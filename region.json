@@ -1,0 +1,138 @@
+{"results":[{"columns":[{"name":"CODDEP","type":"VARCHAR2"},{"name":"CODREG","type":"VARCHAR2"},{"name":"LIB_REG","type":"VARCHAR2"},{"name":"LIB_REGA","type":"VARCHAR2"},{"name":"CODE_DEPT","type":"VARCHAR2"},{"name":"CODE_REGION","type":"VARCHAR2"},{"name":"FICHIER","type":"VARCHAR2"},{"name":"CODSREG","type":"VARCHAR2"}],"items":
+[
+{"coddep":"H00","codreg":"500","lib_reg":"acentralcontr","lib_rega":"ÈÑäÇãÌ ÏÚã ÇáÞØÇÚ ÇáÕÍí","code_dept":"H00","code_region":"000","fichier":"acentralcontr","codsreg":"0"}
+,{"coddep":"H00","codreg":"16L","lib_reg":"htsfar","lib_rega":"ÇáãÓÊÔÝì ÇáØÇåÑ ÕÝÑ ÈÇáãåÏíÉ","code_dept":"H00","code_region":"16L","fichier":"htsfar","codsreg":"0"}
+,{"coddep":"S00","codreg":"009","lib_reg":"aonounor","lib_rega":"ÏíæÇä ÇáÎÏãÇÊ ÇáÌÇãÚíÉ ááÔãÇá ÈÊæäÓ","code_dept":"S00","code_region":"009","fichier":"aonounor","codsreg":"0"}
+,{"coddep":"H00","codreg":"0HN","lib_reg":"cmaternite","lib_rega":"ãÑßÒ ÇáÊæáíÏ æ ØÈ ÇáÑÖíÚ","code_dept":"H00","code_region":"0HN","fichier":"cmaternite","codsreg":"0"}
+,{"coddep":"H00","codreg":"0HQ","lib_reg":"iophtalmo","lib_rega":"ãÚåÏ ÇáåÇÏí ÇáÑÇíÓ áÃãÑÇÖ ÇáÚíæä","code_dept":"H00","code_region":"0HQ","fichier":"iophtalmo","codsreg":"0"}
+,{"coddep":"H00","codreg":"0HR","lib_reg":"ineurologie","lib_rega":"ÇáãÚåÏ ÇáæØäí áÃãÑÇÖ ÇáÃÚÕÇÈ","code_dept":"H00","code_region":"0HR","fichier":"ineurologie","codsreg":"0"}
+,{"coddep":"H00","codreg":"0HS","lib_reg":"isalahazziz","lib_rega":"ãÚåÏ ÕÇáÍ ÚÒíÒ ÈÊæäÓ","code_dept":"H00","code_region":"0HS","fichier":"isalahazziz","codsreg":"0"}
+,{"coddep":"H00","codreg":"0HT","lib_reg":"inutrition","lib_rega":"ÇáãÚåÏ ÇáæØäí ááÊÛÐíÉ æÇáÊßäáæÌíÇ ÇáÛÐÇÆ","code_dept":"H00","code_region":"0HT","fichier":"inutrition","codsreg":"0"}
+,{"coddep":"H00","codreg":"0HU","lib_reg":"iorthopedi","lib_rega":"ãÚåÏ ãÍãÏ ÇáÞÕÇÈ ááÌÈÑ æ ÊÞæíã ÇáÃÚÖÇÁ","code_dept":"H00","code_region":"0HU","fichier":"iorthopedi","codsreg":"0"}
+,{"coddep":"H00","codreg":"0HV","lib_reg":"hmongislim","lib_rega":"ãÓÊÔÝì ÇáãäÌí Óáíã ÈÇáãÑÓì","code_dept":"H00","code_region":"0HV","fichier":"hmongislim","codsreg":"0"}
+,{"coddep":"H00","codreg":"0HW","lib_reg":"hbourguiba","lib_rega":"ãÓÊÔÝì ÇáÍÈíÈ ÈæÑÞíÈÉ ÈÕÝÇÞÓ","code_dept":"H00","code_region":"0HW","fichier":"hbourguiba","codsreg":"0"}
+,{"coddep":"H00","codreg":"0HX","lib_reg":"hthameur","lib_rega":"ãÓÊÔÝì  ÇáÍÈíÈ ËÇãÑ","code_dept":"H00","code_region":"0HX","fichier":"hthameur","codsreg":"0"}
+,{"coddep":"H00","codreg":"0HY","lib_reg":"habdmammi","lib_rega":"ãÓÊÔÝì ÚÈÏ ÇáÑÍãÇä ãÇãí ááÃãÑÇÖ ÇáÑÆæíÉ","code_dept":"H00","code_region":"0HY","fichier":"habdmammi","codsreg":"0"}
+,{"coddep":"H00","codreg":"0HZ","lib_reg":"hrazi","lib_rega":"ãÓÊÔÝì ÇáÑÇÒí ÈãäæÈÉ","code_dept":"H00","code_region":"0HZ","fichier":"hrazi","codsreg":"0"}
+,{"coddep":"H00","codreg":"0I0","lib_reg":"hfattouma","lib_rega":"ãÓÊÔÝì ÝØæãÉ ÈæÑÞíÈÉ ÈÇáãäÓÊíÑ","code_dept":"H00","code_region":"0I0","fichier":"hfattouma","codsreg":"0"}
+,{"coddep":"H00","codreg":"0I1","lib_reg":"hazizaoth","lib_rega":"ãÓÊÔÝì  ÚÒíÒÉ ÚËãÇäÉ","code_dept":"H00","code_region":"0I1","fichier":"hazizaoth","codsreg":"0"}
+,{"coddep":"H00","codreg":"0I2","lib_reg":"henfant","lib_rega":"ãÓÊÔÝì ÇáÃØÝÇá","code_dept":"H00","code_region":"0I2","fichier":"henfant","codsreg":"0"}
+,{"coddep":"H00","codreg":"0I3","lib_reg":"hsahloul","lib_rega":"ãÓÊÔÝì Óåáæá ÈÓæÓÉ","code_dept":"H00","code_region":"0I3","fichier":"hsahloul","codsreg":"0"}
+,{"coddep":"H00","codreg":"0I4","lib_reg":"hrabta","lib_rega":"ãÓÊÔÝì  ÇáÑÇÈØÉ","code_dept":"H00","code_region":"0I4","fichier":"hrabta","codsreg":"0"}
+,{"coddep":"H00","codreg":"0I5","lib_reg":"hcharlenicol","lib_rega":"ãÓÊÔÝì  ÔÇÑá äíßæá","code_dept":"H00","code_region":"0I5","fichier":"hcharlenicol","codsreg":"0"}
+,{"coddep":"H00","codreg":"0I6","lib_reg":"hfarhat","lib_rega":"ãÓÊÔÝì ÝÑÍÇÊ ÍÔÇÏ ÈÓæÓÉ","code_dept":"H00","code_region":"0I6","fichier":"hfarhat","codsreg":"0"}
+,{"coddep":"H00","codreg":"0I7","lib_reg":"hchaker","lib_rega":"ãÓÊÔÝì ÇáåÇÏí ÔÇßÑ ÈÕÝÇÞÓ","code_dept":"H00","code_region":"0I7","fichier":"hchaker","codsreg":"0"}
+,{"coddep":"H00","codreg":"0I9","lib_reg":"ccamu","lib_rega":"ãÑßÒ ÇáÅÓÚÇÝ ÇáØÈí ÇáÅÓÊÚÌÇáí","code_dept":"H00","code_region":"0I9","fichier":"ccamu","codsreg":"0"}
+,{"coddep":"H00","codreg":"0IB","lib_reg":"ccnts","lib_rega":"ÇáãÑßÒ ÇáæØäí áäÞá ÇáÏã","code_dept":"H00","code_region":"0IB","fichier":"ccnts","codsreg":"0"}
+,{"coddep":"H00","codreg":"0IC","lib_reg":"hkhereddine","lib_rega":"ÇáãÓÊÔÝì ÇáÌåæí ÈÎíÑ ÇáÏíä","code_dept":"H00","code_region":"0IC","fichier":"hkhereddine","codsreg":"0"}
+,{"coddep":"H00","codreg":"295","lib_reg":"cjebeloust","lib_rega":"ÇáãÑßÈ ÇáÕÍøí ÈÌÈá ÇáæÓØ","code_dept":"H00","code_region":"295","fichier":"cjebeloust","codsreg":"0"}
+,{"coddep":"H00","codreg":"0AA","lib_reg":"aariana","lib_rega":"ÇáÅÏÇÑÉ ÇáÌåæíÉ ááÕÍÉ ÇáÚãæãíÉ ÈÃÑíÇäÉ","code_dept":"H00","code_region":"0AA","fichier":"aariana","codsreg":"0"}
+,{"coddep":"S00","codreg":"04C","lib_reg":"atunis","lib_rega":"ÌÇãÚÉ ÊæäÓ","code_dept":"S00","code_region":"04C","fichier":"atunis","codsreg":"0"}
+,{"coddep":"S00","codreg":"04D","lib_reg":"amanar","lib_rega":"ÌÇãÚÉ ÊæäÓ ÇáãäÇÑ","code_dept":"S00","code_region":"04D","fichier":"amanar","codsreg":"0"}
+,{"coddep":"S00","codreg":"256","lib_reg":"acentre","lib_rega":"ÌÇãÚÉ ÓæÓÉ","code_dept":"S00","code_region":"256","fichier":"acentre","codsreg":"0"}
+,{"coddep":"S00","codreg":"254","lib_reg":"asfax","lib_rega":"ÌÇãÚÉ ÕÝÇÞÓ","code_dept":"S00","code_region":"254","fichier":"asfax","codsreg":"0"}
+,{"coddep":"S00","codreg":"04E","lib_reg":"acarthage","lib_rega":"ÌÇãÚÉ ÞÑØÇÌ","code_dept":"S00","code_region":"04E","fichier":"acarthage","codsreg":"0"}
+,{"coddep":"S00","codreg":"04F","lib_reg":"amanouba","lib_rega":"ÌÇãÚÉ ãäæÈÉ","code_dept":"S00","code_region":"04F","fichier":"amanouba","codsreg":"0"}
+,{"coddep":"S00","codreg":"166","lib_reg":"azitouna","lib_rega":"ÌÇãÚÉ ÇáÒíÊæäÉ","code_dept":"S00","code_region":"166","fichier":"azitouna","codsreg":"0"}
+,{"coddep":"H00","codreg":"0AB","lib_reg":"abeja","lib_rega":"ÇáÅÏÇÑÉ ÇáÌåæíÉ ááÕÍÉ ÇáÚãæãíÉ ÈÜÈÜÇÌÉ","code_dept":"H00","code_region":"0AB","fichier":"abeja","codsreg":"0"}
+,{"coddep":"H00","codreg":"0AC","lib_reg":"abarous","lib_rega":"ÇáÅÏÇÑÉ ÇáÌåæíÉ ááÕÍÉ ÇáÚãæãíÉ ÈÈä ÚÑæÓ","code_dept":"H00","code_region":"0AC","fichier":"abarous","codsreg":"0"}
+,{"coddep":"H00","codreg":"0AD","lib_reg":"abizerte","lib_rega":"ÇáÅÏÇÑÉ ÇáÌåæíÉ ááÕÍÉ ÇáÚãæãíÉ  ÈÈäÒÑÊ","code_dept":"H00","code_region":"0AD","fichier":"abizerte","codsreg":"0"}
+,{"coddep":"H00","codreg":"0AE","lib_reg":"agabes","lib_rega":"ÇáÅÏÇÑÉ ÇáÌåæíÉ ááÕÍÉ ÇáÚãæãíÉ ÈÞÇÈÓ","code_dept":"H00","code_region":"0AE","fichier":"agabes","codsreg":"0"}
+,{"coddep":"H00","codreg":"0AF","lib_reg":"agafsa","lib_rega":"ÇáÅÏÇÑÉ ÇáÌåæíÉ ááÕÍÉ ÇáÚãæãíÉ ÈÞÝÕÉ","code_dept":"H00","code_region":"0AF","fichier":"agafsa","codsreg":"0"}
+,{"coddep":"H00","codreg":"0AG","lib_reg":"ajendouba","lib_rega":"ÇáÅÏÇÑÉ ÇáÌåæíÉ ááÕÍÉ ÇáÚãæãíÉ ÈÌäÏæÈÉ","code_dept":"H00","code_region":"0AG","fichier":"ajendouba","codsreg":"0"}
+,{"coddep":"H00","codreg":"0AH","lib_reg":"akairouan","lib_rega":"ÇáÅÏÇÑÉ ÇáÌåæíÉ  ááÕÍÉ ÇáÚãæãíÉ ÈÇáÞíÑæÇä","code_dept":"H00","code_region":"0AH","fichier":"akairouan","codsreg":"0"}
+,{"coddep":"H00","codreg":"0AI","lib_reg":"akasserin","lib_rega":"ÇáÅÏÇÑÉ ÇáÌåæíÉ ááÕÍÉ ÇáÚãæãíÉ ÈÇáÞÕÑíä","code_dept":"H00","code_region":"0AI","fichier":"akasserin","codsreg":"0"}
+,{"coddep":"H00","codreg":"0AJ","lib_reg":"akebili","lib_rega":"ÇáÅÏÇÑÉ ÇáÌåæíÉ ááÕÍÉ ÇáÚãæãíÉ ÈÞÈáí","code_dept":"H00","code_region":"0AJ","fichier":"akebili","codsreg":"0"}
+,{"coddep":"H00","codreg":"0AK","lib_reg":"akef","lib_rega":"ÇáÅÏÇÑÉ ÇáÌåæíÉ ááÕÍÉ ÇáÚãæãíÉ ÈÇáßÇÝ","code_dept":"H00","code_region":"0AK","fichier":"akef","codsreg":"0"}
+,{"coddep":"H00","codreg":"0AL","lib_reg":"amahdia","lib_rega":"ÇáÅÏÇÑÉ ÇáÌåæíÉ ááÕÍÉ ÇáÚãæãíÉ ÈÇáãÜåÏíÜÉ","code_dept":"H00","code_region":"0AL","fichier":"amahdia","codsreg":"0"}
+,{"coddep":"H00","codreg":"0AM","lib_reg":"amedenine","lib_rega":"ÇáÅÏÇÑÉ ÇáÌåæíÉ ááÕÍÉ ÇáÚãæãíÉ ÈãÏäíä","code_dept":"H00","code_region":"0AM","fichier":"amedenine","codsreg":"0"}
+,{"coddep":"H00","codreg":"0AN","lib_reg":"amonastir","lib_rega":"ÇáÅÏÇÑÉ ÇáÌåæíÉ ááÕÍÉ ÇáÚãæãíÉ ÈÇáãäÓÊíÑ","code_dept":"H00","code_region":"0AN","fichier":"amonastir","codsreg":"0"}
+,{"coddep":"H00","codreg":"0AP","lib_reg":"anabeul","lib_rega":"ÇáÅÏÇÑÉ ÇáÌåæíÉ ááÕÍÉ ÇáÚãæãíÉ ÈäÇÈá","code_dept":"H00","code_region":"0AP","fichier":"anabeul","codsreg":"0"}
+,{"coddep":"H00","codreg":"0AR","lib_reg":"asfax","lib_rega":"ÇáÅÏÇÑÉ ÇáÌåæíÉ ááÕÍÉ ÇáÚãæãíÉ  ÈÕÝÇÞÓ","code_dept":"H00","code_region":"0AR","fichier":"asfax","codsreg":"0"}
+,{"coddep":"H00","codreg":"0AS","lib_reg":"abouzid","lib_rega":"ÇáÅÏÇÑÉ ÇáÌåæíÉ ááÕÍÉ ÇáÚãæãíÉ ÈÓíÏí ÈæÒíÏ","code_dept":"H00","code_region":"0AS","fichier":"abouzid","codsreg":"0"}
+,{"coddep":"H00","codreg":"0AQ","lib_reg":"asiliana","lib_rega":"ÇáÅÏÇÑÉ ÇáÌåæíÉ ááÕÍÉ ÇáÚãæãíÉ ÈÓáíÇäÉ","code_dept":"H00","code_region":"0AQ","fichier":"asiliana","codsreg":"0"}
+,{"coddep":"H00","codreg":"0AU","lib_reg":"atataouin","lib_rega":"ÇáÅÏÇÑÉ ÇáÌåæíÉ ááÕÍÉ ÇáÚãæãíÉ ÈÊØÇæíä","code_dept":"H00","code_region":"0AU","fichier":"atataouin","codsreg":"0"}
+,{"coddep":"H00","codreg":"0AV","lib_reg":"atozeur","lib_rega":"ÇáÅÏÇÑÉ ÇáÌåæíÉ ááÕÍÉ ÇáÚãæãíÉ ÈÊæÒÑ","code_dept":"H00","code_region":"0AV","fichier":"atozeur","codsreg":"0"}
+,{"coddep":"H00","codreg":"0AY","lib_reg":"atunis","lib_rega":"ÇáÅÏÇÑÉ ÇáÌåæíÉ ááÕÍÉ ÇáÚãæãíÉ  ÈÊæäÓ","code_dept":"H00","code_region":"0AY","fichier":"atunis","codsreg":"0"}
+,{"coddep":"H00","codreg":"002","lib_reg":"habdmammi32","lib_rega":"ãÓÊÔÝì ÚÈÏ ÇáÑÍãÇä ãÇãí ááÃãÑÇÖ ÇáÑÆæíÉ-ÚãáÉ","code_dept":"H00","code_region":"0HY","fichier":"habdmammi32","codsreg":"0"}
+,{"coddep":"H00","codreg":"003","lib_reg":"hazizaoth32","lib_rega":"ãÓÊÔÝì  ÚÒíÒÉ ÚËãÇäÉ -ÚãáÉ","code_dept":"H00","code_region":"0I1","fichier":"hazizaoth32","codsreg":"0"}
+,{"coddep":"H00","codreg":"004","lib_reg":"hbourguiba32","lib_rega":"ãÓÊÔÝì ÇáÍÈíÈ ÈæÑÞíÈÉ ÈÕÝÇÞÓ-ÚãáÉ","code_dept":"H00","code_region":"0HW","fichier":"hbourguiba32","codsreg":"0"}
+,{"coddep":"H00","codreg":"007","lib_reg":"henfant32","lib_rega":"ãÓÊÔÝì ÇáÃØÝÇá-ÚãáÉ","code_dept":"H00","code_region":"0I2","fichier":"henfant32","codsreg":"0"}
+,{"coddep":"H00","codreg":"008","lib_reg":"hfarhat32","lib_rega":"ãÓÊÔÝì ÝÑÍÇÊ ÍÔÇÏ ÈÓæÓÉ-ÚãáÉ","code_dept":"H00","code_region":"0I6","fichier":"hfarhat32","codsreg":"0"}
+,{"coddep":"H00","codreg":"009","lib_reg":"hfattouma32","lib_rega":"ãÓÊÔÝì ÝØæãÉ ÈæÑÞíÈÉ ÈÇáãäÓÊíÑ-ÚãáÉ","code_dept":"H00","code_region":"0I0","fichier":"hfattouma32","codsreg":"0"}
+,{"coddep":"H00","codreg":"010","lib_reg":"hmongislim32","lib_rega":"ãÓÊÔÝì ÇáãäÌí Óáíã ÈÇáãÑÓì-ÚãáÉ","code_dept":"H00","code_region":"0HV","fichier":"hmongislim32","codsreg":"0"}
+,{"coddep":"H00","codreg":"011","lib_reg":"hrabta32","lib_rega":"ãÓÊÔÝì  ÇáÑÇÈØÉ -ÚãáÉ","code_dept":"H00","code_region":"0I4","fichier":"hrabta32","codsreg":"0"}
+,{"coddep":"H00","codreg":"012","lib_reg":"hrazi32","lib_rega":"ãÓÊÔÝì ÇáÑÇÒí ÈãäæÈÉ-ÚãáÉ","code_dept":"H00","code_region":"0HZ","fichier":"hrazi32","codsreg":"0"}
+,{"coddep":"H00","codreg":"013","lib_reg":"hsahloul32","lib_rega":"ãÓÊÔÝì Óåáæá ÈÓæÓÉ-ÚãáÉ","code_dept":"H00","code_region":"0I3","fichier":"hsahloul32","codsreg":"0"}
+,{"coddep":"H00","codreg":"014","lib_reg":"hthameur32","lib_rega":"ãÓÊÔÝì  ÇáÍÈíÈ ËÇãÑ-ÚãáÉ","code_dept":"H00","code_region":"0HX","fichier":"hthameur32","codsreg":"0"}
+,{"coddep":"H00","codreg":"015","lib_reg":"ineurologie32","lib_rega":"ÇáãÚåÏ ÇáæØäí áÃãÑÇÖ ÇáÃÚÕÇÈ-ÚãáÉ","code_dept":"H00","code_region":"0HR","fichier":"ineurologie32","codsreg":"0"}
+,{"coddep":"H00","codreg":"016","lib_reg":"inutrition32","lib_rega":"ÇáãÚåÏ ÇáæØäí ááÊÛÐíÉ æÇáÊßäáæÌíÇ ÇáÛÐÇÆ","code_dept":"H00","code_region":"0HT","fichier":"inutrition32","codsreg":"0"}
+,{"coddep":"H00","codreg":"017","lib_reg":"iophtalmo32","lib_rega":"ãÚåÏ ÇáåÇÏí ÇáÑÇíÓ áÃãÑÇÖ ÇáÚíæä -ÚãáÉ","code_dept":"H00","code_region":"0HQ","fichier":"iophtalmo32","codsreg":"0"}
+,{"coddep":"H00","codreg":"018","lib_reg":"iorthopedi32","lib_rega":"ãÚåÏ ãÍãÏ ÇáÞÕÇÈ ááÌÈÑ æ ÊÞæíã ÇáÃÚÖÇÁ-ÚãáÉl","code_dept":"H00","code_region":"0HU","fichier":"iorthopedi32","codsreg":"0"}
+,{"coddep":"H00","codreg":"020","lib_reg":"isalahazziz32","lib_rega":"ãÚåÏ ÕÇáÍ ÚÒíÒ ÈÊæäÓ-ÚãáÉ","code_dept":"H00","code_region":"0HS","fichier":"isalahazziz32","codsreg":"0"}
+,{"coddep":"H00","codreg":"0AZ","lib_reg":"amanouba","lib_rega":"ÇáÅÏÇÑÉ ÇáÌåæíÉ ááÕÍÉ ÇáÚãæãíÉ ÈãäæÈÉ","code_dept":"H00","code_region":"0AZ","fichier":"amanouba","codsreg":"0"}
+,{"coddep":"S00","codreg":"04H","lib_reg":"agabes","lib_rega":"ÌÇãÚÉ ÞÇÈÓ","code_dept":"S00","code_region":"04H","fichier":"agabes","codsreg":"0"}
+,{"coddep":"H00","codreg":"0X1","lib_reg":"ahopariana32","lib_rega":"ãÓÊÔÝì ãÍãæÏ ÇáãÇØÑí ÈÃÑíÇäÉ-ÚãáÉ","code_dept":"H00","code_region":"0X1","fichier":"ahopariana32","codsreg":"0"}
+,{"coddep":"H00","codreg":"0X2","lib_reg":"ahopmjez32","lib_rega":"ÇáãÓÊÔÝì ÇáÌåæí ÈãÌÇÒ ÇáÈÇÈ-ÚãáÉ","code_dept":"H00","code_region":"0X2","fichier":"ahopmjez32","codsreg":"0"}
+,{"coddep":"H00","codreg":"0X3","lib_reg":"ahopbeja32","lib_rega":"ÇáãÓÊÔÝì ÇáÌåæí ÈÈÇÌÉ-ÚãáÉ","code_dept":"H00","code_region":"0X3","fichier":"ahopbeja32","codsreg":"0"}
+,{"coddep":"H00","codreg":"0X4","lib_reg":"ahopbarous32","lib_rega":"ÇáãÓÊÔÝìÇáÌåæí ÈÈä ÚÑæÓ-ÚãáÉ","code_dept":"H00","code_region":"0X4","fichier":"ahopbarous32","codsreg":"0"}
+,{"coddep":"H00","codreg":"0X5","lib_reg":"ahopmenzelb32","lib_rega":"ÇáãÓÊÔÝì ÇáÌåæí ÈãäÒá ÈæÑÞíÈÉ-ÚãáÉ","code_dept":"H00","code_region":"0X5","fichier":"ahopmenzelb32","codsreg":"0"}
+,{"coddep":"H00","codreg":"0X6","lib_reg":"hbgatfa32","lib_rega":"ÇáãÓÊÔÝì ÇáÍÈíÈ ÈæÞØÝÉ ÈÈäÒÑÊ-ÚãáÉ","code_dept":"H00","code_region":"0X6","fichier":"ahbgatfa32","codsreg":"0"}
+,{"coddep":"H00","codreg":"0X7","lib_reg":"ahopsassi32","lib_rega":"ÇáãÓÊÔÝì ÇáÌåæí ãÍãÏ ÓÇÓí ÈÞÇÈÓ-ÚãáÉ","code_dept":"H00","code_region":"0X7","fichier":"ahopsassi32","codsreg":"0"}
+,{"coddep":"H00","codreg":"0X8","lib_reg":"ahopbouzaien32","lib_rega":"ÇáãÓÊÔÝì ÇáÌåæí ÇáÍÓíä ÈæÒíÇä ÈÞÝÕÉ-ÚãáÉ","code_dept":"H00","code_region":"0X8","fichier":"ahopbouzaien32","codsreg":"0"}
+,{"coddep":"H00","codreg":"0X9","lib_reg":"ahopmetlaoui32","lib_rega":"ÇáãÓÊÔÝì ÇáÌåæí ÈÇáãÊáæí-ÚãáÉ","code_dept":"H00","code_region":"0X9","fichier":"ahopmetlaoui32","codsreg":"0"}
+,{"coddep":"H00","codreg":"0XA","lib_reg":"ahopjendouba32","lib_rega":"ÇáãÓÊÔÝì ÇáÌåæí ÈÌäÏæÈÉ-ÚãáÉ","code_dept":"H00","code_region":"0XA","fichier":"ahopjendouba32","codsreg":"0"}
+,{"coddep":"H00","codreg":"0XB","lib_reg":"hjazzar32","lib_rega":"ÇáãÓÊÔÝì ÅÈä ÇáÌÒÇÑ ÈÇáÞíÑæÇä-ÚãáÉ","code_dept":"H00","code_region":"0XB","fichier":"hjazzar32","codsreg":"0"}
+,{"coddep":"H00","codreg":"0XC","lib_reg":"ahopkasserin32","lib_rega":"ÇáãÓÊÔÝì ÇáÌåæí ÈÇáÞÕÑíä-ÚãáÉ","code_dept":"H00","code_region":"0XC","fichier":"ahopkasserin32","codsreg":"0"}
+,{"coddep":"H00","codreg":"0XD","lib_reg":"ahopkebili32","lib_rega":"ÇáãÓÊÔÝì ÇáÌåæí ÈÞÈáí-ÚãáÉ","code_dept":"H00","code_region":"0XD","fichier":"ahopkebili32","codsreg":"0"}
+,{"coddep":"H00","codreg":"0XF","lib_reg":"htsfar32","lib_rega":"ÇáãÓÊÔÝì ÇáØÇåÑ ÕÝÑ ÈÇáãåÏíÉ-ÚãáÉ","code_dept":"H00","code_region":"16L","fichier":"htsfar32","codsreg":"0"}
+,{"coddep":"H00","codreg":"0XG","lib_reg":"hbmedenine32","lib_rega":"ÇáãÓÊÔÝì ÇáÍÈíÈ ÈæÑÞíÈÉ ÈãÏäíä-ÚãáÉ","code_dept":"H00","code_region":"0XG","fichier":"hbmedenine32","codsreg":"0"}
+,{"coddep":"H00","codreg":"0XH","lib_reg":"ahopjerba32","lib_rega":"ÇáãÓÊÔÝì ÇáÌåæí  ÇáÕÇÏÞ ÇáãÞÏã  ÈÌÑÈÉ-ÚãáÉ","code_dept":"H00","code_region":"0XH","fichier":"ahopjerba32","codsreg":"0"}
+,{"coddep":"H00","codreg":"0XI","lib_reg":"ahopjerzis32","lib_rega":"ÇáãÓÊÔÝì ÇáÌåæí ÈÌÑÌíÓ-ÚãáÉ","code_dept":"H00","code_region":"0XI","fichier":"ahopjerzis32","codsreg":"0"}
+,{"coddep":"H00","codreg":"0XK","lib_reg":"ahopksarhle32","lib_rega":"ÇáãÓÊÔÝì ÇáÌåæí ÈÞÕÑ åáÇá-ÚãáÉ","code_dept":"H00","code_region":"0XK","fichier":"ahopksarhle32","codsreg":"0"}
+,{"coddep":"H00","codreg":"0XL","lib_reg":"ahopbsalah32","lib_rega":"ÇáãÓÊÔÝì ÇáÌåæí -ãÍãÏ Èä ÕÇáÍ- ÈÇáãßäíä-ÚãáÉ","code_dept":"H00","code_region":"0XL","fichier":"ahopbsalah32","codsreg":"0"}
+,{"coddep":"H00","codreg":"0XM","lib_reg":"hmaamouri32","lib_rega":"ÇáãÓÊÔÝì ãÍãÏ ÇáØÇåÑ ÇáãÚãæÑì ÈäÇÈá-ÚãáÉ","code_dept":"H00","code_region":"0XM","fichier":"hmaamouri32","codsreg":"0"}
+,{"coddep":"H00","codreg":"0XN","lib_reg":"ahoptemime32","lib_rega":"ÇáãÓÊÔÝì ÇáÌåæí ÈãäÒá Êãíã-ÚãáÉ","code_dept":"H00","code_region":"0XN","fichier":"ahoptemime32","codsreg":"0"}
+,{"coddep":"H00","codreg":"0XP","lib_reg":"ahopnabeul32","lib_rega":"ÇáãÓÊÔÝì ÇáÌåæí ÈäÇÈá-ÚãáÉ","code_dept":"H00","code_region":"0XP","fichier":"ahopnabeul32","codsreg":"0"}
+,{"coddep":"H00","codreg":"0XS","lib_reg":"ahopmahres32","lib_rega":"ÇáãÓÊÔÝì ÇáÌåæí ÈÇáãÍÑÓ-ÚãáÉ","code_dept":"H00","code_region":"0XS","fichier":"ahopmahres32","codsreg":"0"}
+,{"coddep":"H00","codreg":"0XQ","lib_reg":"ahopkerkena32","lib_rega":"ÇáãÓÊÔÝì ÇáÌåæí ÈÞÑÞäÉ-ÚãáÉ","code_dept":"H00","code_region":"0XQ","fichier":"ahopkerkena32","codsreg":"0"}
+,{"coddep":"H00","codreg":"0XR","lib_reg":"ahopbouzid32","lib_rega":"ÇáãÓÊÔÝì ÇáÌåæí ÈÓíÏí ÈæÒíÏ-ÚãáÉ","code_dept":"H00","code_region":"0XR","fichier":"ahopbouzid32","codsreg":"0"}
+,{"coddep":"H00","codreg":"0XU","lib_reg":"ahopsiliana32","lib_rega":"ÇáãÓÊÔÝì ÇáÌåæí ÈÓáíÇäÉ-ÚãáÉ","code_dept":"H00","code_region":"0XU","fichier":"ahopsiliana32","codsreg":"0"}
+,{"coddep":"H00","codreg":"0XW","lib_reg":"ahoptataoui32","lib_rega":"ÇáãÓÊÔÝì ÇáÌåæí ÈÊØÇæíä-ÚãáÉ","code_dept":"H00","code_region":"0XW","fichier":"ahoptataoui32","codsreg":"0"}
+,{"coddep":"H00","codreg":"0XX","lib_reg":"ahoptozeur32","lib_rega":"ÇáãÓÊÔÝì ÇáÌåæí ÈÊæÒÑ-ÚãáÉ","code_dept":"H00","code_region":"0XX","fichier":"ahoptozeur32","codsreg":"0"}
+,{"coddep":"H00","codreg":"0XY","lib_reg":"ahopzaghouan32","lib_rega":"ÇáãÓÊÔÝì ÇáÌåæí ÈÒÛæÇä-ÚãáÉ","code_dept":"H00","code_region":"0XY","fichier":"ahopzaghouan32","codsreg":"0"}
+,{"coddep":"S00","codreg":"04I","lib_reg":"ajendouba","lib_rega":"ÌÇãÚÉ ÌäÏæÈÉ","code_dept":"S00","code_region":"04I","fichier":"ajendouba","codsreg":"0"}
+,{"coddep":"H00","codreg":"0Y2","lib_reg":"acirmc","lib_rega":"ãÑßÒ ÇáãÕæÑÇÊ ÈÇáÑäíä ÇáãÛäÇØíÓí ÈÇáæÓØ","code_dept":"H00","code_region":"0Y2","fichier":"acirmc","codsreg":"0"}
+,{"coddep":"S00","codreg":"027","lib_reg":"aonousud","lib_rega":"ÏíæÇä ÇáÎÏãÇÊ ÇáÌÇãÚíÉ ááÌäæÈ ÈÕÝÇÞÓ","code_dept":"S00","code_region":"027","fichier":"aonousud","codsreg":"0"}
+,{"coddep":"H00","codreg":"001","lib_reg":"cmaternite32","lib_rega":"ãÑßÒ ÇáÊæáíÏ æ ØÈ ÇáÑÖíÚ -ÚãáÉ","code_dept":"H00","code_region":"0HN","fichier":"cmaternite32","codsreg":"0"}
+,{"coddep":"F00","codreg":"000","lib_reg":"acentral","lib_rega":"æÒÇÑÉ ÇáÏÇÎáíÉ","code_dept":"F00","code_region":"000","fichier":"acentral","codsreg":"0"}
+,{"coddep":"S00","codreg":"000","lib_reg":"acentral","lib_rega":"ÅÏÇÑÉ ãÑßÒíÉ","code_dept":"S00","code_region":"000","fichier":"acentral","codsreg":"0"}
+,{"coddep":"H00","codreg":"000","lib_reg":"acentral","lib_rega":"ÇáÅÏÇÑÉ ÇáãÑßÒíÉ","code_dept":"H00","code_region":"000","fichier":"acentral","codsreg":"0"}
+,{"coddep":"S00","codreg":"023","lib_reg":"akairouan","lib_rega":"ÌÇãÚÉ ÇáÞíÑæÇä","code_dept":"S00","code_region":"023","fichier":"akairouan","codsreg":"0"}
+,{"coddep":"S00","codreg":"028","lib_reg":"agafsa","lib_rega":"ÌÇãÚÉ ÞÝÕÉ","code_dept":"S00","code_region":"028","fichier":"agafsa","codsreg":"0"}
+,{"coddep":"S00","codreg":"020","lib_reg":"amonastir","lib_rega":"ÌÇãÚÉ ÇáãäÓÊíÑ","code_dept":"S00","code_region":"020","fichier":"amonastir","codsreg":"0"}
+,{"coddep":"S00","codreg":"04V","lib_reg":"avirtuel","lib_rega":"ÌÇãÚÉ ÊæäÓ ÇáÅÝÊÑÇÖíÉ","code_dept":"S00","code_region":"04V","fichier":"avirtuel","codsreg":"0"}
+,{"coddep":"H00","codreg":"0HP","lib_reg":"ipasteur","lib_rega":"ãÚåÏ  ÈÇÓÊæÑ","code_dept":"H00","code_region":"0HP","fichier":"ipasteur","codsreg":"0"}
+,{"coddep":"H00","codreg":"0AT","lib_reg":"asousse","lib_rega":"ÇáÅÏÇÑÉ ÇáÌåæíÉ ááÕÍÉ ÇáÚãæãíÉ ÈÓæÓÉ","code_dept":"H00","code_region":"0AT","fichier":"asousse","codsreg":"0"}
+,{"coddep":"H00","codreg":"0AX","lib_reg":"azaghouan","lib_rega":"ÇáÅÏÇÑÉ ÇáÌåæíÉ ááÕÍÉ ÇáÚãæãíÉ  ÈÒÛæÇä","code_dept":"H00","code_region":"0AX","fichier":"azaghouan","codsreg":"0"}
+,{"coddep":"H00","codreg":"005","lib_reg":"hchaker32","lib_rega":"ãÓÊÔÝì ÇáåÇÏí ÔÇßÑ ÈÕÝÇÞÓ-ÚãáÉ","code_dept":"H00","code_region":"0I7","fichier":"hchaker32","codsreg":"0"}
+,{"coddep":"H00","codreg":"0XV","lib_reg":"ahopmsaken32","lib_rega":"ÇáãÓÊÔÝì ÇáÌåæí ÈãÓÇßä-ÚãáÉ","code_dept":"H00","code_region":"0XV","fichier":"ahopmsaken32","codsreg":"0"}
+,{"coddep":"H00","codreg":"0Y1","lib_reg":"hkhereddine32","lib_rega":"ÇáãÓÊÔÝì ÇáÌåæí ÈÎíÑ ÇáÏíä-ÚãáÉ","code_dept":"H00","code_region":"0IC","fichier":"hkhereddine32","codsreg":"0"}
+,{"coddep":"S00","codreg":"026","lib_reg":"aonoucen","lib_rega":"ÏíæÇä ÇáÎÏãÇÊ ÇáÌÇãÚíÉ ááæÓØ  ÈÓæÓÉ","code_dept":"S00","code_region":"026","fichier":"aonoucen","codsreg":"0"}
+,{"coddep":"H00","codreg":"0XE","lib_reg":"ahopkef32","lib_rega":"ÇáãÓÊÔÝì ÇáÌåæí ãÍãÏ ÈæÑÞíÈÉ ÈÇáßÇÝ-ÚãáÉ","code_dept":"H00","code_region":"0XE","fichier":"ahopkef32","codsreg":"0"}
+,{"coddep":"H00","codreg":"0XJ","lib_reg":"ahopguerden32","lib_rega":"ÇáãÓÊÔÝì ÇáÌåæí ÈÈä ÞÑÏÇä-ÚãáÉ","code_dept":"H00","code_region":"0XJ","fichier":"ahopguerden32","codsreg":"0"}
+,{"coddep":"H00","codreg":"0XT","lib_reg":"ahopjbenian32","lib_rega":"ÇáãÓÊÔÝì ÇáÌåæí ÈÌÈäíÇäÉ-ÚãáÉ","code_dept":"H00","code_region":"0XT","fichier":"ahopjbenian32","codsreg":"0"}
+,{"coddep":"H00","codreg":"510","lib_reg":"alabo","lib_rega":"ÇáãÎÈÑ ÇáæØäí áãÑÇÞÈÉ ÇáÃÏæíÉ","code_dept":"H00","code_region":"510","fichier":"alabo","codsreg":"0"}
+,{"coddep":"F00","codreg":"FX1","lib_reg":"adsn","lib_rega":"ÇáÇãä ÇáæØäí","code_dept":"F00","code_region":"FX1","fichier":"adsn","codsreg":"0"}
+,{"coddep":"F00","codreg":"FX2","lib_reg":"agn","lib_rega":"ÇáÍÑÓ ÇáæØäí","code_dept":"F00","code_region":"FX2","fichier":"agn","codsreg":"0"}
+,{"coddep":"H00","codreg":"0Y5","lib_reg":"ipastcherch","lib_rega":"ãÚåÏ  ÈÇÓÊæÑ  -  ÇáÈÇÍËíä","code_dept":"H00","code_region":"0HP","fichier":"ipastcherch","codsreg":"0"}
+,{"coddep":"H00","codreg":"0Y6","lib_reg":"ipastcontra","lib_rega":"ãÚåÏ  ÈÇÓÊæÑ  - ÇáãÊÚÇÞÏíä","code_dept":"H00","code_region":"0HP","fichier":"ipastcontra","codsreg":"0"}
+,{"coddep":"H00","codreg":"0Y7","lib_reg":"ienfcontra","lib_rega":"ãÓÊÔÝì ÇáÃØÝÇá - ãÊÚÇÞÏæä","code_dept":"H00","code_region":"0I2","fichier":"ienfcontra","codsreg":"0"}
+,{"coddep":"H00","codreg":"006","lib_reg":"hcharlenicol32","lib_rega":"ãÓÊÔÝì  ÔÇÑá äíßæá-ÚãáÉ","code_dept":"H00","code_region":"0I5","fichier":"hcharlenicol32","codsreg":"0"}
+,{"coddep":"H00","codreg":"019","lib_reg":"ipasteur32","lib_rega":"ãÚåÏ  ÈÇÓÊæÑ -ÚãáÉ","code_dept":"H00","code_region":"0HP","fichier":"ipasteur32","codsreg":"0"}
+,{"coddep":"H00","codreg":"0IE","lib_reg":"atraumato","lib_rega":"ãÑßÒ ÇáÅÕÇÈÇÊ æ ÇáÍÑæÞ Èä ÚÑæÓ","code_dept":"H00","code_region":"0IE","fichier":"atraumato","codsreg":"0"}
+,{"coddep":"H00","codreg":"0Y4","lib_reg":"atraumato32","lib_rega":"ãÑßÒ ÇáÅÕÇÈÇÊ æ ÇáÍÑæÞ Èä ÚÑæÓ - ÚãáÉ","code_dept":"H00","code_region":"0IE","fichier":"atraumato32","codsreg":"0"}
+,{"coddep":"S00","codreg":"700","lib_reg":"arecherche","lib_rega":"ÇáÈÍË ÇáÚáãí","code_dept":"S00","code_region":"700","fichier":"arecherche","codsreg":"0"}
+,{"coddep":"H00","codreg":"16K","lib_reg":"cdentaire","lib_rega":"ãÕÍÉ ØÈ æÌÑÇÍÉ ÇáÃÓäÇä ÈÇáãäÓÊíÑ","code_dept":"H00","code_region":"16K","fichier":"cdentaire","codsreg":"0"}
+,{"coddep":"H00","codreg":"26K","lib_reg":"cdentaire32","lib_rega":"ãÕÍÉ ØÈ æÌÑÇÍÉ ÇáÃÓäÇä ÈÇáãäÓÊíÑ-ÚãáÉ","code_dept":"H00","code_region":"26K","fichier":"cdentaire32","codsreg":"0"}
+]}]}
