@@ -17,6 +17,7 @@
 | `pa_sexe` | Sexe | **Gender** — `1` = Male, `2` = Female | `"1"` |
 | `pa_datnais` | Date de naissance | **Date of birth** (DD/MM/YY format) | `"09/01/61"` → Jan 9, 1961 |
 | `pa_datent` | Date d'entrée | **Hire date / date of entry** into service (DD/MM/YY) | `"12/09/10"` → Sep 12, 2010 |
+| `pa_adrl` | Adresse légale | **Address** — employee's registered address | `" "` |
 
 ---
 
@@ -26,7 +27,17 @@
 |---|---|---|---|
 | `pa_mois` | Mois | **Pay month** (1–12) | `1` (January) |
 | `pa_annee` | Année | **Pay year** | `2016` |
-| `pa_type` | Type de paie | **Payroll type** — categorizes the type of payment (e.g., `1` = regular salary) | `"1"` |
+| `pa_type` | Type de paie | **Payroll type** — categorizes the type of payment (see values below) | `"1"` |
+
+**`pa_type` values:**
+
+| Code | French | Arabic | Description |
+|---|---|---|---|
+| `1` | PAIE | خلاص شهري | **Monthly salary** — regular monthly pay |
+| `2` | PRIME | منحة إنتاج | **Performance bonus** — production/performance premium |
+| `3` | INDCOMP | منحة خاصة | **Special indemnity** — special allowances and indemnities |
+| `4` | PAICOMP | خلاص شهري تكميلي | **Supplementary salary** — complementary monthly pay |
+| `pa_sec` | Section | **Budget section** — identifies the budget section for this payment | `2` |
 
 ---
 
@@ -34,10 +45,14 @@
 
 | Field | Full Name (French) | Description | Example |
 |---|---|---|---|
+| `pa_cab` | Cabinet | **Cabinet** code — ministerial cabinet | `"   "` |
+| `pa_sg` | Secrétariat Général | **General Secretariat** code | `"   "` |
 | `pa_dg` | Direction Générale | **General directorate** code | `"000"` |
 | `pa_dire` | Direction | **Directorate / department** code | `"S00"` |
 | `pa_sdir` | Sous-Direction | **Sub-directorate** code | `"000"` |
 | `pa_serv` | Service | **Service / unit** code | `"000"` |
+| `pa_unite` | Unité | **Unit** — lowest-level organizational unit | `"   "` |
+| `pa_loca` | Localisation | **Location code** — physical work location of the employee | `"WV6"` |
 
 ---
 
@@ -46,10 +61,35 @@
 | Field | Full Name (French) | Description | Example |
 |---|---|---|---|
 | `pa_article` | Article budgétaire | **Budget article** — budget line item associated with the position | `"01136"` |
+| `pa_parag` | Paragraphe | **Budget paragraph** — sub-division of the budget article | `"00"` |
 | `pa_grd` | Grade | **Grade / rank** of the employee in the civil service hierarchy | `"03F"` |
 | `pa_eche` | Échelon | **Step / echelon** — seniority level within the grade | `1` |
 | `pa_natu` | Nature de l'acte | **Nature of appointment** — type of employment action (e.g., `8` = integration, contract, etc.) | `"8"` |
 | `pa_datnatu` | Date de l'acte | **Date of the appointment action** (DD/MM/YY) | `"12/09/10"` |
+| `pa_indice` | Indice | **Salary index** — index value used to calculate base salary | `0.04` |
+| `pa_efonc` | Échelon fonctionnel | **Functional step** — additional step tied to the function held | `" "` |
+| `pa_fonc` | Fonction | **Function code** — specific function or role held by the employee | `"000"` |
+
+---
+
+## Family Situation
+
+| Field | Full Name (French) | Description | Example |
+|---|---|---|---|
+| `pa_nbrfam` | Nombre de famille | **Family dependents count** — number of family members for allowance calculation | `"0000"` |
+| `pa_enfits` | Enfants ITS | **Children (ITS)** — number of children for ITS (income tax) deduction purposes | `0` |
+| `pa_totinf` | Total inférieur | **Dependent children total** — total number of dependent children | `0` |
+| `pa_codconj` | Code conjoint | **Spouse status code** — marital/spouse classification (`2` = married) | `"2"` |
+| `pa_sitfam` | Situation familiale | **Family situation** — overall family status for benefit eligibility | `" "` |
+
+---
+
+## Banking & Payment
+
+| Field | Full Name (French) | Description | Example |
+|---|---|---|---|
+| `pa_mp` | Mode de paiement | **Payment method** — how salary is disbursed (e.g., `1D` = bank transfer) | `"1D"` |
+| `pa_idbank` | Identifiant bancaire | **Bank account ID** — full bank account identifier (RIB) for salary transfer | `"05000000001508682362"` |
 
 ---
 
@@ -67,6 +107,15 @@
 
 ---
 
+## Benefits in Kind
+
+| Field | Full Name (French) | Description | Example |
+|---|---|---|---|
+| `pa_avkm` | Avantage kilométrique | **Mileage / transport benefit** — monetary value of transportation allowance | `0` |
+| `pa_avlog` | Avantage logement | **Housing benefit** — monetary value of housing allowance or benefit in kind | `0` |
+
+---
+
 ## Deductions
 
 | Field | Full Name (French) | Description | Example |
@@ -77,6 +126,17 @@
 | `pa_capdeces` | Capital décès | **Death benefit insurance** — contribution to a death/life insurance fund | `21.845` |
 | `pa_sps` | Sécurité / Protection sociale | **Social protection contribution** — employer/employee social protection levy | `87.38` |
 | `pa_spl` | Supplément / prélèvement | **Supplementary levy** — additional mandatory deduction | `21.845` |
+
+---
+
+## Insurance & Social
+
+| Field | Full Name (French) | Description | Example |
+|---|---|---|---|
+| `pa_regcnr` | Régime CNR | **CNR regime** — national retirement fund regime classification | `" "` |
+| `pa_capd` | Capital décès (régime) | **Death capital regime** — regime for death benefit calculation | `" "` |
+| `pa_mutuel` | Mutuelle | **Mutual insurance** — employee mutual health insurance membership | `" "` |
+| `pa_typarmee` | Type armée | **Military type** — military branch classification (if applicable) | `" "` |
 
 ---
 
