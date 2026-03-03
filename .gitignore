@@ -1,2 +1,16 @@
-paie2015.json
-ind2015.json
+.venv/
+__pycache__/
+**/__pycache__/
+*.pyc
+*.pyo
+*.log
+
+# Local editor/system noise
+.DS_Store
+Thumbs.db
+
+# Raw heavy files (keep local for pipeline reproducibility)
+data/raw/*.json
+
+# Generated clean artifacts (optional to commit)
+data/clean/*.jsonl

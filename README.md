@@ -1,101 +1,68 @@
-# INSAF — Payroll Intelligence Platform
+# INSAF — ETL & Data Warehouse
 
-> **PFE 2026** — Business Intelligence applied to government payroll data (masse salariale)
+This repository contains the finalized ETL + DW phase for the payroll/indemnity BI project.
 
----
+## Repository layout
 
-## Objectif du projet
+- `data/raw/`: raw JSON sources used by ETL
+- `data/clean/`: generated clean JSONL files used for staging loads
+- `etl/`: cleaning, recovery, and staging load scripts
+- `dw/`: SQL scripts for staging/dim/fact creation and DW load
+- `reports/`: validation SQL and ETL execution summary
+- `run_pipeline.ps1`: end-to-end reproducible pipeline
 
-Conception et mise en place d'une plateforme BI pour l'analyse de la **masse salariale** du secteur public, couvrant :
+## Reproducible pipeline
 
-- **Analyse descriptive** — tableaux de bord de la masse salariale par ministère, grade, région et type d'emploi
-- **Prédiction** — projection budgétaire, simulation de scénarios (augmentations, recrutements, départs en retraite)
-- **Détection d'anomalies** — identification automatique des paies anormales, doublons, employés fantômes et incohérences
+Run the full pipeline from repository root:
 
----
-
-## Données sources
-
-| Fichier | Description | Taille |
-|---|---|---|
-| `schema-paie.json` | Fiche de paie mensuelle (type 1 — PAIE) | Exemple unitaire |
-| `schema-indemnity.json` | Fiche d'indemnités (type 3 — INDCOMP) | Exemple unitaire |
-| `grade.json` | Référentiel des grades et rangs de la fonction publique | ~500 grades |
-| `nature.json` | Types d'emploi (fonctionnaire, ouvrier, contractuel...) | 12 types |
-| `region.json` | Localisations (hôpitaux, universités, administrations régionales) | 138+ sites |
-| `organisme.json` | Structure organisationnelle (directions, services, gouvernorats) | 90+ unités |
-| `indem_def.json` | Catalogue des indemnités et primes | 100+ types |
-
-### Types de paie (`pa_type`)
-
-| Code | Français | العربية | Description |
-|---|---|---|---|
-| `1` | PAIE | خلاص شهري | Salaire mensuel |
-| `2` | PRIME | منحة إنتاج | Prime de rendement |
-| `3` | INDCOMP | منحة خاصة | Indemnités spéciales |
-| `4` | PAICOMP | خلاص شهري تكميلي | Salaire complémentaire |
-
----
-
-## Documentation
-
-### Schémas de données
-
-| Document | Contenu |
-|---|---|
-| [schema-paie-documentation.md](docs/schema-paie-documentation.md) | Tous les champs de la fiche de paie (56 champs) |
-| [schema-indemnity-documentation.md](docs/schema-indemnity-documentation.md) | Tous les champs de la fiche d'indemnités |
-| [grade-documentation.md](docs/grade-documentation.md) | Structure du référentiel des grades (22 colonnes) |
-| [nature-documentation.md](docs/nature-documentation.md) | Classification des types d'emploi |
-| [region-documentation.md](docs/region-documentation.md) | Référentiel des localisations géographiques |
-| [organisme-documentation.md](docs/organisme-documentation.md) | Structure organisationnelle hiérarchique |
-| [indem-def-documentation.md](docs/indem-def-documentation.md) | Catalogue des indemnités avec paramètres de calcul |
-
-### Cas d'usage BI
-
-| Document | Contenu |
-|---|---|
-| [bi-use-cases.md](docs/bi-use-cases.md) | Cas d'usage détaillés : masse salariale, prédiction, statistiques, détection d'anomalies, architecture BI |
-
----
-
-## Architecture cible
-
-```
-  JSON Sources          ETL              Data Warehouse           Restitution
- ┌────────────┐    ┌──────────┐    ┌───────────────────┐    ┌─────────────────┐
- │ schema-paie│───▶│          │───▶│   fact_paie        │───▶│   Dashboards    │
- │ schema-ind.│───▶│  Python  │───▶│   fact_indemnite   │    │   (Power BI)    │
- ├────────────┤    │  Pandas  │    ├───────────────────┤    ├─────────────────┤
- │ grade.json │───▶│          │───▶│   dim_grade        │───▶│   Prédiction    │
- │ nature.json│───▶│          │───▶│   dim_nature       │    │   (Prophet)     │
- │ region.json│───▶│          │───▶│   dim_region       │    ├─────────────────┤
- │ organisme  │───▶│          │───▶│   dim_organisme    │───▶│   Anomalies     │
- │ indem_def  │───▶│          │───▶│   dim_indemnite    │    │   (Isolation    │
- └────────────┘    └──────────┘    │   dim_temps        │    │    Forest)      │
-                                   └───────────────────┘    └─────────────────┘
+```powershell
+./run_pipeline.ps1
 ```
 
----
+Execution sequence:
 
-## Cas d'usage principaux
+1. Create staging (`dw/01_create_staging.sql`)
+2. Create dimensions (`dw/02_create_dimensions.sql`)
+3. Create facts (`dw/03_create_facts.sql`)
+4. Clean raw files into JSONL (`etl/clean_raw_to_jsonl.py` + `etl/recover_ind2015.py`)
+5. Load staging (`etl/load_staging.py --truncate --use-copy`)
+6. Load DW (`dw/04_load_dw.sql`)
+7. Run validation checks (`reports/validation.sql`)
 
-### 1. Masse salariale
-- Vue globale brute / nette / retenues par ministère, grade, région
-- Évolution mensuelle et annuelle
-- Ratio indemnités / salaire de base
+## Project State
 
-### 2. Prédiction
-- Projection budgétaire N+1, N+2, N+3 (ARIMA / Prophet)
-- Vague de départs en retraite (`date_naissance` + `grade.AGERET`)
-- Simulation d'impact : augmentation générale, recrutement, reclassement
+### Current dataset coverage
 
-### 3. Statistiques
-- Pyramide des âges et des grades
-- Distribution salariale par genre, ancienneté, région
-- Analyse de Pareto des indemnités
+- Payroll (`paie2015`) loaded end-to-end
+- Indemnities (`ind2015`) loaded end-to-end
+- Reference dimensions loaded from raw reference JSON
 
-### 4. Détection d'anomalies
-- **Règles métier** : doublon de paiement, retraité encore payé, net > brut, échelon hors plafond
-- **Statistiques** : Z-score, Isolation Forest, loi de Benford
-- **Patterns suspects** : même RIB pour plusieurs matricules, saut d'échelon rapide, indemnité incompatible avec le grade
+### Row counts (current validated state)
+
+- `staging.stg_paie2015`: **22,867**
+- `staging.stg_ind2015`: **75,699**
+- `public.dim_employee`: **15,064**
+- `public.dim_temps`: **121**
+- `public.fact_paie`: **22,867**
+- `public.fact_indemnite`: **75,699**
+
+Full table counts and checks are documented in `reports/etl_summary.md`.
+
+### Data quality status
+
+- Duplicate business-key groups: **0** (`fact_paie`, `fact_indemnite`)
+- Null FK/key join checks: **0**
+- Invalid `netpay > salbrut`: **0**
+
+### Known limitation
+
+Payroll salvage reached a plateau at **22,867** rows under current recovery rules.
+
+- Re-cleaning `data/raw/paie2015.json` repeatedly yields the same row count.
+- Additional aggressive salvage heuristics are likely to increase false positives with low expected gain.
+
+Decision: keep the current conservative recovery strategy for stability and reproducibility.
+
+## Next phase
+
+The next planned phase is a **Backend Clean Architecture API** to expose DW data for dashboards and downstream analytics services.
