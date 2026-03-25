@@ -1,68 +1,91 @@
-# INSAF — ETL & Data Warehouse
+# Payroll ETL (Clean-Slate Rebuild)
 
-This repository contains the finalized ETL + DW phase for the payroll/indemnity BI project.
+This repository is currently focused on rebuilding the payroll cleaning pipeline from scratch.
 
-## Repository layout
+Scope of this phase:
+- Source dataset: `data/raw/paie2015.json`
+- Domain: payroll only
+- Filter: `pa_type == "1"`
+- Indemnity processing: intentionally out of scope for now
 
-- `data/raw/`: raw JSON sources used by ETL
-- `data/clean/`: generated clean JSONL files used for staging loads
-- `etl/`: cleaning, recovery, and staging load scripts
-- `dw/`: SQL scripts for staging/dim/fact creation and DW load
-- `reports/`: validation SQL and ETL execution summary
-- `run_pipeline.ps1`: end-to-end reproducible pipeline
+## Goals
 
-## Reproducible pipeline
+The pipeline is designed to produce a clean and trustworthy payroll dataset while preserving information:
+- Keep all payroll type-1 rows
+- Preserve valid raw values
+- Repair malformed tokens when structure allows safe recovery
+- Do not invent unsupported values
+- Flag unresolved fields explicitly instead of dropping rows
+- Keep corrections traceable at field level
 
-Run the full pipeline from repository root:
+## Current Script Layout
+
+- ETL and preparation scripts: `et/`
+- DW scaffolding folders: `dw/`
+- Final curated reports: `reports/`
+- Technical notes and contract docs: `docs/`
+
+Primary scripts:
+- Builder: `et/build_payroll_dataset.py`
+- Quality gate: `et/run_payroll_quality_gate.py`
+- DW input finalization: `et/finalize_paie_dw_input_layer.py`
+- Fact-to-dimension mapping bridges: `et/build_fact_dimension_mappings.py`
+
+Main behavior:
+- Streams large raw payload without loading the full file in memory
+- Parses malformed numeric tokens such as decimal commas (`1923,452 -> 1923.452`)
+- Normalizes date fields from `dd/mm/yy` to ISO `yyyy-mm-dd` when valid
+- Normalizes code and text whitespace conservatively
+- Adds quality metadata per row:
+	- `dq_unresolved_fields`
+	- `dq_has_unresolved`
+	- `dq_trace_count`
+
+## How To Run
+
+From repository root:
 
 ```powershell
-./run_pipeline.ps1
+.venv/Scripts/python.exe et/build_payroll_dataset.py
 ```
 
-Execution sequence:
+Optional development mode (sample only):
 
-1. Create staging (`dw/01_create_staging.sql`)
-2. Create dimensions (`dw/02_create_dimensions.sql`)
-3. Create facts (`dw/03_create_facts.sql`)
-4. Clean raw files into JSONL (`etl/clean_raw_to_jsonl.py` + `etl/recover_ind2015.py`)
-5. Load staging (`etl/load_staging.py --truncate --use-copy`)
-6. Load DW (`dw/04_load_dw.sql`)
-7. Run validation checks (`reports/validation.sql`)
+```powershell
+.venv/Scripts/python.exe et/build_payroll_dataset.py --max-rows 10000
+```
 
-## Project State
+Run full validation and finalization reports:
 
-### Current dataset coverage
+```powershell
+.venv/Scripts/python.exe et/run_payroll_quality_gate.py
+.venv/Scripts/python.exe et/finalize_paie_dw_input_layer.py
+.venv/Scripts/python.exe et/build_fact_dimension_mappings.py
+```
 
-- Payroll (`paie2015`) loaded end-to-end
-- Indemnities (`ind2015`) loaded end-to-end
-- Reference dimensions loaded from raw reference JSON
+## Outputs
 
-### Row counts (current validated state)
+- Final production datasets: `data/clean/*.jsonl`
+- Fact-to-dimension bridges: `data/clean/bridge_region_fact_to_dim_production.jsonl`, `data/clean/bridge_organisme_fact_to_dim_production.jsonl`
+- DW-safe region dimension (with Unknown member): `data/clean/dim_region_dw_production.jsonl`
+- Quality and mapping reports: `reports/paie_clean_v1_*.json`, `reports/paie_dw_*.json`
+- Technical notes and contracts: `docs/technical_notes.md`, `docs/data_contract.md`
 
-- `staging.stg_paie2015`: **22,867**
-- `staging.stg_ind2015`: **75,699**
-- `public.dim_employee`: **15,064**
-- `public.dim_temps`: **121**
-- `public.fact_paie`: **22,867**
-- `public.fact_indemnite`: **75,699**
+## Data Quality Contract
 
-Full table counts and checks are documented in `reports/etl_summary.md`.
+For each payroll type-1 row:
+- Row is preserved in output
+- Valid fields are preserved
+- Malformed fields are repaired when confidently recoverable
+- If unrecoverable, only that field is marked unresolved
 
-### Data quality status
+No blind replacement policy:
+- No blanket replacement with `0`
+- No blanket replacement with `null`
+- Legitimate zeros from source are preserved
 
-- Duplicate business-key groups: **0** (`fact_paie`, `fact_indemnite`)
-- Null FK/key join checks: **0**
-- Invalid `netpay > salbrut`: **0**
+## Notes
 
-### Known limitation
-
-Payroll salvage reached a plateau at **22,867** rows under current recovery rules.
-
-- Re-cleaning `data/raw/paie2015.json` repeatedly yields the same row count.
-- Additional aggressive salvage heuristics are likely to increase false positives with low expected gain.
-
-Decision: keep the current conservative recovery strategy for stability and reproducibility.
-
-## Next phase
-
-The next planned phase is a **Backend Clean Architecture API** to expose DW data for dashboards and downstream analytics services.
+- Reference files (`grade`, `nature`, `organisme`, `region`) are used only for enrichment labels and validation context in this phase.
+- Region mapping is strict by design. No fallback assignment to synthetic/default real regions is allowed.
+- Unmatched region rows are handled as Unknown in DW-safe outputs.
