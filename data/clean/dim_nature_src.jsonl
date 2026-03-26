@@ -1,0 +1,12 @@
+{"nature_key": 1, "codnat": "1", "libnata": "ãæÙÝ  ãÊÑÈÕ", "libnatl": "FONCTIONNAIRE STAGIAIRE", "typnat": "1"}
+{"nature_key": 2, "codnat": "2", "libnata": "ãæÙÝ ãÊÑÓã", "libnatl": "FONCTIONNAIRE TITULAIRE", "typnat": "1"}
+{"nature_key": 3, "codnat": "3", "libnata": "ÚÇãá ãÊÑÓã", "libnatl": "OUVRIER TITULAIRE", "typnat": "2"}
+{"nature_key": 4, "codnat": "4", "libnata": "ÚÇãá  ãÊÑÈÕ", "libnatl": "OUVRIER STAGIAIRE", "typnat": "2"}
+{"nature_key": 5, "codnat": "5", "libnata": "ÚÇãÜá æÞÊí", "libnatl": "OUVRIER TEMPORAIRE", "typnat": "2"}
+{"nature_key": 6, "codnat": "6", "libnata": "ÚÇãá ÚÑÖí", "libnatl": "OUVRIER OCCASIONNEL", "typnat": "2"}
+{"nature_key": 7, "codnat": "7", "libnata": "Úæä æÞÊí", "libnatl": "AGENT TEMPORAIRE", "typnat": "3"}
+{"nature_key": 8, "codnat": "8", "libnata": "ãÊÜÚÜÇÞÜÏ", "libnatl": "CONTRACTUEL", "typnat": "3"}
+{"nature_key": 9, "codnat": "9", "libnata": "ÃÕäÇÝ ãÎÊáÝÉ", "libnatl": "DIVERS", "typnat": "3"}
+{"nature_key": 10, "codnat": "A", "libnata": "ãÊÚÇÞÏ ãäÙøÑ", "libnatl": "CONTRACTUEL ASSIMILE", "typnat": "1"}
+{"nature_key": 11, "codnat": "B", "libnata": "Úæä æÞÊí ãäÙøÑ ÈÑÊÈÉ", "libnatl": "AGENT TEMPORAIRE ASSIMILE", "typnat": "3"}
+{"nature_key": 12, "codnat": "C", "libnata": "ÚãÏ", "libnatl": "OMDA", "typnat": "3"}

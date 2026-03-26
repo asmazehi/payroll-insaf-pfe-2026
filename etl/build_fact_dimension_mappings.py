@@ -12,13 +12,13 @@ CLEAN_DIR = PROJECT_ROOT / "data" / "clean"
 REPORTS_DIR = PROJECT_ROOT / "reports"
 DOCS_DIR = PROJECT_ROOT / "docs"
 
-FACT_FILE = CLEAN_DIR / "paie_fact_ready_production.jsonl"
+FACT_FILE = CLEAN_DIR / "fact_paie_src.jsonl"
 DIM_REGION_FILE = CLEAN_DIR / "dim_region_production.jsonl"
-DIM_ORGANISME_FILE = CLEAN_DIR / "dim_organisme_production.jsonl"
+DIM_ORGANISME_FILE = CLEAN_DIR / "dim_organisme_src.jsonl"
 
-REGION_BRIDGE_FILE = CLEAN_DIR / "bridge_region_fact_to_dim_production.jsonl"
-ORGANISME_BRIDGE_FILE = CLEAN_DIR / "bridge_organisme_fact_to_dim_production.jsonl"
-DIM_REGION_DW_FILE = CLEAN_DIR / "dim_region_dw_production.jsonl"
+REGION_BRIDGE_FILE = CLEAN_DIR / "map_region.jsonl"
+ORGANISME_BRIDGE_FILE = CLEAN_DIR / "map_organisme.jsonl"
+DIM_REGION_DW_FILE = CLEAN_DIR / "dim_region_src.jsonl"
 
 REPORT_FILE = REPORTS_DIR / "paie_dw_mapping_layer_report.json"
 TECH_NOTE_FILE = DOCS_DIR / "technical_notes.md"

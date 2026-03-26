@@ -9,7 +9,7 @@ This contract defines the payroll type-1 curated layer used as input to DW model
 One row per employee, per year, per month, per payroll type.
 
 Business key:
-- pa_mat
+- employee_id
 - pa_annee
 - pa_mois
 - pa_type
@@ -40,9 +40,9 @@ No codreg=000 fallback is allowed.
 
 ## Canonical References
 
-- data/clean/paie_fact_ready_production.jsonl
-- data/clean/employee_production.jsonl
-- data/clean/dim_region_dw_production.jsonl
-- data/clean/bridge_region_fact_to_dim_production.jsonl
-- data/clean/bridge_organisme_fact_to_dim_production.jsonl
+- data/clean/fact_paie_src.jsonl
+- data/clean/dim_employee_src.jsonl
+- data/clean/dim_region_src.jsonl
+- data/clean/map_region.jsonl
+- data/clean/map_organisme.jsonl
 - reports/paie_dw_mapping_layer_report.json

@@ -15,3 +15,5 @@ data/raw/*.json
 
 # Generated clean artifacts (optional to commit)
 data/clean/*.jsonl
+data/clean/fact_paie_src.jsonl
+data/clean/fact_paie_src.jsonl

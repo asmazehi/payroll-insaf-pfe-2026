@@ -20,16 +20,16 @@ The pipeline is designed to produce a clean and trustworthy payroll dataset whil
 
 ## Current Script Layout
 
-- ETL and preparation scripts: `et/`
+- ETL and preparation scripts: `etl/`
 - DW scaffolding folders: `dw/`
 - Final curated reports: `reports/`
 - Technical notes and contract docs: `docs/`
 
 Primary scripts:
-- Builder: `et/build_payroll_dataset.py`
-- Quality gate: `et/run_payroll_quality_gate.py`
-- DW input finalization: `et/finalize_paie_dw_input_layer.py`
-- Fact-to-dimension mapping bridges: `et/build_fact_dimension_mappings.py`
+- Builder: `etl/build_payroll_dataset.py`
+- Quality gate: `etl/run_payroll_quality_gate.py`
+- DW input finalization: `etl/finalize_paie_dw_input_layer.py`
+- Fact-to-dimension mapping bridges: `etl/build_fact_dimension_mappings.py`
 
 Main behavior:
 - Streams large raw payload without loading the full file in memory
@@ -46,28 +46,28 @@ Main behavior:
 From repository root:
 
 ```powershell
-.venv/Scripts/python.exe et/build_payroll_dataset.py
+.venv/Scripts/python.exe etl/build_payroll_dataset.py
 ```
 
 Optional development mode (sample only):
 
 ```powershell
-.venv/Scripts/python.exe et/build_payroll_dataset.py --max-rows 10000
+.venv/Scripts/python.exe etl/build_payroll_dataset.py --max-rows 10000
 ```
 
 Run full validation and finalization reports:
 
 ```powershell
-.venv/Scripts/python.exe et/run_payroll_quality_gate.py
-.venv/Scripts/python.exe et/finalize_paie_dw_input_layer.py
-.venv/Scripts/python.exe et/build_fact_dimension_mappings.py
+.venv/Scripts/python.exe etl/run_payroll_quality_gate.py
+.venv/Scripts/python.exe etl/finalize_paie_dw_input_layer.py
+.venv/Scripts/python.exe etl/build_fact_dimension_mappings.py
 ```
 
 ## Outputs
 
 - Final production datasets: `data/clean/*.jsonl`
-- Fact-to-dimension bridges: `data/clean/bridge_region_fact_to_dim_production.jsonl`, `data/clean/bridge_organisme_fact_to_dim_production.jsonl`
-- DW-safe region dimension (with Unknown member): `data/clean/dim_region_dw_production.jsonl`
+- Fact-to-dimension bridges: `data/clean/map_region.jsonl`, `data/clean/map_organisme.jsonl`
+- DW-safe region dimension (with Unknown member): `data/clean/dim_region_src.jsonl`
 - Quality and mapping reports: `reports/paie_clean_v1_*.json`, `reports/paie_dw_*.json`
 - Technical notes and contracts: `docs/technical_notes.md`, `docs/data_contract.md`
 

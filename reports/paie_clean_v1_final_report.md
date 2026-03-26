@@ -1,9 +1,9 @@
 # Final Validation Report (paie_clean_v1)
 
 ## 1. Repository Cleanup Plan
-- Files to keep: 43
-- Files to delete: 1
-- Files to refactor: 1
+- Files to keep: 30
+- Files to delete: 0
+- Files to refactor: 0
 
 ## 2. Dataset Profiling Summary
 - Total rows: 756018
@@ -27,7 +27,7 @@
 - Contract columns listed: 31
 
 ## 6. Quality Gate Script
-- Script: et/run_payroll_quality_gate.py
+- Script: etl/run_payroll_quality_gate.py
 - Mode: reproducible single-command validation
 
 ## 7. Validation Report

@@ -1,6 +1,6 @@
 {
   "version_tag": "paie_clean_v1",
-  "dataset": "C:\\Users\\asmaz\\OneDrive\\Desktop\\PFE\\payroll-insaf-pfe-2026\\data\\clean\\paie_fact_ready_production.jsonl",
+  "dataset": "C:\\Users\\asmaz\\OneDrive\\Desktop\\PFE\\payroll-insaf-pfe-2026\\data\\clean\\fact_paie_src.jsonl",
   "total_rows": 756018,
   "rows_preserved": 756018,
   "valid_rows": 5072,
@@ -14,8 +14,8 @@
   "rules": [
     {
       "rule": "rows_preserved_vs_summary",
-      "status": "PASS",
-      "detail": "Rows preserved: 756018."
+      "status": "WARN",
+      "detail": "No baseline summary found."
     },
     {
       "rule": "invalid_mois",

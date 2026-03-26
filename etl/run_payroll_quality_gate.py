@@ -8,14 +8,44 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Dict, Iterable, Iterator, List, Tuple
 
-from build_payroll_dataset import (
-    NUMERIC_FIELDS,
-    PAIE_FILE,
-    PAYROLL_OUTPUT,
-    REPORTS_DIR,
-    SUMMARY_OUTPUT,
-    build_reference_maps,
-)
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+RAW_DIR = PROJECT_ROOT / "data" / "raw"
+REPORTS_DIR = PROJECT_ROOT / "reports"
+PAYROLL_OUTPUT = PROJECT_ROOT / "data" / "clean" / "payroll_type1_clean.jsonl"
+SUMMARY_OUTPUT = REPORTS_DIR / "payroll_type1_summary.json"
+
+GRADE_FILE = RAW_DIR / "grade.json"
+NATURE_FILE = RAW_DIR / "nature.json"
+ORGANISME_FILE = RAW_DIR / "organisme.json"
+REGION_FILE = RAW_DIR / "region.json"
+
+NUMERIC_FIELDS = {
+    "pa_mois",
+    "pa_annee",
+    "pa_sec",
+    "pa_eche",
+    "pa_enfits",
+    "pa_totinf",
+    "pa_indice",
+    "pa_salimp",
+    "pa_salnimp",
+    "pa_avkm",
+    "pa_avlog",
+    "pa_cpe",
+    "pa_retrait",
+    "pa_cps",
+    "pa_capdeces",
+    "pa_netord",
+    "pa_netpay",
+    "pa_rapimp",
+    "pa_rapni",
+    "pa_sub",
+    "pa_sps",
+    "pa_spl",
+    "pa_rapsalb",
+    "pa_brutcnr",
+    "pa_salbrut",
+}
 
 
 VERSION_TAG = "paie_clean_v1"
@@ -29,7 +59,59 @@ REPO_CLEANUP_OUTPUT = REPORTS_DIR / f"{VERSION_TAG}_repository_cleanup.json"
 FINAL_REPORT_OUTPUT = REPORTS_DIR / f"{VERSION_TAG}_final_report.md"
 
 
-PAIE_FACT_READY_PROD = Path(__file__).resolve().parents[1] / "data" / "clean" / "paie_fact_ready_production.jsonl"
+PAIE_FACT_READY_PROD = Path(__file__).resolve().parents[1] / "data" / "clean" / "fact_paie_src.jsonl"
+
+
+def build_reference_maps() -> Dict[str, Dict[str, str]]:
+    def load_items(path: Path) -> List[Dict[str, Any]]:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        return payload["results"][0]["items"]
+
+    grade_map: Dict[str, str] = {}
+    for row in load_items(GRADE_FILE):
+        code = str(row.get("codgrd", "")).strip()
+        label = str(row.get("libcgrdl", "")).strip() or str(row.get("liblgrdl", "")).strip()
+        if code and label and code not in grade_map:
+            grade_map[code] = label
+
+    nature_map: Dict[str, str] = {}
+    for row in load_items(NATURE_FILE):
+        code = str(row.get("codnat", "")).strip()
+        label = str(row.get("libnatl", "")).strip()
+        if code and label and code not in nature_map:
+            nature_map[code] = label
+
+    org_map: Dict[str, str] = {}
+    for row in load_items(ORGANISME_FILE):
+        key = "|".join(
+            [
+                str(row.get("codetab", "")).strip(),
+                str(row.get("cab", "")).strip(),
+                str(row.get("sg", "")).strip(),
+                str(row.get("dg", "")).strip(),
+                str(row.get("dire", "")).strip(),
+                str(row.get("sdir", "")).strip(),
+                str(row.get("serv", "")).strip(),
+                str(row.get("unite", "")).strip(),
+            ]
+        )
+        label = str(row.get("liborgl", "")).strip()
+        if key and label and key not in org_map:
+            org_map[key] = label
+
+    region_map: Dict[str, str] = {}
+    for row in load_items(REGION_FILE):
+        key = f"{str(row.get('coddep', '')).strip()}|{str(row.get('codreg', '')).strip()}"
+        label = str(row.get("lib_reg", "")).strip()
+        if key and label and key not in region_map:
+            region_map[key] = label
+
+    return {
+        "grade": grade_map,
+        "nature": nature_map,
+        "organisme": org_map,
+        "region": region_map,
+    }
 
 
 def infer_identity_field(row: Dict[str, Any]) -> str:
@@ -533,7 +615,7 @@ def audit_repository(project_root: Path) -> Dict[str, Any]:
                     "reason": "Temporary runtime artifact; not needed for reproducibility or maintenance.",
                 }
             )
-        elif rel in {"README.md", ".gitignore", "et/build_payroll_dataset.py", "et/run_payroll_quality_gate.py"}:
+        elif rel in {"README.md", ".gitignore", "etl/build_payroll_dataset.py", "etl/run_payroll_quality_gate.py"}:
             category = "essential"
             purpose = "Core pipeline/reproducibility documentation or executable logic"
             keep.append(rel)
@@ -565,9 +647,9 @@ def audit_repository(project_root: Path) -> Dict[str, Any]:
         ".gitignore",
         "data/raw/{paie2015.json, grade.json, nature.json, organisme.json, region.json}",
         "data/raw/{ind2015.json, indem_def.json}  # kept for future phase",
-        "data/clean/{employee_production.jsonl, paie_fact_ready_production.jsonl}",
-        "et/build_payroll_dataset.py",
-        "et/run_payroll_quality_gate.py",
+        "data/clean/{dim_employee_src.jsonl, fact_paie_src.jsonl}",
+        "etl/build_payroll_dataset.py",
+        "etl/run_payroll_quality_gate.py",
         "reports/{payroll_type1_*.jsonl|json|md}",
         f"reports/{VERSION_TAG}_*.json|md",
     ]
@@ -709,7 +791,7 @@ def write_final_markdown(
             f"- Contract columns listed: {len(contract['columns'])}",
             "",
             "## 6. Quality Gate Script",
-            "- Script: et/run_payroll_quality_gate.py",
+            "- Script: etl/run_payroll_quality_gate.py",
             "- Mode: reproducible single-command validation",
             "",
             "## 7. Validation Report",
