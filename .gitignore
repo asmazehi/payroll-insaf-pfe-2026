@@ -17,3 +17,4 @@ data/raw/*.json
 data/clean/*.jsonl
 data/clean/fact_paie_src.jsonl
 data/clean/fact_paie_src.jsonl
+reports/*.json
