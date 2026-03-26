@@ -1,0 +1,77 @@
+{
+  "version_tag": "paie_clean_v1",
+  "dataset": "C:\\Users\\asmaz\\OneDrive\\Desktop\\PFE\\payroll-insaf-pfe-2026\\data\\clean\\paie_fact_ready_production.jsonl",
+  "total_rows": 756018,
+  "rows_preserved": 756018,
+  "valid_rows": 5072,
+  "rows_with_issues": 750946,
+  "duplicates": {
+    "grain": "employee_id x pa_annee x pa_mois x pa_type x pa_sec x pa_codmin x pa_dire x pa_article x pa_parag",
+    "duplicate_groups": 0,
+    "duplicate_rows": 0
+  },
+  "unresolved_rows_proxy": 0,
+  "rules": [
+    {
+      "rule": "rows_preserved_vs_summary",
+      "status": "PASS",
+      "detail": "Rows preserved: 756018."
+    },
+    {
+      "rule": "invalid_mois",
+      "status": "PASS",
+      "detail": "count=0"
+    },
+    {
+      "rule": "invalid_annee",
+      "status": "PASS",
+      "detail": "count=0"
+    },
+    {
+      "rule": "invalid_pa_type",
+      "status": "PASS",
+      "detail": "count=0"
+    },
+    {
+      "rule": "netpay_gt_salbrut",
+      "status": "PASS",
+      "detail": "count=0"
+    },
+    {
+      "rule": "duplicate_grain_rows",
+      "status": "PASS",
+      "detail": "duplicate_rows=0"
+    },
+    {
+      "rule": "suspicious_rows",
+      "status": "WARN",
+      "detail": "suspicious_rows=750946"
+    },
+    {
+      "rule": "inconsistent_rows",
+      "status": "PASS",
+      "detail": "inconsistent_rows=0"
+    },
+    {
+      "rule": "reference_coverage_grade",
+      "status": "PASS",
+      "detail": "match_rate=0.9960"
+    },
+    {
+      "rule": "reference_coverage_nature",
+      "status": "PASS",
+      "detail": "match_rate=1.0000"
+    },
+    {
+      "rule": "reference_coverage_organisme",
+      "status": "WARN",
+      "detail": "match_rate=0.0483"
+    },
+    {
+      "rule": "reference_coverage_region",
+      "status": "WARN",
+      "detail": "match_rate=0.0043"
+    }
+  ],
+  "final_status": "PASS WITH WARNINGS"
+}
