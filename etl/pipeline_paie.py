@@ -3,7 +3,7 @@ DW1 Pipeline — Payroll (pa_type = "1")
 ═══════════════════════════════════════
 Source : data/raw/paie2015.json
 Output :
-  data/clean/fact_paie.jsonl
+  data/clean/fact_paie.jsonl        ← slim: FKs + measures + DQ flags only
   data/clean/dim_employee.jsonl
   data/clean/dim_grade.jsonl
   data/clean/dim_nature.jsonl
@@ -103,51 +103,84 @@ def run(source: Path = RAW_PAIE, run_id: str | None = None) -> dict:
             if org:    stats["org_matched"]    += 1
             if rgn:    stats["region_matched"] += 1
 
-            # Collect unique employees
+            # ── Collect unique employees ──────────────────────────────────────
             mat = rec.get("pa_mat")
             if mat and mat not in employees:
                 employees[mat] = {
-                    "employee_id": mat,
-                    "last_name":   rec.get("pa_noml"),
-                    "first_name":  rec.get("pa_prenl"),
-                    "gender":      rec.get("pa_sexe"),
-                    "birth_date":  rec.get("pa_datnais"),
-                    "hire_date":   rec.get("pa_datent"),
+                    "employee_id":      mat,
+                    "last_name":        rec.get("pa_noml"),
+                    "first_name":       rec.get("pa_prenl"),
+                    "gender":           rec.get("pa_sexe"),
+                    "birth_date":       rec.get("pa_datnais"),
+                    "hire_date":        rec.get("pa_datent"),
+                    "appointment_date": rec.get("pa_datnatu"),
                 }
 
-            # Collect time periods
+            # ── Collect time periods ──────────────────────────────────────────
             yr, mo = rec.get("pa_annee"), rec.get("pa_mois")
             if yr and mo:
                 time_periods.add((int(yr), int(mo)))
 
-            # Attach reference labels to fact record
-            if grade:
-                rec["ref_grade_fr"] = grade["grade_label_fr"]
-                rec["ref_grade_ar"] = grade["grade_label_ar"]
-            if nature:
-                rec["ref_nature_fr"] = nature["nature_label_fr"]
-                rec["ref_nature_ar"] = nature["nature_label_ar"]
-            if org:
-                rec["ref_org_fr"] = org["liborgl"]
-                rec["ref_org_ar"] = org["liborga"]
-            if rgn:
-                rec["ref_region_fr"] = rgn["lib_reg"]
-                rec["ref_region_ar"] = rgn["lib_rega"]
+            # ── Build slim fact row ───────────────────────────────────────────
+            fact_row = {
+                # Natural foreign keys (resolved to surrogate keys by load_dw)
+                "employee_id":  mat,
+                "year_num":     int(yr) if yr else None,
+                "month_num":    int(mo) if mo else None,
+                "grade_code":   rec.get("pa_grd"),
+                "nature_code":  rec.get("pa_natu"),
+                "org_codetab":  org["codetab"] if org else None,
+                "org_dire":     org["dire"]    if org else None,
+                "pa_loca_raw":  rec.get("pa_loca"),
+                # Degenerate dimensions (context that changes monthly)
+                "pa_type":      rec.get("pa_type"),
+                "pa_sec":       rec.get("pa_sec"),
+                "pa_eche":      rec.get("pa_eche"),
+                "pa_indice":    rec.get("pa_indice"),
+                "pa_sitfam":    rec.get("pa_sitfam"),
+                "pa_nbrfam":    rec.get("pa_nbrfam"),
+                "pa_enfits":    rec.get("pa_enfits"),
+                "pa_totinf":    rec.get("pa_totinf"),
+                "pa_article":   rec.get("pa_article"),
+                "pa_parag":     rec.get("pa_parag"),
+                "pa_mp":        rec.get("pa_mp"),
+                "pa_regcnr":    rec.get("pa_regcnr"),
+                # Measures (prefixed m_ to match DW schema)
+                "m_salnimp":    rec.get("pa_salnimp"),
+                "m_avkm":       rec.get("pa_avkm"),
+                "m_rapni":      rec.get("pa_rapni"),
+                "m_salimp":     rec.get("pa_salimp"),
+                "m_salbrut":    rec.get("pa_salbrut"),
+                "m_netord":     rec.get("pa_netord"),
+                "m_brutcnr":    rec.get("pa_brutcnr"),
+                "m_sps":        rec.get("pa_sps"),
+                "m_rapsalb":    rec.get("pa_rapsalb"),
+                "m_spl":        rec.get("pa_spl"),
+                "m_cps":        rec.get("pa_cps"),
+                "m_avlog":      rec.get("pa_avlog"),
+                "m_netpay":     rec.get("pa_netpay"),
+                "m_retrait":    rec.get("pa_retrait"),
+                "m_sub":        rec.get("pa_sub"),
+                "m_cpe":        rec.get("pa_cpe"),
+                "m_rapimp":     rec.get("pa_rapimp"),
+                "m_capdeces":   rec.get("pa_capdeces"),
+                # DQ flags
+                "dq_has_issues":     rec.get("dq_has_issues"),
+                "dq_issue_count":    rec.get("dq_issue_count"),
+                "dq_grade_matched":  grade  is not None,
+                "dq_nature_matched": nature is not None,
+                "dq_org_matched":    org    is not None,
+                "dq_region_matched": rgn    is not None,
+                "dq_grade_method":   gm,
+                "dq_nature_method":  nm,
+                "dq_org_method":     om,
+                "dq_region_method":  rm,
+                # Audit
+                "run_id":      run_id,
+                "source_file": source.name,
+            }
 
-            # DQ flags
-            rec["dq_grade_matched"]   = grade  is not None
-            rec["dq_nature_matched"]  = nature is not None
-            rec["dq_org_matched"]     = org    is not None
-            rec["dq_region_matched"]  = rgn    is not None
-            rec["dq_grade_method"]    = gm
-            rec["dq_nature_method"]   = nm
-            rec["dq_org_method"]      = om
-            rec["dq_region_method"]   = rm
-
-            rec["run_id"]      = run_id
-            rec["source_file"] = source.name
-
-            fout.write(json.dumps(rec, ensure_ascii=False, default=str) + "\n")
+            fout.write(json.dumps(fact_row, ensure_ascii=False, default=str) + "\n")
             stats["written"] += 1
 
             if stats["written"] % 50_000 == 0:
