@@ -289,8 +289,7 @@ def write_pbit(model: dict) -> None:
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
         # [Content_Types].xml stays UTF-8 (it's XML, not JSON)
         zf.writestr("[Content_Types].xml", CONTENT_TYPES_XML.encode("utf-8"))
-        # Everything else: UTF-16 LE with BOM
-        zf.writestr("Version",          _utf16("4.0"))
+        zf.writestr("Version",          b"3.0")   # plain ASCII — no BOM
         zf.writestr("Settings",         _utf16(json.dumps(SETTINGS,      ensure_ascii=False)))
         zf.writestr("Metadata",         _utf16(json.dumps(METADATA,      ensure_ascii=False)))
         zf.writestr("SecurityBindings", b"")
