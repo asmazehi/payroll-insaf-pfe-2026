@@ -25,7 +25,8 @@ CREATE TABLE IF NOT EXISTS dw.dim_employee (
     first_name   TEXT,
     gender       SMALLINT     CHECK (gender IN (1, 2)),   -- 1=M  2=F
     birth_date   DATE,                           -- NULL = unknown / absent
-    hire_date    DATE,
+    hire_date         DATE,
+    appointment_date  DATE,
     is_unknown   BOOLEAN      NOT NULL DEFAULT FALSE,
     dw_load_ts   TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
     CONSTRAINT uq_dim_employee_id UNIQUE (employee_id)

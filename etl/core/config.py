@@ -55,7 +55,7 @@ import os
 DB_CONFIG = {
     "host":     os.getenv("PG_HOST",     "localhost"),
     "port":     int(os.getenv("PG_PORT", "5432")),
-    "dbname":   os.getenv("PG_DB",       "insaf_dw"),
+    "dbname":   os.getenv("PG_DB",       "payroll_dw"),
     "user":     os.getenv("PG_USER",     "postgres"),
     "password": os.getenv("PG_PASSWORD", "postgres"),
 }
