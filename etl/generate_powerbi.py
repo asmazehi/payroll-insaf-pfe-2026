@@ -206,7 +206,7 @@ def _build_model(schema: dict) -> dict:
 
     return {
         "name":               "Model",
-        "compatibilityLevel": 1567,
+        "compatibilityLevel": 1500,
         "model": {
             "culture": "en-US",
             "dataAccessOptions": {
