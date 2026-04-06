@@ -10,11 +10,7 @@ __pycache__/
 .DS_Store
 Thumbs.db
 
-# Raw heavy files (keep local for pipeline reproducibility)
-data/raw/*.json
-
-# Generated clean artifacts (optional to commit)
-data/clean/*.jsonl
-data/clean/fact_paie_src.jsonl
-data/clean/fact_paie_src.jsonl
-reports/*.json
+# Data files — never commit, always local only
+data/raw/
+data/clean/
+reports/
