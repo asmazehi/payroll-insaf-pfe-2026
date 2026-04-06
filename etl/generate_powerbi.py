@@ -146,15 +146,13 @@ def _col(name: str, pg_type: str) -> dict:
 
 
 def _table(name: str, cols: list[tuple[str, str]]) -> dict:
-    # M query as array of strings (Power BI's native format)
-    expression = [
-        f'let',
-        f'    Source = PostgreSQL.Database("{PG_HOST}:{PG_PORT}", "{PG_DB}"),',
-        f'    Schema = Source{{[Name="{DW_SCHEMA}"]}}[Data],',
-        f'    Result = Schema{{[Name="{name}"]}}[Data]',
-        f'in',
-        f'    Result',
-    ]
+    expression = (
+        f'let\n'
+        f'    Source = PostgreSQL.Database("{PG_HOST}:{PG_PORT}", "{PG_DB}"),\n'
+        f'    dw_schema = Source{{[Schema="{DW_SCHEMA}",Item="{name}"]}}[Data]\n'
+        f'in\n'
+        f'    dw_schema'
+    )
     return {
         "name":       name,
         "lineageTag": str(uuid.uuid4()),
@@ -184,7 +182,7 @@ def _measures_table() -> dict:
         "measures":   measures,
         "partitions": [{
             "name":   "_Measures",
-            "source": {"type": "m", "expression": ["let", "    Source = #table({},{})", "in", "    Source"]},
+            "source": {"type": "m", "expression": "let\n    Source = #table({},{})\nin\n    Source"},
         }],
         "annotations": [{"name": "PBI_ResultType", "value": "Table"}],
     }
@@ -289,7 +287,10 @@ def write_pbit(model: dict) -> None:
         zf.writestr("Settings",             json.dumps(SETTINGS,       ensure_ascii=False))
         zf.writestr("Metadata",             json.dumps(METADATA,       ensure_ascii=False))
         zf.writestr("SecurityBindings",     "")
-        zf.writestr("DataModelSchema",      json.dumps(model,          ensure_ascii=False, indent=0))
+        # DataModelSchema must be UTF-16 LE with BOM — Power BI requirement
+        schema_bytes = json.dumps(model, ensure_ascii=False, indent=0).encode("utf-16-le")
+        bom = b"\xff\xfe"
+        zf.writestr("DataModelSchema", bom + schema_bytes)
         zf.writestr("Report/Layout",        json.dumps(REPORT_LAYOUT,  ensure_ascii=False))
     PBIT_PATH.write_bytes(buf.getvalue())
 
