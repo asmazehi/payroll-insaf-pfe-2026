@@ -104,19 +104,21 @@ def load_dim_employee(cur, path: Path):
             _int(r, "gender"),
             _date(r, "birth_date"),
             _date(r, "hire_date"),
+            _date(r, "appointment_date"),
         ))
 
     cur.executemany("""
         INSERT INTO dw.dim_employee
-            (employee_id, last_name, first_name, gender, birth_date, hire_date)
-        VALUES (%s, %s, %s, %s, %s, %s)
+            (employee_id, last_name, first_name, gender, birth_date, hire_date, appointment_date)
+        VALUES (%s, %s, %s, %s, %s, %s, %s)
         ON CONFLICT (employee_id) DO UPDATE SET
-            last_name  = EXCLUDED.last_name,
-            first_name = EXCLUDED.first_name,
-            gender     = EXCLUDED.gender,
-            birth_date = EXCLUDED.birth_date,
-            hire_date  = EXCLUDED.hire_date,
-            dw_load_ts = NOW()
+            last_name        = EXCLUDED.last_name,
+            first_name       = EXCLUDED.first_name,
+            gender           = EXCLUDED.gender,
+            birth_date       = EXCLUDED.birth_date,
+            hire_date        = EXCLUDED.hire_date,
+            appointment_date = EXCLUDED.appointment_date,
+            dw_load_ts       = NOW()
     """, rows)
     log.info("  dim_employee: %d rows upserted", len(rows))
 
@@ -292,35 +294,37 @@ def load_dim_indemnite(cur, path: Path):
 # ── fact loaders ──────────────────────────────────────────────────────────────
 
 MEASURE_FIELDS = [
-    "pa_salimp","pa_salnimp","pa_salbrut","pa_brutcnr","pa_netord","pa_netpay",
-    "pa_cpe","pa_retrait","pa_cps","pa_capdeces","pa_avkm","pa_avlog",
-    "pa_rapimp","pa_rapni","pa_sub","pa_sps","pa_spl","pa_rapsalb",
+    "m_salimp","m_salnimp","m_salbrut","m_brutcnr","m_netord","m_netpay",
+    "m_cpe","m_retrait","m_cps","m_capdeces","m_avkm","m_avlog",
+    "m_rapimp","m_rapni","m_sub","m_sps","m_spl","m_rapsalb",
 ]
 
-def _fact_row(r: dict, employee_map: dict, time_map: dict, grade_map: dict,
-              nature_map: dict, org_map: dict, region_map: dict,
+def _fact_row(r: dict, employee_map: dict, time_map: dict, grade_map_: dict,
+              nature_map_: dict, org_map_: dict, region_map_: dict,
               indemnite_sk: int = None):
-    """Build one fact row tuple, resolving all SKs."""
-    emp_sk  = employee_map.get(_v(r, "pa_mat"),  0)
-    time_sk = time_map.get((_int(r,"pa_annee"), _int(r,"pa_mois")), 0)
-    grd_sk  = grade_map.get(_v(r, "pa_grd"),    0)
-    nat_sk  = nature_map.get(_v(r, "pa_natu"),  0)
-    org_sk  = org_map.get((_v(r,"pa_codmin"), _v(r,"pa_dire")), 0)
-    reg_sk  = region_map.get(_v(r, "pa_codmin"), 0)
+    """Build one fact row tuple, resolving all SKs.
+    Reads slim fact JSONL format produced by pipeline_paie / pipeline_indem.
+    """
+    emp_sk  = employee_map.get(_v(r, "employee_id"), 0)
+    time_sk = time_map.get((_int(r, "year_num"), _int(r, "month_num")), 0)
+    grd_sk  = grade_map_.get(_v(r, "grade_code"), 0)
+    nat_sk  = nature_map_.get(_v(r, "nature_code"), 0)
+    org_sk  = org_map_.get((_v(r, "org_codetab"), _v(r, "org_dire")), 0)
+    reg_sk  = region_map_.get(_v(r, "org_codetab"), 0)   # codetab == pa_codmin (ministry code)
 
     measures = tuple(_num(r, f) for f in MEASURE_FIELDS)
 
     base = (
-        emp_sk, time_sk, _v(r,"pa_type") or "1",
+        emp_sk, time_sk, _v(r, "pa_type") or "1",
         grd_sk, nat_sk, org_sk, reg_sk,
-        _int(r,"pa_eche"), _v(r,"pa_sitfam"), _v(r,"pa_loca"),
+        _int(r, "pa_eche"), _v(r, "pa_sitfam"), _v(r, "pa_loca_raw"),
         *measures,
-        _bool(r,"dq_grade_matched"),  _bool(r,"dq_nature_matched"),
-        _bool(r,"dq_org_matched"),    _bool(r,"dq_region_matched"),
-        _bool(r,"dq_has_issues") or False,
-        _int(r,"dq_issue_count") or 0,
-        _v(r,"run_id") or "unknown",
-        _v(r,"source_file") or "unknown",
+        _bool(r, "dq_grade_matched"),  _bool(r, "dq_nature_matched"),
+        _bool(r, "dq_org_matched"),    _bool(r, "dq_region_matched"),
+        _bool(r, "dq_has_issues") or False,
+        _int(r, "dq_issue_count") or 0,
+        _v(r, "run_id") or "unknown",
+        _v(r, "source_file") or "unknown",
     )
 
     if indemnite_sk is not None:
