@@ -1,0 +1,332 @@
+table fact_paie
+	lineageTag: 685b52df-8164-47c2-ab8f-af48ba39a620
+
+	column employee_sk
+		dataType: int64
+		isHidden
+		isKey
+		lineageTag: f9566125-8eb0-4143-8965-8ed4adbf78a8
+		summarizeBy: none
+		sourceColumn: employee_sk
+
+		annotation SummarizationSetBy = Automatic
+
+	column time_sk
+		dataType: int64
+		isHidden
+		isKey
+		lineageTag: fa2491e7-21c1-4deb-aad6-193f19eb0546
+		summarizeBy: none
+		sourceColumn: time_sk
+
+		annotation SummarizationSetBy = Automatic
+
+	column pa_type
+		dataType: string
+		lineageTag: afa1887e-208a-4ab4-91bc-bcb06cb2609f
+		summarizeBy: none
+		sourceColumn: pa_type
+
+		annotation SummarizationSetBy = Automatic
+
+	column grade_sk
+		dataType: int64
+		isHidden
+		isKey
+		lineageTag: 84704f80-d3b3-46f8-a896-cfccb1d46fee
+		summarizeBy: none
+		sourceColumn: grade_sk
+
+		annotation SummarizationSetBy = Automatic
+
+	column nature_sk
+		dataType: int64
+		isHidden
+		isKey
+		lineageTag: 91673da2-cff1-4d8e-abba-e5d1c738025a
+		summarizeBy: none
+		sourceColumn: nature_sk
+
+		annotation SummarizationSetBy = Automatic
+
+	column organisme_sk
+		dataType: int64
+		isHidden
+		isKey
+		lineageTag: e2fb9494-f24a-43f6-bb5f-d3b8b4182238
+		summarizeBy: none
+		sourceColumn: organisme_sk
+
+		annotation SummarizationSetBy = Automatic
+
+	column region_sk
+		dataType: int64
+		isHidden
+		isKey
+		lineageTag: 8cb84445-6b6c-49af-9451-07c40fb4181a
+		summarizeBy: none
+		sourceColumn: region_sk
+
+		annotation SummarizationSetBy = Automatic
+
+	column pa_eche
+		dataType: int64
+		lineageTag: d4d25075-c068-4f8b-ac62-233e3ed2e8d2
+		summarizeBy: none
+		sourceColumn: pa_eche
+
+		annotation SummarizationSetBy = Automatic
+
+	column pa_sitfam
+		dataType: string
+		lineageTag: b08d7735-f637-46e2-a95c-23067eb67b89
+		summarizeBy: none
+		sourceColumn: pa_sitfam
+
+		annotation SummarizationSetBy = Automatic
+
+	column pa_loca_raw
+		dataType: string
+		lineageTag: 6706bc4d-9eb2-4664-8167-7ea8ab04635c
+		summarizeBy: none
+		sourceColumn: pa_loca_raw
+
+		annotation SummarizationSetBy = Automatic
+
+	column m_salimp
+		dataType: decimal
+		lineageTag: 517e0e04-d01b-4e52-a0c7-295609e711f5
+		summarizeBy: sum
+		sourceColumn: m_salimp
+
+		annotation SummarizationSetBy = Automatic
+
+	column m_salnimp
+		dataType: decimal
+		lineageTag: 6b431d94-5127-4232-a1ab-3f23f12a7a3e
+		summarizeBy: sum
+		sourceColumn: m_salnimp
+
+		annotation SummarizationSetBy = Automatic
+
+	column m_salbrut
+		dataType: decimal
+		lineageTag: f3d08b5c-bc29-46ed-8e0a-7130eaf45ffa
+		summarizeBy: sum
+		sourceColumn: m_salbrut
+
+		annotation SummarizationSetBy = Automatic
+
+	column m_brutcnr
+		dataType: decimal
+		lineageTag: 257ddeb6-cb95-4bfa-9477-19ed2ea10ed2
+		summarizeBy: sum
+		sourceColumn: m_brutcnr
+
+		annotation SummarizationSetBy = Automatic
+
+	column m_netord
+		dataType: decimal
+		lineageTag: dd8d317d-dfbb-43cc-861b-bd6d520ee469
+		summarizeBy: sum
+		sourceColumn: m_netord
+
+		annotation SummarizationSetBy = Automatic
+
+	column m_netpay
+		dataType: decimal
+		lineageTag: bebabfcf-43d3-468c-b4af-4bdac7582f51
+		summarizeBy: sum
+		sourceColumn: m_netpay
+
+		annotation SummarizationSetBy = Automatic
+
+	column m_cpe
+		dataType: decimal
+		lineageTag: 0366cbeb-500f-49c3-b5cf-b7524f07e6cd
+		summarizeBy: sum
+		sourceColumn: m_cpe
+
+		annotation SummarizationSetBy = Automatic
+
+	column m_retrait
+		dataType: decimal
+		lineageTag: 7e1565fb-0627-45f2-9602-7aa9757c616e
+		summarizeBy: sum
+		sourceColumn: m_retrait
+
+		annotation SummarizationSetBy = Automatic
+
+	column m_cps
+		dataType: decimal
+		lineageTag: ccba7a07-b080-4ab9-a0a0-a27b82c6de83
+		summarizeBy: sum
+		sourceColumn: m_cps
+
+		annotation SummarizationSetBy = Automatic
+
+	column m_capdeces
+		dataType: decimal
+		lineageTag: e07c7d3b-ce0b-4c69-9226-04e71a04b057
+		summarizeBy: sum
+		sourceColumn: m_capdeces
+
+		annotation SummarizationSetBy = Automatic
+
+	column m_avkm
+		dataType: decimal
+		lineageTag: 5601aa22-5c15-4692-8762-9b63c1c44eab
+		summarizeBy: sum
+		sourceColumn: m_avkm
+
+		annotation SummarizationSetBy = Automatic
+
+	column m_avlog
+		dataType: decimal
+		lineageTag: e1198bc8-a18e-4d4d-bc22-b082ec2cc757
+		summarizeBy: sum
+		sourceColumn: m_avlog
+
+		annotation SummarizationSetBy = Automatic
+
+	column m_rapimp
+		dataType: decimal
+		lineageTag: c1f48a54-734d-4ec4-bc77-3ac94050c48e
+		summarizeBy: sum
+		sourceColumn: m_rapimp
+
+		annotation SummarizationSetBy = Automatic
+
+	column m_rapni
+		dataType: decimal
+		lineageTag: 381a0dcc-a22e-4d31-80fc-1dd3a0e4ae5f
+		summarizeBy: sum
+		sourceColumn: m_rapni
+
+		annotation SummarizationSetBy = Automatic
+
+	column m_sub
+		dataType: decimal
+		lineageTag: 5f4152ec-20f6-4e32-ade3-75a4a0b30798
+		summarizeBy: sum
+		sourceColumn: m_sub
+
+		annotation SummarizationSetBy = Automatic
+
+	column m_sps
+		dataType: decimal
+		lineageTag: 279cd6eb-c789-4d6d-8490-903e4a2777c2
+		summarizeBy: sum
+		sourceColumn: m_sps
+
+		annotation SummarizationSetBy = Automatic
+
+	column m_spl
+		dataType: decimal
+		lineageTag: 7bdc097a-d74d-4e50-a58b-38c01e0c4fbb
+		summarizeBy: sum
+		sourceColumn: m_spl
+
+		annotation SummarizationSetBy = Automatic
+
+	column m_rapsalb
+		dataType: decimal
+		lineageTag: 47df6288-0cd4-4820-b5b4-79a03451197f
+		summarizeBy: sum
+		sourceColumn: m_rapsalb
+
+		annotation SummarizationSetBy = Automatic
+
+	column dq_grade_matched
+		dataType: boolean
+		isHidden
+		lineageTag: b1773502-9ab0-4019-a254-c27a240189a5
+		summarizeBy: none
+		sourceColumn: dq_grade_matched
+
+		annotation SummarizationSetBy = Automatic
+
+	column dq_nature_matched
+		dataType: boolean
+		isHidden
+		lineageTag: 34eb6083-9477-4726-8519-fa31e9096f14
+		summarizeBy: none
+		sourceColumn: dq_nature_matched
+
+		annotation SummarizationSetBy = Automatic
+
+	column dq_org_matched
+		dataType: boolean
+		isHidden
+		lineageTag: 01b351ac-78d5-4b22-8247-48cabfe61bf3
+		summarizeBy: none
+		sourceColumn: dq_org_matched
+
+		annotation SummarizationSetBy = Automatic
+
+	column dq_region_matched
+		dataType: boolean
+		isHidden
+		lineageTag: 16c6da6b-caa5-42d0-b986-aeeaf2e563a6
+		summarizeBy: none
+		sourceColumn: dq_region_matched
+
+		annotation SummarizationSetBy = Automatic
+
+	column dq_has_issues
+		dataType: boolean
+		isHidden
+		lineageTag: e6e85929-6268-4542-95f4-26554f66c002
+		summarizeBy: none
+		sourceColumn: dq_has_issues
+
+		annotation SummarizationSetBy = Automatic
+
+	column dq_issue_count
+		dataType: int64
+		isHidden
+		lineageTag: 93ea6863-40df-4264-9dbf-bf0d7111e34a
+		summarizeBy: none
+		sourceColumn: dq_issue_count
+
+		annotation SummarizationSetBy = Automatic
+
+	column run_id
+		dataType: string
+		isHidden
+		lineageTag: 13d9f052-e600-4c33-9a49-1a9d222e9b71
+		summarizeBy: none
+		sourceColumn: run_id
+
+		annotation SummarizationSetBy = Automatic
+
+	column source_file
+		dataType: string
+		isHidden
+		lineageTag: 14480e91-e221-4bd0-93bf-c3f8d956cfcd
+		summarizeBy: none
+		sourceColumn: source_file
+
+		annotation SummarizationSetBy = Automatic
+
+	column load_ts
+		dataType: dateTime
+		isHidden
+		lineageTag: 0e9ec5cf-742a-48b1-b9d7-7d072887e2e2
+		summarizeBy: none
+		sourceColumn: load_ts
+
+		annotation SummarizationSetBy = Automatic
+
+	partition fact_paie = m
+		mode: import
+		source
+			```
+			let
+			    Source = PostgreSQL.Database("localhost:5432", "payroll_dw"),
+			    Result = Source{[Schema="dw", Item="fact_paie"]}[Data]
+			in
+			    Result
+			```
+
+	annotation PBI_ResultType = Table

@@ -1,0 +1,99 @@
+table dim_employee
+	lineageTag: acde69f9-c3be-4082-abc0-0fb93284aaba
+
+	column employee_sk
+		dataType: int64
+		isHidden
+		isKey
+		lineageTag: edb25f92-7a40-4c2e-af9f-ae74faf77241
+		summarizeBy: none
+		sourceColumn: employee_sk
+
+		annotation SummarizationSetBy = Automatic
+
+	column employee_id
+		dataType: string
+		lineageTag: 754e2e21-bff7-44de-8b6d-6b27d78654b2
+		summarizeBy: none
+		sourceColumn: employee_id
+
+		annotation SummarizationSetBy = Automatic
+
+	column last_name
+		dataType: string
+		lineageTag: 7ffd5eef-4339-4bea-b24a-f7c3043464a3
+		summarizeBy: none
+		sourceColumn: last_name
+
+		annotation SummarizationSetBy = Automatic
+
+	column first_name
+		dataType: string
+		lineageTag: 02f720ef-c80d-46b3-8448-37a1bb8e0edd
+		summarizeBy: none
+		sourceColumn: first_name
+
+		annotation SummarizationSetBy = Automatic
+
+	column gender
+		dataType: int64
+		lineageTag: 353c08a2-061d-4e3f-9665-f887aa78239b
+		summarizeBy: none
+		sourceColumn: gender
+
+		annotation SummarizationSetBy = Automatic
+
+	column birth_date
+		dataType: dateTime
+		lineageTag: 5521ffa7-d2d3-4d90-9cf1-92d70246e033
+		summarizeBy: none
+		sourceColumn: birth_date
+
+		annotation SummarizationSetBy = Automatic
+
+	column hire_date
+		dataType: dateTime
+		lineageTag: 3c0a659c-5709-4a42-8de6-c0320aa12d1d
+		summarizeBy: none
+		sourceColumn: hire_date
+
+		annotation SummarizationSetBy = Automatic
+
+	column is_unknown
+		dataType: boolean
+		isHidden
+		lineageTag: 272a6d8a-e0eb-4676-9534-92b7500e9b31
+		summarizeBy: none
+		sourceColumn: is_unknown
+
+		annotation SummarizationSetBy = Automatic
+
+	column dw_load_ts
+		dataType: dateTime
+		isHidden
+		lineageTag: dd6ba547-7542-4b8b-9c77-073adbb97eaf
+		summarizeBy: none
+		sourceColumn: dw_load_ts
+
+		annotation SummarizationSetBy = Automatic
+
+	column appointment_date
+		dataType: dateTime
+		lineageTag: fc67b030-b447-46c3-9099-203eb1f06f2e
+		summarizeBy: none
+		sourceColumn: appointment_date
+
+		annotation SummarizationSetBy = Automatic
+
+	partition dim_employee = m
+		mode: import
+		source
+			```
+			let
+			    Source = PostgreSQL.Database("localhost:5432", "payroll_dw"),
+			    Result = Source{[Schema="dw", Item="dim_employee"]}[Data]
+			in
+			    Result
+			```
+
+	annotation PBI_ResultType = Table

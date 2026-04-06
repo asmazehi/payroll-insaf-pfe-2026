@@ -1,0 +1,147 @@
+table dim_organisme
+	lineageTag: 60ede28a-fcca-4240-b8a4-5fb8e8229fac
+
+	column organisme_sk
+		dataType: int64
+		isHidden
+		isKey
+		lineageTag: 5e49f184-0e2a-4206-bc36-e37acfa7d19e
+		summarizeBy: none
+		sourceColumn: organisme_sk
+
+		annotation SummarizationSetBy = Automatic
+
+	column codetab
+		dataType: string
+		lineageTag: 51caf3b2-6f7c-4b92-a915-15ad7c827187
+		summarizeBy: none
+		sourceColumn: codetab
+
+		annotation SummarizationSetBy = Automatic
+
+	column cab
+		dataType: string
+		lineageTag: 3b325a85-69f9-4711-bbb9-3170f761577b
+		summarizeBy: none
+		sourceColumn: cab
+
+		annotation SummarizationSetBy = Automatic
+
+	column sg
+		dataType: string
+		lineageTag: 4cea1c73-eaf5-4748-a83e-a5f0e63f06fd
+		summarizeBy: none
+		sourceColumn: sg
+
+		annotation SummarizationSetBy = Automatic
+
+	column dg
+		dataType: string
+		lineageTag: 261c8643-89f3-4837-bc61-c012b85415ed
+		summarizeBy: none
+		sourceColumn: dg
+
+		annotation SummarizationSetBy = Automatic
+
+	column dire
+		dataType: string
+		lineageTag: 72fa1a6b-c056-4aa3-926f-b72e4b9ae529
+		summarizeBy: none
+		sourceColumn: dire
+
+		annotation SummarizationSetBy = Automatic
+
+	column sdir
+		dataType: string
+		lineageTag: 16f6e9c6-c1af-41ec-ace7-4994930f5500
+		summarizeBy: none
+		sourceColumn: sdir
+
+		annotation SummarizationSetBy = Automatic
+
+	column serv
+		dataType: string
+		lineageTag: b9bcbef6-f227-4f7b-aba2-d93cab630a8e
+		summarizeBy: none
+		sourceColumn: serv
+
+		annotation SummarizationSetBy = Automatic
+
+	column unite
+		dataType: string
+		lineageTag: 39dc78ff-35db-42dc-b03b-bb55a24fdf39
+		summarizeBy: none
+		sourceColumn: unite
+
+		annotation SummarizationSetBy = Automatic
+
+	column liborgl
+		dataType: string
+		lineageTag: 22f5aed2-3d7d-4c17-a279-7475f39479b7
+		summarizeBy: none
+		sourceColumn: liborgl
+
+		annotation SummarizationSetBy = Automatic
+
+	column liborga
+		dataType: string
+		lineageTag: 4cc13ab7-4e58-456c-ba85-e8984267b1c7
+		summarizeBy: none
+		sourceColumn: liborga
+
+		annotation SummarizationSetBy = Automatic
+
+	column codgouv
+		dataType: string
+		lineageTag: b1f4816d-54fb-4ba6-899f-d684dcb001a7
+		summarizeBy: none
+		sourceColumn: codgouv
+
+		annotation SummarizationSetBy = Automatic
+
+	column deleg
+		dataType: string
+		lineageTag: 70072a3e-3883-4491-bcd2-438b167221d5
+		summarizeBy: none
+		sourceColumn: deleg
+
+		annotation SummarizationSetBy = Automatic
+
+	column typstruct
+		dataType: string
+		lineageTag: ce1399b5-b7da-4eca-8629-0aa54b641ee5
+		summarizeBy: none
+		sourceColumn: typstruct
+
+		annotation SummarizationSetBy = Automatic
+
+	column is_unknown
+		dataType: boolean
+		isHidden
+		lineageTag: ff4bbe75-c1ea-46d3-8f7b-42fe68e80334
+		summarizeBy: none
+		sourceColumn: is_unknown
+
+		annotation SummarizationSetBy = Automatic
+
+	column dw_load_ts
+		dataType: dateTime
+		isHidden
+		lineageTag: fd18a2b8-dfb8-45e3-902e-1034b593f69a
+		summarizeBy: none
+		sourceColumn: dw_load_ts
+
+		annotation SummarizationSetBy = Automatic
+
+	partition dim_organisme = m
+		mode: import
+		source
+			```
+			let
+			    Source = PostgreSQL.Database("localhost:5432", "payroll_dw"),
+			    Result = Source{[Schema="dw", Item="dim_organisme"]}[Data]
+			in
+			    Result
+			```
+
+	annotation PBI_ResultType = Table

@@ -1,0 +1,11 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/gitIntegration/platformProperties/2.0.0/schema.json",
+  "metadata": {
+    "type": "Dataset",
+    "displayName": "insaf_dw"
+  },
+  "config": {
+    "version": "2.0",
+    "logicalId": "4fe86979-1677-4069-aac0-9b8f19c578df"
+  }
+}

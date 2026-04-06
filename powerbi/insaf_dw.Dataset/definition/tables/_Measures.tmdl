@@ -1,0 +1,79 @@
+table _Measures
+	lineageTag: b04b8d8f-dc38-4fa1-9794-3dc0cf0e2e7b
+
+	measure 'Total Net Pay' = SUM(fact_paie[m_netpay])
+		formatString: #,##0.000
+		lineageTag: cc4ec2e0-c29a-46bd-8c56-4aadad8823df
+		displayFolder: Payroll
+
+	measure 'Total Gross Pay' = SUM(fact_paie[m_salbrut])
+		formatString: #,##0.000
+		lineageTag: baf57252-e8ab-4abe-9aed-190b832ecc57
+		displayFolder: Payroll
+
+	measure 'Avg Net Pay' = AVERAGEX(FILTER(fact_paie, fact_paie[m_netpay] <> BLANK()), fact_paie[m_netpay])
+		formatString: #,##0.000
+		lineageTag: 63b3ef37-1c01-40bd-a517-b9f8db21f9a0
+		displayFolder: Payroll
+
+	measure 'Min Net Pay' = MINX(FILTER(fact_paie, fact_paie[m_netpay] <> BLANK()), fact_paie[m_netpay])
+		formatString: #,##0.000
+		lineageTag: d301ce8c-d8c9-48c2-90b4-a06ff6d8a5ac
+		displayFolder: Payroll
+
+	measure 'Max Net Pay' = MAXX(FILTER(fact_paie, fact_paie[m_netpay] <> BLANK()), fact_paie[m_netpay])
+		formatString: #,##0.000
+		lineageTag: 4a4a25d5-4768-47f3-bf10-d41cc9afcf23
+		displayFolder: Payroll
+
+	measure 'Employee Count' = DISTINCTCOUNT(fact_paie[employee_sk])
+		formatString: #,##0
+		lineageTag: 821d03b6-c27d-453f-8dbc-bd37c20ff7a3
+		displayFolder: Payroll
+
+	measure 'Total Deductions' = SUM(fact_paie[m_retrait]) + SUM(fact_paie[m_cps]) + SUM(fact_paie[m_cpe])
+		formatString: #,##0.000
+		lineageTag: f1910c1d-1b1d-4914-be94-f1541ddccd93
+		displayFolder: Payroll
+
+	measure 'Total Taxable Salary' = SUM(fact_paie[m_salimp])
+		formatString: #,##0.000
+		lineageTag: 1c4d43f2-0b22-4ca7-8535-030d58fb2fa5
+		displayFolder: Payroll
+
+	measure 'Net to Gross Ratio' = DIVIDE(SUM(fact_paie[m_netpay]), SUM(fact_paie[m_salbrut]))
+		formatString: 0.00%
+		lineageTag: d094fd05-8503-4875-af99-038b17e7e4fc
+		displayFolder: Payroll
+
+	measure 'Total Indemnity' = SUM(fact_indem[m_netpay])
+		formatString: #,##0.000
+		lineageTag: 33c95f14-e064-4d19-8208-0e36916ed5d1
+		displayFolder: Indemnities
+
+	measure 'Indemnity Employee Count' = DISTINCTCOUNT(fact_indem[employee_sk])
+		formatString: #,##0
+		lineageTag: c9eb2498-9c12-46fc-b522-031bea4e88ae
+		displayFolder: Indemnities
+
+	measure 'Avg Indemnity' = AVERAGEX(FILTER(fact_indem, fact_indem[m_netpay] <> BLANK()), fact_indem[m_netpay])
+		formatString: #,##0.000
+		lineageTag: 23b1582f-e083-4993-ab2e-43b0ead221ff
+		displayFolder: Indemnities
+
+	measure 'Total Compensation' = [Total Net Pay] + [Total Indemnity]
+		formatString: #,##0.000
+		lineageTag: c98dfc1c-4d5f-42ea-b7f5-0388372f4c77
+		displayFolder: Combined
+
+	measure 'Payroll Share' = DIVIDE([Total Net Pay], [Total Compensation])
+		formatString: 0.00%
+		lineageTag: 41704c05-6d27-41d0-9ec7-ba7f088a5a4c
+		displayFolder: Combined
+
+	measure 'Indemnity Share' = DIVIDE([Total Indemnity], [Total Compensation])
+		formatString: 0.00%
+		lineageTag: 2eafb1e1-be48-44f5-82e0-6eeef26f9983
+		displayFolder: Combined
+
+	annotation PBI_ResultType = Table

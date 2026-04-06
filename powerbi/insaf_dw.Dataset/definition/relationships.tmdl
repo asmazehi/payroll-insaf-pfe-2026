@@ -1,0 +1,77 @@
+relationship adf4b790-6805-452d-be8b-4c15ab5ce495
+	fromTable: fact_paie
+	fromColumn: employee_sk
+	toTable: dim_employee
+	toColumn: employee_sk
+
+relationship b9ef1082-2e82-49ff-bdba-5a11656b9e25
+	fromTable: fact_paie
+	fromColumn: time_sk
+	toTable: dim_temps
+	toColumn: time_sk
+
+relationship a684b317-691a-48c0-93c4-56bc82265d6c
+	fromTable: fact_paie
+	fromColumn: grade_sk
+	toTable: dim_grade
+	toColumn: grade_sk
+
+relationship b2fb4de2-e8b7-4584-9ab1-a389ac7faafb
+	fromTable: fact_paie
+	fromColumn: nature_sk
+	toTable: dim_nature
+	toColumn: nature_sk
+
+relationship 6167e42c-f28e-4954-98df-f62bd3f27b5a
+	fromTable: fact_paie
+	fromColumn: organisme_sk
+	toTable: dim_organisme
+	toColumn: organisme_sk
+
+relationship 7bfe6e68-c8e4-4a01-880a-5c9d967b7509
+	fromTable: fact_paie
+	fromColumn: region_sk
+	toTable: dim_region
+	toColumn: region_sk
+
+relationship 629521d4-3d3e-4e2e-b393-d19f6ed2a479
+	fromTable: fact_indem
+	fromColumn: employee_sk
+	toTable: dim_employee
+	toColumn: employee_sk
+
+relationship 48d134db-c33b-4060-b2a1-7e03dfb84036
+	fromTable: fact_indem
+	fromColumn: time_sk
+	toTable: dim_temps
+	toColumn: time_sk
+
+relationship f5b3ff00-ac0f-4d55-9bbf-1a0c25a629f3
+	fromTable: fact_indem
+	fromColumn: grade_sk
+	toTable: dim_grade
+	toColumn: grade_sk
+
+relationship c78d843e-ceed-4a96-9e20-57cf75a088a2
+	fromTable: fact_indem
+	fromColumn: nature_sk
+	toTable: dim_nature
+	toColumn: nature_sk
+
+relationship c76bfc19-91bb-4759-a078-358bef5fba7c
+	fromTable: fact_indem
+	fromColumn: organisme_sk
+	toTable: dim_organisme
+	toColumn: organisme_sk
+
+relationship a86d37c3-5d88-473f-b1e8-b20af68c020e
+	fromTable: fact_indem
+	fromColumn: region_sk
+	toTable: dim_region
+	toColumn: region_sk
+
+relationship 1fffef9c-d29b-4b95-8245-28b45468e6df
+	fromTable: fact_indem
+	fromColumn: indemnite_sk
+	toTable: dim_indemnite
+	toColumn: indemnite_sk
