@@ -278,20 +278,24 @@ METADATA = {
 }
 
 
+def _utf16(text: str) -> bytes:
+    """Encode string as UTF-16 LE with BOM — required for ALL text files in .pbit."""
+    return b"\xff\xfe" + text.encode("utf-16-le")
+
+
 def write_pbit(model: dict) -> None:
     PBIT_PATH.parent.mkdir(parents=True, exist_ok=True)
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
-        zf.writestr("[Content_Types].xml",  CONTENT_TYPES_XML)
-        zf.writestr("Version",              "3.0")
-        zf.writestr("Settings",             json.dumps(SETTINGS,       ensure_ascii=False))
-        zf.writestr("Metadata",             json.dumps(METADATA,       ensure_ascii=False))
-        zf.writestr("SecurityBindings",     "")
-        # DataModelSchema must be UTF-16 LE with BOM — Power BI requirement
-        schema_bytes = json.dumps(model, ensure_ascii=False, indent=0).encode("utf-16-le")
-        bom = b"\xff\xfe"
-        zf.writestr("DataModelSchema", bom + schema_bytes)
-        zf.writestr("Report/Layout",        json.dumps(REPORT_LAYOUT,  ensure_ascii=False))
+        # [Content_Types].xml stays UTF-8 (it's XML, not JSON)
+        zf.writestr("[Content_Types].xml", CONTENT_TYPES_XML.encode("utf-8"))
+        # Everything else: UTF-16 LE with BOM
+        zf.writestr("Version",          _utf16("4.0"))
+        zf.writestr("Settings",         _utf16(json.dumps(SETTINGS,      ensure_ascii=False)))
+        zf.writestr("Metadata",         _utf16(json.dumps(METADATA,      ensure_ascii=False)))
+        zf.writestr("SecurityBindings", b"")
+        zf.writestr("DataModelSchema",  _utf16(json.dumps(model,         ensure_ascii=False)))
+        zf.writestr("Report/Layout",    _utf16(json.dumps(REPORT_LAYOUT, ensure_ascii=False)))
     PBIT_PATH.write_bytes(buf.getvalue())
 
 
