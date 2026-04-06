@@ -1,0 +1,75 @@
+table dim_nature
+	lineageTag: 00aa6292-a814-4d0c-a996-7d3edd8a95ab
+
+	column nature_sk
+		dataType: int64
+		isHidden
+		isKey
+		lineageTag: 6214669e-6005-46fa-a97d-973847148e4a
+		summarizeBy: none
+		sourceColumn: nature_sk
+
+		annotation SummarizationSetBy = Automatic
+
+	column nature_code
+		dataType: string
+		lineageTag: 0ffd3308-33d1-47e0-8890-6dc88621763e
+		summarizeBy: none
+		sourceColumn: nature_code
+
+		annotation SummarizationSetBy = Automatic
+
+	column nature_type
+		dataType: string
+		lineageTag: ebabc9b7-10a8-4b63-94d7-b75364d137c1
+		summarizeBy: none
+		sourceColumn: nature_type
+
+		annotation SummarizationSetBy = Automatic
+
+	column nature_label_fr
+		dataType: string
+		lineageTag: 355d4be7-ee10-45b2-8355-e1fc7e4afd41
+		summarizeBy: none
+		sourceColumn: nature_label_fr
+
+		annotation SummarizationSetBy = Automatic
+
+	column nature_label_ar
+		dataType: string
+		lineageTag: b2682f41-3f51-4812-b87f-625c3397d0f3
+		summarizeBy: none
+		sourceColumn: nature_label_ar
+
+		annotation SummarizationSetBy = Automatic
+
+	column is_unknown
+		dataType: boolean
+		isHidden
+		lineageTag: 463d80c7-6382-4b29-a810-7a1e983728db
+		summarizeBy: none
+		sourceColumn: is_unknown
+
+		annotation SummarizationSetBy = Automatic
+
+	column dw_load_ts
+		dataType: dateTime
+		isHidden
+		lineageTag: 3c8e13bb-5690-4eb9-9739-48cf08310ac6
+		summarizeBy: none
+		sourceColumn: dw_load_ts
+
+		annotation SummarizationSetBy = Automatic
+
+	partition dim_nature = m
+		mode: import
+		source
+			```
+			let
+			    Source = PostgreSQL.Database("localhost:5432", "payroll_dw"),
+			    Result = Source{[Schema="dw", Item="dim_nature"]}[Data]
+			in
+			    Result
+			```
+
+	annotation PBI_ResultType = Table

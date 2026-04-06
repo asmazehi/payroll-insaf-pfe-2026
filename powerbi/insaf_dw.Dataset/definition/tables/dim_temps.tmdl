@@ -1,0 +1,91 @@
+table dim_temps
+	lineageTag: 67bb4c80-c1d4-4544-b951-49565053be5e
+
+	column time_sk
+		dataType: int64
+		isHidden
+		isKey
+		lineageTag: 1e39b675-ee97-48b4-8343-236996e1fad5
+		summarizeBy: none
+		sourceColumn: time_sk
+
+		annotation SummarizationSetBy = Automatic
+
+	column year_num
+		dataType: int64
+		lineageTag: 44438328-624b-48c9-bda8-6b7c6d371963
+		summarizeBy: none
+		sourceColumn: year_num
+
+		annotation SummarizationSetBy = Automatic
+
+	column month_num
+		dataType: int64
+		lineageTag: 3b6df301-3259-4af5-8d69-25a575e4199f
+		summarizeBy: none
+		sourceColumn: month_num
+
+		annotation SummarizationSetBy = Automatic
+
+	column year_month
+		dataType: string
+		lineageTag: 085c4818-165a-43df-8538-a380761a2329
+		summarizeBy: none
+		sourceColumn: year_month
+
+		annotation SummarizationSetBy = Automatic
+
+	column month_start_date
+		dataType: dateTime
+		lineageTag: e63200e2-9cd4-483b-b327-5b65a7f43a31
+		summarizeBy: none
+		sourceColumn: month_start_date
+
+		annotation SummarizationSetBy = Automatic
+
+	column quarter_num
+		dataType: int64
+		lineageTag: c9578ece-dd9a-42fc-813a-eafd3d3b74b5
+		summarizeBy: none
+		sourceColumn: quarter_num
+
+		annotation SummarizationSetBy = Automatic
+
+	column semester_num
+		dataType: int64
+		lineageTag: 53b2de54-8a53-4dfe-a6bc-a7d0cd754d6d
+		summarizeBy: none
+		sourceColumn: semester_num
+
+		annotation SummarizationSetBy = Automatic
+
+	column is_unknown
+		dataType: boolean
+		isHidden
+		lineageTag: 784862c0-e528-4231-b23f-98ab14df8c5e
+		summarizeBy: none
+		sourceColumn: is_unknown
+
+		annotation SummarizationSetBy = Automatic
+
+	column dw_load_ts
+		dataType: dateTime
+		isHidden
+		lineageTag: bd28d81c-9e9a-459a-b056-43370e14e92b
+		summarizeBy: none
+		sourceColumn: dw_load_ts
+
+		annotation SummarizationSetBy = Automatic
+
+	partition dim_temps = m
+		mode: import
+		source
+			```
+			let
+			    Source = PostgreSQL.Database("localhost:5432", "payroll_dw"),
+			    Result = Source{[Schema="dw", Item="dim_temps"]}[Data]
+			in
+			    Result
+			```
+
+	annotation PBI_ResultType = Table

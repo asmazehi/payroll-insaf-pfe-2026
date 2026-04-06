@@ -1,0 +1,139 @@
+table dim_indemnite
+	lineageTag: 6a945b28-0be1-445b-855e-c911596092d8
+
+	column indemnite_sk
+		dataType: int64
+		isHidden
+		isKey
+		lineageTag: 16dda8b6-05e1-4e3c-a137-eb6024e51fca
+		summarizeBy: none
+		sourceColumn: indemnite_sk
+
+		annotation SummarizationSetBy = Automatic
+
+	column indemnite_code
+		dataType: string
+		lineageTag: dc126973-6247-4a5d-8457-d6b73eb5a247
+		summarizeBy: none
+		sourceColumn: indemnite_code
+
+		annotation SummarizationSetBy = Automatic
+
+	column indemnite_label_fr
+		dataType: string
+		lineageTag: 095b6e9f-c1b4-40a6-a81a-61b68a074eac
+		summarizeBy: none
+		sourceColumn: indemnite_label_fr
+
+		annotation SummarizationSetBy = Automatic
+
+	column indemnite_label_fr_long
+		dataType: string
+		lineageTag: 6f477bf9-3308-412f-b11d-827d2f2ac8ed
+		summarizeBy: none
+		sourceColumn: indemnite_label_fr_long
+
+		annotation SummarizationSetBy = Automatic
+
+	column indemnite_label_ar
+		dataType: string
+		lineageTag: 3edf532b-27b5-40b5-8d82-addd701ba859
+		summarizeBy: none
+		sourceColumn: indemnite_label_ar
+
+		annotation SummarizationSetBy = Automatic
+
+	column nature_flag
+		dataType: string
+		lineageTag: 61ccb3f1-5b0c-42c2-bbc2-bde7e230a2ca
+		summarizeBy: none
+		sourceColumn: nature_flag
+
+		annotation SummarizationSetBy = Automatic
+
+	column is_taxable
+		dataType: boolean
+		lineageTag: 84bbc2f5-9c85-4629-8fdb-2be403ddf4d2
+		summarizeBy: none
+		sourceColumn: is_taxable
+
+		annotation SummarizationSetBy = Automatic
+
+	column is_cnr
+		dataType: boolean
+		lineageTag: 6fa39006-1c8a-4332-98dd-b4a61ebadc69
+		summarizeBy: none
+		sourceColumn: is_cnr
+
+		annotation SummarizationSetBy = Automatic
+
+	column zone
+		dataType: string
+		lineageTag: 330e6ca9-183b-4aeb-9639-45e894209775
+		summarizeBy: none
+		sourceColumn: zone
+
+		annotation SummarizationSetBy = Automatic
+
+	column arg1
+		dataType: decimal
+		lineageTag: 4d2d5cb8-e975-4ef8-9a1c-7573d5d43899
+		summarizeBy: none
+		sourceColumn: arg1
+
+		annotation SummarizationSetBy = Automatic
+
+	column arg2
+		dataType: decimal
+		lineageTag: 81fb8882-128d-4cad-8b2a-a78ae1a6054c
+		summarizeBy: none
+		sourceColumn: arg2
+
+		annotation SummarizationSetBy = Automatic
+
+	column date_entry
+		dataType: dateTime
+		lineageTag: 1afab8c4-99ac-4b4f-ba68-f4e11fbee601
+		summarizeBy: none
+		sourceColumn: date_entry
+
+		annotation SummarizationSetBy = Automatic
+
+	column insurance_code
+		dataType: string
+		lineageTag: 72be35d2-6062-4aec-b36f-3d1225c3b0ca
+		summarizeBy: none
+		sourceColumn: insurance_code
+
+		annotation SummarizationSetBy = Automatic
+
+	column is_unknown
+		dataType: boolean
+		isHidden
+		lineageTag: f0e86a09-cbad-4fe7-a709-a22b8f66e7df
+		summarizeBy: none
+		sourceColumn: is_unknown
+
+		annotation SummarizationSetBy = Automatic
+
+	column dw_load_ts
+		dataType: dateTime
+		isHidden
+		lineageTag: 260c43aa-7191-474d-a29a-e509116d18e9
+		summarizeBy: none
+		sourceColumn: dw_load_ts
+
+		annotation SummarizationSetBy = Automatic
+
+	partition dim_indemnite = m
+		mode: import
+		source
+			```
+			let
+			    Source = PostgreSQL.Database("localhost:5432", "payroll_dw"),
+			    Result = Source{[Schema="dw", Item="dim_indemnite"]}[Data]
+			in
+			    Result
+			```
+
+	annotation PBI_ResultType = Table
