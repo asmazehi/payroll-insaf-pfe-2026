@@ -1,36 +1,44 @@
 {
   "model": "salary_prediction_xgboost",
   "algorithm": "XGBoost",
+  "peer_group": [
+    "grade_code",
+    "ministry_code",
+    "pa_eche"
+  ],
   "kfold_cv": {
-    "r2_mean": 0.5747,
-    "r2_std": 0.0108,
-    "mae_mean": 262.06,
-    "mape_mean": 29.38
+    "r2_mean": 0.5795,
+    "r2_std": 0.0099,
+    "mae_mean": 259.3,
+    "medae_mean": 58.11,
+    "mape_mean": 29.22,
+    "within_10pct": 71.2
   },
-  "temporal_train_metrics": {
-    "mae": 186.5589,
-    "rmse": 519.1164,
-    "r2": 0.7593,
-    "mape": 21.1383
-  },
-  "temporal_test_metrics": {
-    "mae": 781.1583,
-    "rmse": 1863.5452,
-    "r2": -1.2166,
-    "mape": 85.3523
+  "test_2024_metrics": {
+    "mae": 249.9826,
+    "medae": 57.1673,
+    "rmse": 694.0347,
+    "r2": 0.6926,
+    "mape": 27.8272,
+    "within_10pct": 74.2008,
+    "within_20pct": 82.9326
   },
   "feature_importance": {
-    "emp_mean": 0.1477,
-    "grade_x_eche": 0.1169,
-    "nature_code_enc": 0.1158,
-    "month_sin": 0.096,
-    "grade_code_enc": 0.0952,
-    "month_cos": 0.0855,
-    "emp_std": 0.0831,
-    "year_num": 0.0826,
-    "emp_median": 0.0724,
-    "pa_eche": 0.0723,
-    "ministry_code_enc": 0.0194,
-    "pa_sitfam_enc": 0.0132
+    "peer_mean": 0.1219,
+    "peer_count": 0.101,
+    "peer_median": 0.0928,
+    "peer_std": 0.0915,
+    "emp_mean": 0.0883,
+    "nature_code_enc": 0.066,
+    "month_sin": 0.0636,
+    "year_num": 0.0585,
+    "grade_x_eche": 0.0582,
+    "month_cos": 0.0572,
+    "emp_std": 0.0557,
+    "emp_median": 0.0517,
+    "pa_eche": 0.0422,
+    "grade_code_enc": 0.0361,
+    "ministry_code_enc": 0.008,
+    "pa_sitfam_enc": 0.0073
   }
 }

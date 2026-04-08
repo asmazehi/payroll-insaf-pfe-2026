@@ -186,11 +186,18 @@ def plot_salary_model():
     df["grade_x_eche"] = df["grade_code_enc"] * df["pa_eche"]
     df = df.dropna(subset=["m_netpay"]).copy()
 
-    emp_stats = joblib.load(MODELS_DIR / "salary_emp_stats.pkl")
-    df = df.merge(emp_stats, on="employee_sk", how="left")
-    df["emp_mean"]   = df["emp_mean"].fillna(df["m_netpay"].mean())
-    df["emp_median"] = df["emp_median"].fillna(df["m_netpay"].mean())
+    global_mean = df["m_netpay"].mean()
+    emp_stats   = joblib.load(MODELS_DIR / "salary_emp_stats.pkl")
+    peer_stats  = joblib.load(MODELS_DIR / "salary_peer_stats.pkl")
+    df = df.merge(emp_stats,  on="employee_sk", how="left")
+    df = df.merge(peer_stats, on=["grade_code", "ministry_code", "pa_eche"], how="left")
+    for col in ["emp_mean", "emp_median"]:
+        df[col] = df[col].fillna(df["peer_mean"].fillna(global_mean))
     df["emp_std"]    = df["emp_std"].fillna(0)
+    for col in ["peer_mean", "peer_median"]:
+        df[col] = df[col].fillna(global_mean)
+    df["peer_std"]   = df["peer_std"].fillna(0)
+    df["peer_count"] = df["peer_count"].fillna(0)
 
     feature_cols = joblib.load(MODELS_DIR / "salary_features.pkl")
     model = joblib.load(MODELS_DIR / "salary_model.pkl")
@@ -271,11 +278,18 @@ def plot_shap():
     df["grade_x_eche"] = df["grade_code_enc"] * df["pa_eche"]
     df = df.dropna(subset=["m_netpay"]).copy()
 
-    emp_stats = joblib.load(MODELS_DIR / "salary_emp_stats.pkl")
-    df = df.merge(emp_stats, on="employee_sk", how="left")
-    df["emp_mean"]   = df["emp_mean"].fillna(df["m_netpay"].mean())
-    df["emp_median"] = df["emp_median"].fillna(df["m_netpay"].mean())
+    global_mean = df["m_netpay"].mean()
+    emp_stats   = joblib.load(MODELS_DIR / "salary_emp_stats.pkl")
+    peer_stats  = joblib.load(MODELS_DIR / "salary_peer_stats.pkl")
+    df = df.merge(emp_stats,  on="employee_sk", how="left")
+    df = df.merge(peer_stats, on=["grade_code", "ministry_code", "pa_eche"], how="left")
+    for col in ["emp_mean", "emp_median"]:
+        df[col] = df[col].fillna(df["peer_mean"].fillna(global_mean))
     df["emp_std"]    = df["emp_std"].fillna(0)
+    for col in ["peer_mean", "peer_median"]:
+        df[col] = df[col].fillna(global_mean)
+    df["peer_std"]   = df["peer_std"].fillna(0)
+    df["peer_count"] = df["peer_count"].fillna(0)
 
     feature_cols = joblib.load(MODELS_DIR / "salary_features.pkl")
     model = joblib.load(MODELS_DIR / "salary_model.pkl")
