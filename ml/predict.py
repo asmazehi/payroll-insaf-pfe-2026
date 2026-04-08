@@ -19,6 +19,8 @@ import pandas as pd
 
 MODELS_DIR = Path(__file__).resolve().parent / "models"
 
+PEER_GROUP = ["grade_code", "ministry_code", "pa_eche"]
+
 
 # ── Model loaders (lazy, cached) ──────────────────────────────────────────────
 
@@ -27,10 +29,11 @@ _salary_cache: dict = {}
 
 def _load_salary():
     if not _salary_cache:
-        _salary_cache["model"]     = joblib.load(MODELS_DIR / "salary_model.pkl")
-        _salary_cache["encoders"]  = joblib.load(MODELS_DIR / "salary_encoders.pkl")
-        _salary_cache["features"]  = joblib.load(MODELS_DIR / "salary_features.pkl")
-        _salary_cache["emp_stats"] = joblib.load(MODELS_DIR / "salary_emp_stats.pkl")
+        _salary_cache["model"]      = joblib.load(MODELS_DIR / "salary_model.pkl")
+        _salary_cache["encoders"]   = joblib.load(MODELS_DIR / "salary_encoders.pkl")
+        _salary_cache["features"]   = joblib.load(MODELS_DIR / "salary_features.pkl")
+        _salary_cache["emp_stats"]  = joblib.load(MODELS_DIR / "salary_emp_stats.pkl")
+        _salary_cache["peer_stats"] = joblib.load(MODELS_DIR / "salary_peer_stats.pkl")
     return _salary_cache
 
 
@@ -64,23 +67,32 @@ def predict_salary(
 ) -> dict:
     """
     Predict net salary for a single employee.
-    If employee_sk is provided and known, uses their personal history.
-    Otherwise falls back to population average.
 
-    Returns: {"predicted_netpay": float, "used_personal_history": bool}
+    Fallback priority for personal history:
+      1. Employee's own historical mean (if employee_sk known)
+      2. Peer group mean (same grade + ministry + echelon)
+      3. Global mean (last resort)
+
+    Returns: {
+        predicted_netpay: float,
+        used_personal_history: bool,
+        used_peer_group: bool,
+        peer_mean: float,   -- what this job slot typically pays
+    }
     """
-    m = _load_salary()
-    encoders  = m["encoders"]
-    features  = m["features"]
-    model     = m["model"]
-    emp_stats = m["emp_stats"]
+    m          = _load_salary()
+    encoders   = m["encoders"]
+    features   = m["features"]
+    model      = m["model"]
+    emp_stats  = m["emp_stats"]
+    peer_stats = m["peer_stats"]
 
-    # Encode categoricals — handle unseen values gracefully
+    global_mean = float(emp_stats["emp_mean"].mean())
+
+    # ── Encode categoricals (handle unseen values gracefully) ─────────────────
     def safe_encode(le, value: str) -> int:
         value = str(value).strip()
-        if value in le.classes_:
-            return int(le.transform([value])[0])
-        return -1  # unseen category → -1 (XGBoost handles this)
+        return int(le.transform([value])[0]) if value in le.classes_ else -1
 
     grade_enc    = safe_encode(encoders["grade_code"],    grade_code)
     nature_enc   = safe_encode(encoders["nature_code"],   nature_code)
@@ -91,22 +103,45 @@ def predict_salary(
     month_sin = np.sin(2 * np.pi * month_num / 12)
     month_cos = np.cos(2 * np.pi * month_num / 12)
 
-    # Employee personal history
+    # ── Peer group lookup (grade + ministry + echelon) ────────────────────────
+    peer_row = peer_stats[
+        (peer_stats["grade_code"]    == str(grade_code).strip()) &
+        (peer_stats["ministry_code"] == str(ministry_code).strip()) &
+        (peer_stats["pa_eche"]       == float(pa_eche))
+    ]
+    if not peer_row.empty:
+        peer_mean   = float(peer_row["peer_mean"].iloc[0])
+        peer_median = float(peer_row["peer_median"].iloc[0])
+        peer_std    = float(peer_row["peer_std"].iloc[0])
+        peer_count  = float(peer_row["peer_count"].iloc[0])
+    else:
+        peer_mean = peer_median = global_mean
+        peer_std  = 0.0
+        peer_count = 0.0
+
+    # ── Employee personal history ─────────────────────────────────────────────
     used_personal = False
+    used_peer     = False
+
     if employee_sk is not None:
-        row = emp_stats[emp_stats["employee_sk"] == employee_sk]
-        if not row.empty:
-            emp_mean   = float(row["emp_mean"].iloc[0])
-            emp_median = float(row["emp_median"].iloc[0])
-            emp_std    = float(row["emp_std"].iloc[0])
+        emp_row = emp_stats[emp_stats["employee_sk"] == employee_sk]
+        if not emp_row.empty:
+            emp_mean   = float(emp_row["emp_mean"].iloc[0])
+            emp_median = float(emp_row["emp_median"].iloc[0])
+            emp_std    = float(emp_row["emp_std"].iloc[0])
             used_personal = True
         else:
-            emp_mean = emp_median = float(emp_stats["emp_mean"].mean())
-            emp_std  = 0.0
+            # New employee — fall back to peer group
+            emp_mean = emp_median = peer_mean
+            emp_std  = peer_std
+            used_peer = True
     else:
-        emp_mean = emp_median = float(emp_stats["emp_mean"].mean())
-        emp_std  = 0.0
+        # No employee_sk given — use peer group
+        emp_mean = emp_median = peer_mean
+        emp_std  = peer_std
+        used_peer = True
 
+    # ── Build feature vector ──────────────────────────────────────────────────
     row_data = {
         "grade_code_enc":    grade_enc,
         "nature_code_enc":   nature_enc,
@@ -120,37 +155,41 @@ def predict_salary(
         "emp_mean":          emp_mean,
         "emp_median":        emp_median,
         "emp_std":           emp_std,
+        "peer_mean":         peer_mean,
+        "peer_median":       peer_median,
+        "peer_std":          peer_std,
+        "peer_count":        peer_count,
     }
 
-    X = np.array([[row_data[f] for f in features]])
+    X         = np.array([[row_data[f] for f in features]])
     predicted = float(model.predict(X)[0])
 
     return {
-        "predicted_netpay":     round(predicted, 2),
+        "predicted_netpay":      round(predicted, 2),
+        "peer_mean":             round(peer_mean, 2),
+        "peer_group_size":       int(peer_count),
         "used_personal_history": used_personal,
+        "used_peer_group":       used_peer,
     }
 
 
 def predict_payroll_next_months(n_months: int = 6) -> list[dict]:
     """
     Forecast total payroll for the next N months.
-    Queries current DW data to get latest history, then forecasts forward.
+    Always reads the latest data from the DW so forecasts are current.
 
     Returns: list of {"date": "YYYY-MM", "predicted_netpay": float}
     """
     from ml.data_loader import load_monthly_payroll
 
-    m = _load_forecast()
+    m            = _load_forecast()
     model        = m["model"]
     feature_cols = m["features"]
 
-    df = load_monthly_payroll()
-    target = "total_netpay"
-
-    # Rebuild lag/rolling features from current history
-    df = df.sort_values("month_start_date").reset_index(drop=True)
-    y       = df[target].values
-    history = list(y)
+    df        = load_monthly_payroll()
+    df        = df.sort_values("month_start_date").reset_index(drop=True)
+    y         = df["total_netpay"].values
+    history   = list(y)
     last_date = pd.Timestamp(df["month_start_date"].iloc[-1])
 
     preds = []
@@ -167,18 +206,24 @@ def predict_payroll_next_months(n_months: int = 6) -> list[dict]:
         row["rolling_mean_3"] = np.mean(history[-3:])
         row["rolling_mean_6"] = np.mean(history[-6:])
         row["rolling_std_3"]  = np.std(history[-3:])
-        row["yoy_growth"]     = (history[-1] - history[-13]) / abs(history[-13]) if len(history) >= 13 else 0
-        row["mom_delta"]      = history[-1] - history[-2] if len(history) >= 2 else 0
-        row["month_sin"]      = np.sin(2 * np.pi * future_month / 12)
-        row["month_cos"]      = np.cos(2 * np.pi * future_month / 12)
-        row["year_norm"]      = (future_year - df["year_num"].min()) / (
-                                 df["year_num"].max() - df["year_num"].min() + 1)
-        row["month_num"]      = future_month
-        row["year_num"]       = future_year
+        row["yoy_growth"]     = (
+            (history[-1] - history[-13]) / abs(history[-13])
+            if len(history) >= 13 else 0
+        )
+        row["mom_delta"]  = history[-1] - history[-2] if len(history) >= 2 else 0
+        row["month_sin"]  = np.sin(2 * np.pi * future_month / 12)
+        row["month_cos"]  = np.cos(2 * np.pi * future_month / 12)
+        row["year_norm"]  = (future_year - df["year_num"].min()) / (
+                             df["year_num"].max() - df["year_num"].min() + 1)
+        row["month_num"]  = future_month
+        row["year_num"]   = future_year
 
         feat = np.array([[row.get(c, 0) for c in feature_cols]])
         pred = float(model.predict(feat)[0])
-        preds.append({"date": future_date.strftime("%Y-%m"), "predicted_netpay": round(pred, 2)})
+        preds.append({
+            "date":               future_date.strftime("%Y-%m"),
+            "predicted_netpay":   round(pred, 2),
+        })
         history.append(pred)
 
     return preds
@@ -188,13 +233,12 @@ def flag_anomalies(df_new: pd.DataFrame) -> pd.DataFrame:
     """
     Flag anomalies in a new batch of payroll records.
 
-    Input: DataFrame with columns matching load_individual_payroll() output.
-    Returns: same DataFrame with added columns:
-        - z_score, pct_deviation, zscore_flag
-        - if_score, if_flag
-        - anomaly_flag
+    Input : DataFrame with columns matching load_individual_payroll() output.
+    Output: same DataFrame + columns:
+              z_score, pct_deviation, zscore_flag,
+              if_score, if_flag, anomaly_flag
     """
-    m = _load_anomaly()
+    m        = _load_anomaly()
     model    = m["model"]
     scaler   = m["scaler"]
     encoders = m["encoders"]
@@ -202,18 +246,16 @@ def flag_anomalies(df_new: pd.DataFrame) -> pd.DataFrame:
 
     df = df_new.copy()
 
-    # Encode categoricals
     for col in ["grade_code", "nature_code", "ministry_code"]:
         le = encoders[col]
         df[col] = df[col].fillna("UNKNOWN").astype(str).str.strip()
         df[col + "_enc"] = df[col].apply(
-            lambda v: int(le.transform([v])[0]) if v in le.classes_ else -1
+            lambda v, le=le: int(le.transform([v])[0]) if v in le.classes_ else -1
         )
 
     for col in ["pa_eche", "year_num", "month_num"]:
         df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
 
-    # Employee baseline
     grp = df.groupby("employee_sk")["m_netpay"]
     df["emp_mean"]   = grp.transform("mean")
     df["emp_std"]    = grp.transform("std").fillna(0)
@@ -230,13 +272,11 @@ def flag_anomalies(df_new: pd.DataFrame) -> pd.DataFrame:
         np.abs(df["m_netpay"] - df["emp_median"]) / df["emp_median"] * 100,
         0.0,
     )
-    df["zscore_flag"] = df["z_score"].abs() > 3.0
+    df["zscore_flag"]  = df["z_score"].abs() > 3.0
 
-    X = df[features].values.astype(float)
-    X_scaled = scaler.transform(X)
-
-    df["if_score"] = model.score_samples(X_scaled)
-    df["if_flag"]  = model.predict(X_scaled) == -1
+    X_scaled           = scaler.transform(df[features].values.astype(float))
+    df["if_score"]     = model.score_samples(X_scaled)
+    df["if_flag"]      = model.predict(X_scaled) == -1
     df["anomaly_flag"] = df["zscore_flag"] | df["if_flag"]
 
     return df
