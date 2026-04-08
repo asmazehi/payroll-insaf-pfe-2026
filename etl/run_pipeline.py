@@ -30,10 +30,12 @@ from etl.load_dw        import run as load_dw
 
 def main():
     parser = argparse.ArgumentParser(description="Run full INSAF ETL + DW load")
-    parser.add_argument("--reset",     action="store_true",
+    parser.add_argument("--reset",       action="store_true",
                         help="Truncate fact tables before loading (full reload)")
-    parser.add_argument("--skip-etl",  action="store_true",
+    parser.add_argument("--skip-etl",   action="store_true",
                         help="Skip ETL and go straight to DB load (reuse existing JSONL)")
+    parser.add_argument("--retrain-ml", action="store_true",
+                        help="Retrain all ML models after loading new data into the DW")
     args = parser.parse_args()
 
     run_id = uuid.uuid4().hex[:8]
@@ -84,6 +86,17 @@ def main():
     log.info("=" * 60)
     log.info("Pipeline complete — both DWs ready in PostgreSQL.")
     log.info("=" * 60)
+
+    # ── Step 4 (optional): Retrain ML models on updated DW ────────────────────
+    if args.retrain_ml:
+        log.info("Step 4/4 — Retraining ML models on updated DW data...")
+        try:
+            from ml.run_all_models import main as run_ml
+            run_ml()
+            log.info("ML models retrained successfully.")
+        except Exception as exc:
+            log.error("ML retraining failed: %s", exc)
+            log.warning("Pipeline completed but ML models were NOT updated.")
 
 
 if __name__ == "__main__":

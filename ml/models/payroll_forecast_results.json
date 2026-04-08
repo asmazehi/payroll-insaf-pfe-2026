@@ -1,0 +1,43 @@
+{
+  "model": "payroll_forecast",
+  "train_months": 104,
+  "test_months": 12,
+  "train_metrics": {
+    "mae": 289018.7063,
+    "rmse": 443531.3089,
+    "r2": 0.9815,
+    "mape": 3.6317
+  },
+  "test_metrics": {
+    "mae": 1328283.5725,
+    "rmse": 1875490.1916,
+    "r2": 0.4683,
+    "mape": 8.7499
+  },
+  "forecast_6m": [
+    {
+      "date": "2026-03",
+      "predicted_netpay": 11921974.7
+    },
+    {
+      "date": "2026-04",
+      "predicted_netpay": 12841169.23
+    },
+    {
+      "date": "2026-05",
+      "predicted_netpay": 13377527.33
+    },
+    {
+      "date": "2026-06",
+      "predicted_netpay": 13505473.12
+    },
+    {
+      "date": "2026-07",
+      "predicted_netpay": 13183846.75
+    },
+    {
+      "date": "2026-08",
+      "predicted_netpay": 12908859.32
+    }
+  ]
+}
