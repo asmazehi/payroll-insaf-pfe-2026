@@ -1,0 +1,17 @@
+{
+  "model": "indemnity_forecast",
+  "train_months": 44,
+  "test_months": 12,
+  "train_metrics": {
+    "mae": 55107.1084,
+    "rmse": 67072.692,
+    "r2": 0.9528,
+    "mape": 6.6011
+  },
+  "test_metrics": {
+    "mae": 262123.9707,
+    "rmse": 319754.5761,
+    "r2": 0.101,
+    "mape": 18.598
+  }
+}
