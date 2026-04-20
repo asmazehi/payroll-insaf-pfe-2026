@@ -1,13 +1,57 @@
 {
-  "model": "anomaly_detection",
+  "model": "anomaly_detection_comparison",
+  "winner": "if",
   "total_records": 734505,
   "total_employees": 24742,
   "zscore_threshold": 3.0,
-  "if_contamination": 0.02,
-  "zscore_anomalies": 21929,
-  "if_anomalies": 14691,
-  "combined_anomalies": 35207,
-  "anomaly_rate_pct": 4.7933,
+  "contamination": 0.03,
+  "method_comparison": {
+    "zscore": {
+      "n_flagged": 21929,
+      "rate_pct": 2.986,
+      "agreement_pct": 100.0,
+      "avg_zscore": 4.296,
+      "max_zscore": 8.603,
+      "score": 0.9296
+    },
+    "if": {
+      "n_flagged": 22036,
+      "rate_pct": 3.0,
+      "agreement_pct": 96.4,
+      "avg_zscore": 2.72,
+      "max_zscore": 8.603,
+      "score": 0.7648
+    },
+    "lof": {
+      "n_flagged": 22033,
+      "rate_pct": 3.0,
+      "agreement_pct": 94.28,
+      "avg_zscore": 0.583,
+      "max_zscore": 6.929,
+      "score": 0.5469
+    },
+    "ocsvm": {
+      "n_flagged": 22175,
+      "rate_pct": 3.019,
+      "agreement_pct": 95.17,
+      "avg_zscore": 1.671,
+      "max_zscore": 8.603,
+      "score": 0.6574
+    },
+    "autoencoder": {
+      "n_flagged": 22036,
+      "rate_pct": 3.0,
+      "agreement_pct": 94.78,
+      "avg_zscore": 1.306,
+      "max_zscore": 8.603,
+      "score": 0.6202
+    }
+  },
+  "final_flag": {
+    "method": "zscore OR if",
+    "n_anomalies": 35203,
+    "anomaly_rate": 4.7928
+  },
   "top_anomalies": [
     {
       "employee_sk": 13254,

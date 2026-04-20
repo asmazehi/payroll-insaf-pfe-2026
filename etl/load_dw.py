@@ -438,12 +438,23 @@ def load_fact_paie(cur, path: Path, maps: tuple, batch_size: int = 5000):
 
 
 def load_fact_indem(cur, path: Path, maps: tuple, batch_size: int = 5000):
+    """
+    Load fact_indem — only records whose employee_id exists in dim_employee (paie employees).
+    Indem-only employees (emp_sk=0) are loaded but tracked separately for transparency.
+    The BI views filter emp_sk=0 out automatically, giving the paie/indem intersection.
+    """
     emp, time, grade, nature, org, region = maps
     log.info("Loading fact_indem from %s ...", path.name)
     batch, total = [], 0
+    matched_emp, unmatched_emp = 0, 0
 
     for r in load_jsonl(path):
-        batch.append(_fact_row(r, emp, time, grade, nature, org, region, indemnite_sk=0))
+        row = _fact_row(r, emp, time, grade, nature, org, region, indemnite_sk=0)
+        if row[0] != 0:   # employee_sk resolved → exists in paie
+            matched_emp += 1
+        else:
+            unmatched_emp += 1
+        batch.append(row)
         if len(batch) >= batch_size:
             cur.executemany(INDEM_INSERT, batch)
             total += len(batch)
@@ -455,7 +466,9 @@ def load_fact_indem(cur, path: Path, maps: tuple, batch_size: int = 5000):
         cur.executemany(INDEM_INSERT, batch)
         total += len(batch)
 
-    log.info("  fact_indem: %d rows total", total)
+    pct = round(100 * matched_emp / total, 1) if total else 0
+    log.info("  fact_indem: %d rows total | paie-matched: %d (%s%%) | indem-only (excluded from BI): %d",
+             total, matched_emp, pct, unmatched_emp)
     return total
 
 
