@@ -149,53 +149,120 @@ def _score_method(metrics: dict) -> float:
 
 
 # ═══════════════════════════════════════════════════════════════
-# Method 5: Autoencoder (Deep Learning)
+# Method 5: LSTM Autoencoder (Deep Learning)
 # ═══════════════════════════════════════════════════════════════
 
-def _run_autoencoder(X_scaled: np.ndarray) -> tuple[np.ndarray, np.ndarray, object]:
+LSTM_SEQ_LEN   = 12   # look at each employee's last 12 months
+LSTM_LATENT    = 32   # bottleneck size
+
+def _build_lstm_sequences(df: pd.DataFrame) -> tuple[np.ndarray, np.ndarray]:
     """
-    Train an Autoencoder on the full dataset.
-    Logic: train on ALL data — the network learns to reconstruct normal patterns.
-    Records with high reconstruction error are anomalies.
+    Build per-employee salary sequences of length LSTM_SEQ_LEN.
 
-    Architecture:
-        Input(n_features) -> Dense(64, relu) -> Dense(32, relu) -> Dense(16, relu)
-        -> Dense(32, relu) -> Dense(64, relu) -> Output(n_features)
+    For each employee with >= LSTM_SEQ_LEN records, extract all
+    sliding windows of length LSTM_SEQ_LEN from their salary history.
 
-    Returns: (reconstruction_errors, ae_flags, autoencoder_model)
+    Returns:
+        sequences : (N, LSTM_SEQ_LEN, 1) — scaled salary sequences
+        emp_sks   : (N,) — employee_sk for each sequence (last step)
+        row_idxs  : (N,) — index of the LAST record in each sequence
+    """
+    from sklearn.preprocessing import MinMaxScaler
+
+    df_sorted = df.sort_values(["employee_sk", "year_num", "month_num"]).reset_index()
+    seq_scaler = MinMaxScaler()
+    df_sorted["netpay_scaled"] = seq_scaler.fit_transform(
+        df_sorted[["m_netpay"]]
+    )
+
+    sequences, emp_sks, row_idxs = [], [], []
+    for emp_sk, grp in df_sorted.groupby("employee_sk"):
+        vals = grp["netpay_scaled"].values
+        idxs = grp["index"].values
+        if len(vals) < LSTM_SEQ_LEN:
+            continue
+        for i in range(len(vals) - LSTM_SEQ_LEN + 1):
+            sequences.append(vals[i: i + LSTM_SEQ_LEN].reshape(LSTM_SEQ_LEN, 1))
+            emp_sks.append(emp_sk)
+            row_idxs.append(idxs[i + LSTM_SEQ_LEN - 1])
+
+    return (np.array(sequences, dtype=np.float32),
+            np.array(emp_sks),
+            np.array(row_idxs),
+            seq_scaler)
+
+
+def _run_lstm_autoencoder(df: pd.DataFrame) -> tuple[np.ndarray, np.ndarray, object]:
+    """
+    LSTM Autoencoder — learns normal salary trajectories per employee.
+
+    Architecture (sequence-to-sequence):
+        Encoder: LSTM(64) -> RepeatVector -> Decoder: LSTM(64) -> TimeDistributed Dense(1)
+
+    Anomaly score = mean squared reconstruction error per sequence.
+    High error = the salary trajectory deviates from learned normal patterns.
+
+    Returns: (per_record_errors, lstm_flags, lstm_model)
     """
     import tensorflow as tf
     tf.get_logger().setLevel("ERROR")
 
-    n_features = X_scaled.shape[1]
+    print(f"    Building employee salary sequences (window={LSTM_SEQ_LEN} months)...")
+    sequences, emp_sks, row_idxs, seq_scaler = _build_lstm_sequences(df)
 
-    inputs   = tf.keras.Input(shape=(n_features,))
-    encoded  = tf.keras.layers.Dense(64, activation="relu")(inputs)
-    encoded  = tf.keras.layers.Dense(32, activation="relu")(encoded)
-    bottleneck = tf.keras.layers.Dense(16, activation="relu")(encoded)
-    decoded  = tf.keras.layers.Dense(32, activation="relu")(bottleneck)
-    decoded  = tf.keras.layers.Dense(64, activation="relu")(decoded)
-    outputs  = tf.keras.layers.Dense(n_features, activation="linear")(decoded)
+    if len(sequences) == 0:
+        print("    [!] No sequences built — not enough employee history")
+        return np.zeros(len(df)), np.zeros(len(df), dtype=bool), None
 
-    ae = tf.keras.Model(inputs, outputs)
-    ae.compile(optimizer="adam", loss="mse")
+    print(f"    Sequences: {len(sequences):,} windows from "
+          f"{len(np.unique(emp_sks)):,} employees")
 
-    ae.fit(
-        X_scaled, X_scaled,
+    # Build LSTM Autoencoder
+    inputs  = tf.keras.Input(shape=(LSTM_SEQ_LEN, 1))
+    encoded = tf.keras.layers.LSTM(64, activation="tanh",
+                                   return_sequences=False)(inputs)
+    repeated = tf.keras.layers.RepeatVector(LSTM_SEQ_LEN)(encoded)
+    decoded  = tf.keras.layers.LSTM(64, activation="tanh",
+                                    return_sequences=True)(repeated)
+    outputs  = tf.keras.layers.TimeDistributed(
+                   tf.keras.layers.Dense(1))(decoded)
+
+    lstm_ae = tf.keras.Model(inputs, outputs)
+    lstm_ae.compile(optimizer="adam", loss="mse")
+
+    print(f"    Training LSTM Autoencoder ({AE_EPOCHS} epochs, "
+          f"{len(sequences):,} sequences)...")
+    lstm_ae.fit(
+        sequences, sequences,
         epochs=AE_EPOCHS,
         batch_size=AE_BATCH_SIZE,
         validation_split=0.1,
         verbose=0,
     )
 
-    reconstructed = ae.predict(X_scaled, batch_size=AE_BATCH_SIZE, verbose=0)
-    errors        = np.mean(np.square(X_scaled - reconstructed), axis=1)
+    # Reconstruction error per sequence
+    reconstructed  = lstm_ae.predict(sequences, batch_size=AE_BATCH_SIZE, verbose=0)
+    seq_errors     = np.mean(np.square(sequences - reconstructed), axis=(1, 2))
 
-    # Flag top AE_CONTAMINATION% as anomalies
-    threshold     = np.percentile(errors, (1 - AE_CONTAMINATION) * 100)
-    ae_flags      = errors > threshold
+    # Map sequence errors back to individual records
+    # Each record gets the error of the sequence where it was the LAST element
+    record_errors = np.zeros(len(df))
+    for seq_err, row_idx in zip(seq_errors, row_idxs):
+        if row_idx < len(record_errors):
+            record_errors[row_idx] = seq_err
 
-    return errors, ae_flags, ae
+    # Records not covered by any sequence get median error
+    uncovered = record_errors == 0
+    record_errors[uncovered] = np.median(seq_errors)
+
+    # Flag top AE_CONTAMINATION%
+    threshold  = np.percentile(record_errors, (1 - AE_CONTAMINATION) * 100)
+    lstm_flags = record_errors > threshold
+
+    # Save scaler alongside model
+    joblib.dump(seq_scaler, MODELS_DIR / "anomaly_lstm_scaler.pkl")
+
+    return record_errors, lstm_flags, lstm_ae
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -250,13 +317,14 @@ def train_anomaly_model() -> dict:
     df["ocsvm_flag"] = ocsvm.predict(X_scaled) == -1
     ocsvm_metrics = _evaluate_method("One-Class SVM", df["ocsvm_flag"].values, df, zscore_flags)
 
-    # ── Method 5: Autoencoder (Deep Learning) ────────────────────────────────
-    print(f"\n  [5/5] Autoencoder (Deep Learning, {AE_EPOCHS} epochs)...")
-    ae_errors, ae_flags, ae_model = _run_autoencoder(X_scaled)
+    # ── Method 5: LSTM Autoencoder (Deep Learning) ───────────────────────────
+    print(f"\n  [5/5] LSTM Autoencoder (Deep Learning, {AE_EPOCHS} epochs)...")
+    ae_errors, ae_flags, ae_model = _run_lstm_autoencoder(df)
     df["ae_error"] = ae_errors
     df["ae_flag"]  = ae_flags
-    ae_metrics = _evaluate_method("Autoencoder (DL)", df["ae_flag"].values, df, zscore_flags)
-    joblib.dump(ae_model, MODELS_DIR / "anomaly_autoencoder.pkl")
+    ae_metrics = _evaluate_method("LSTM Autoencoder", df["ae_flag"].values, df, zscore_flags)
+    if ae_model is not None:
+        joblib.dump(ae_model, MODELS_DIR / "anomaly_autoencoder.pkl")
 
     # ── Z-score metrics (for comparison table) ────────────────────────────────
     zscore_metrics = _evaluate_method("Z-score", zscore_flags, df, zscore_flags)

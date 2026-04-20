@@ -41,10 +41,10 @@
     "autoencoder": {
       "n_flagged": 22036,
       "rate_pct": 3.0,
-      "agreement_pct": 94.78,
-      "avg_zscore": 1.306,
-      "max_zscore": 8.603,
-      "score": 0.6202
+      "agreement_pct": 94.2,
+      "avg_zscore": 0.524,
+      "max_zscore": 7.282,
+      "score": 0.5408
     }
   },
   "final_flag": {
