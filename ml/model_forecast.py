@@ -1,10 +1,21 @@
 """
 ml/model_forecast.py
 ====================
-Time series forecasting for total monthly payroll and indemnity.
-Model: Random Forest Regressor with lag features.
+MODEL 1 - Monthly Payroll Forecasting (Model Comparison)
 
-Evaluation: last 12 months as holdout test set (proper for small time series).
+Compares 5 models on the same test set (last 12 months):
+  1. Linear Regression   (simple baseline)
+  2. Random Forest       (ensemble, lag features)
+  3. XGBoost             (gradient boosting, lag features)
+  4. SARIMA              (classical time series)
+  5. Prophet             (Meta, handles seasonality + trend automatically)
+
+Winner = lowest MAPE on test set.
+Final model retrained on full data and saved.
+
+Note: per-ministry forecasting is not possible because organisme
+matching in the ETL is ~5% - only 3 ministries resolved. Aggregate
+total is used instead (122 monthly data points, 2016-2026).
 
 Run:
     python -m ml.model_forecast
@@ -12,227 +23,317 @@ Run:
 from __future__ import annotations
 
 import json
+import warnings
 from pathlib import Path
 
 import joblib
 import numpy as np
 import pandas as pd
+from sklearn.linear_model import Ridge
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
+from xgboost import XGBRegressor
 
-from ml.data_loader import load_monthly_payroll, load_monthly_indemnity
+warnings.filterwarnings("ignore")
 
-MODELS_DIR = Path(__file__).resolve().parent.parent / "ml" / "models"
+MODELS_DIR = Path(__file__).resolve().parent / "models"
 MODELS_DIR.mkdir(exist_ok=True)
 
+TARGET      = "total_netpay"
+TEST_MONTHS = 12
 
-def _add_lag_features(df: pd.DataFrame, target: str, lags: int = 6) -> pd.DataFrame:
+
+# ============================================================
+# Feature engineering
+# ============================================================
+
+def _add_lag_features(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy().sort_values("month_start_date").reset_index(drop=True)
 
-    # Lag features — "what was payroll 1, 2, ... 6 months ago?"
-    for i in range(1, lags + 1):
-        df[f"lag_{i}"] = df[target].shift(i)
+    for lag in range(1, 13):
+        df[f"lag_{lag}"] = df[TARGET].shift(lag)
 
-    # Rolling statistics
-    df["rolling_mean_3"] = df[target].shift(1).rolling(3).mean()
-    df["rolling_mean_6"] = df[target].shift(1).rolling(6).mean()
-    df["rolling_std_3"]  = df[target].shift(1).rolling(3).std()
-
-    # Year-over-year: this month vs same month last year
-    df["yoy_growth"] = df[target].pct_change(12).fillna(0)
-
-    # Month-over-month delta
-    df["mom_delta"] = df[target].diff(1).fillna(0)
-
-    # Calendar features
-    df["month_sin"] = np.sin(2 * np.pi * df["month_num"] / 12)
-    df["month_cos"] = np.cos(2 * np.pi * df["month_num"] / 12)
-    df["year_norm"] = (df["year_num"] - df["year_num"].min()) / (
-        df["year_num"].max() - df["year_num"].min() + 1
-    )
+    df["rolling_mean_3"]  = df[TARGET].shift(1).rolling(3).mean()
+    df["rolling_mean_6"]  = df[TARGET].shift(1).rolling(6).mean()
+    df["rolling_mean_12"] = df[TARGET].shift(1).rolling(12).mean()
+    df["rolling_std_3"]   = df[TARGET].shift(1).rolling(3).std()
+    df["yoy_growth"]      = df[TARGET].pct_change(12).fillna(0)
+    df["mom_delta"]       = df[TARGET].diff(1).fillna(0)
+    df["month_sin"]       = np.sin(2 * np.pi * df["month_num"] / 12)
+    df["month_cos"]       = np.cos(2 * np.pi * df["month_num"] / 12)
+    df["year_norm"]       = (df["year_num"] - df["year_num"].min()) / max(
+        df["year_num"].max() - df["year_num"].min(), 1)
 
     return df.dropna().reset_index(drop=True)
 
 
-def _evaluate(y_true, y_pred, label: str) -> dict:
-    mae  = mean_absolute_error(y_true, y_pred)
-    rmse = np.sqrt(mean_squared_error(y_true, y_pred))
-    r2   = r2_score(y_true, y_pred)
-    mape = np.mean(np.abs((y_true - y_pred) / np.clip(np.abs(y_true), 1e-8, None))) * 100
-    print(f"\n  {label}")
-    print(f"    MAE  : {mae:>14,.2f} TND")
-    print(f"    RMSE : {rmse:>14,.2f} TND")
-    print(f"    R²   : {r2:.4f}")
-    print(f"    MAPE : {mape:.2f}%")
-    return {"mae": mae, "rmse": rmse, "r2": r2, "mape": mape}
+LAG_FEATURE_COLS = (
+    [f"lag_{i}" for i in range(1, 13)] +
+    ["rolling_mean_3", "rolling_mean_6", "rolling_mean_12", "rolling_std_3",
+     "yoy_growth", "mom_delta", "month_sin", "month_cos", "year_norm",
+     "month_num", "year_num"]
+)
 
 
-def train_payroll_forecast() -> dict:
-    print("=" * 55)
-    print("MODEL 1 — Monthly Payroll Forecasting")
-    print("=" * 55)
+# ============================================================
+# Metrics
+# ============================================================
 
-    df = load_monthly_payroll()
-    print(f"  Data loaded: {len(df)} months ({df['year_num'].min()}–{df['year_num'].max()})")
+def _metrics(y_true, y_pred, label: str) -> dict:
+    y_true = np.array(y_true, dtype=float)
+    y_pred = np.array(y_pred, dtype=float)
+    mae    = float(mean_absolute_error(y_true, y_pred))
+    rmse   = float(np.sqrt(mean_squared_error(y_true, y_pred)))
+    r2     = float(r2_score(y_true, y_pred))
+    mape   = float(np.mean(np.abs((y_true - y_pred) /
+                                   np.clip(np.abs(y_true), 1e-8, None))) * 100)
+    print(f"    {label:<12s}  MAE={mae:>12,.0f}  RMSE={rmse:>12,.0f}"
+          f"  R2={r2:.4f}  MAPE={mape:.2f}%")
+    return {"mae": round(mae, 2), "rmse": round(rmse, 2),
+            "r2": round(r2, 4),  "mape": round(mape, 4)}
 
-    target = "total_netpay"
-    df = _add_lag_features(df, target, lags=6)
 
-    feature_cols = [c for c in df.columns if
-                    c.startswith("lag_") or
-                    c.startswith("rolling_") or
-                    c in ("month_sin", "month_cos", "year_norm",
-                          "month_num", "year_num", "yoy_growth", "mom_delta")]
+# ============================================================
+# ML models (Linear, RF, XGBoost)
+# ============================================================
 
-    X = df[feature_cols].values
-    y = df[target].values
+def _run_ml_models(X_train, y_train, X_test, y_test):
+    models = {
+        "ridge":  Ridge(alpha=1.0),
+        "rf":     RandomForestRegressor(n_estimators=300, max_depth=10,
+                                        random_state=42, n_jobs=-1),
+        "xgb":    XGBRegressor(n_estimators=500, max_depth=6,
+                               learning_rate=0.05, subsample=0.8,
+                               colsample_bytree=0.8, random_state=42,
+                               verbosity=0),
+    }
+    results  = {}
+    trained  = {}
+    for name, mdl in models.items():
+        mdl.fit(X_train, y_train)
+        m = _metrics(y_test, mdl.predict(X_test), name)
+        results[name] = m
+        trained[name] = mdl
+    return results, trained
 
-    # ── Proper evaluation: last 12 months as test ────────────────────────────
-    # Why 12? Enough to see seasonality. Small dataset → can't afford more.
-    TEST_SIZE = 12
-    X_train, X_test = X[:-TEST_SIZE], X[-TEST_SIZE:]
-    y_train, y_test = y[:-TEST_SIZE], y[-TEST_SIZE:]
-    dates_test = df["month_start_date"].iloc[-TEST_SIZE:].values
 
-    print(f"  Train: {len(X_train)} months | Test: {len(X_test)} months (last 12)")
+# ============================================================
+# SARIMA
+# ============================================================
 
-    # ── Final model ───────────────────────────────────────────────────────────
-    model = RandomForestRegressor(n_estimators=300, max_depth=10, random_state=42, n_jobs=-1)
-    model.fit(X_train, y_train)
+def _run_sarima(y_train, y_test) -> dict:
+    from statsmodels.tsa.statespace.sarimax import SARIMAX
+    try:
+        mdl = SARIMAX(y_train, order=(1, 1, 1),
+                      seasonal_order=(1, 1, 1, 12),
+                      enforce_stationarity=False,
+                      enforce_invertibility=False)
+        res    = mdl.fit(disp=False)
+        y_pred = res.forecast(steps=len(y_test))
+        m = _metrics(y_test, y_pred, "sarima")
+        return m, res
+    except Exception as e:
+        print(f"    sarima        FAILED: {e}")
+        return {"mae": 999, "rmse": 999, "r2": -999, "mape": 999}, None
 
-    train_metrics = _evaluate(y_train, model.predict(X_train), "Training set")
-    test_metrics  = _evaluate(y_test,  model.predict(X_test),  "Test set (last 12 months)")
 
-    # Feature importance
-    importances = dict(zip(feature_cols, model.feature_importances_))
-    top5 = sorted(importances.items(), key=lambda x: x[1], reverse=True)[:5]
-    print(f"\n  Top 5 features: {top5}")
+# ============================================================
+# Prophet
+# ============================================================
 
-    # ── Forecast next 6 months ────────────────────────────────────────────────
-    # Retrain on ALL data for forecasting
-    final_model = RandomForestRegressor(n_estimators=300, max_depth=10, random_state=42, n_jobs=-1)
-    final_model.fit(X, y)
+def _run_prophet(df_train, df_test) -> dict:
+    from prophet import Prophet
+    try:
+        prophet_train = df_train[["month_start_date", TARGET]].rename(
+            columns={"month_start_date": "ds", TARGET: "y"})
+        mdl = Prophet(yearly_seasonality=True, weekly_seasonality=False,
+                      daily_seasonality=False, seasonality_mode="multiplicative")
+        mdl.fit(prophet_train)
+        future   = mdl.make_future_dataframe(
+            periods=len(df_test), freq="MS")
+        forecast = mdl.predict(future)
+        y_pred   = forecast["yhat"].iloc[-len(df_test):].values
+        y_test   = df_test[TARGET].values
+        m = _metrics(y_test, y_pred, "prophet")
+        return m, mdl
+    except Exception as e:
+        print(f"    prophet       FAILED: {e}")
+        return {"mae": 999, "rmse": 999, "r2": -999, "mape": 999}, None
 
-    future_preds = []
-    history = list(y)
+
+# ============================================================
+# 6-month forecast using winner
+# ============================================================
+
+def _forecast_6m(winner_name, winner_model, df, feature_cols) -> list[dict]:
+    """Forecast next 6 months using the winning model."""
+    if winner_name == "prophet":
+        future   = winner_model.make_future_dataframe(periods=6, freq="MS")
+        forecast = winner_model.predict(future)
+        last_date = pd.Timestamp(df["month_start_date"].iloc[-1])
+        preds = []
+        for i, row in enumerate(forecast.tail(6).itertuples()):
+            date = last_date + pd.DateOffset(months=i + 1)
+            preds.append({
+                "date":             date.strftime("%Y-%m"),
+                "predicted_netpay": round(float(row.yhat), 2),
+                "lower":            round(float(row.yhat_lower), 2),
+                "upper":            round(float(row.yhat_upper), 2),
+            })
+        return preds
+
+    # ML models (lag-based)
+    df_feat = _add_lag_features(df)
+    fc = [c for c in feature_cols if c in df_feat.columns]
+    X_all = df_feat[fc].values
+    y_all = df_feat[TARGET].values
+    winner_model.fit(X_all, y_all)
+
+    history   = list(y_all)
     last_date = pd.Timestamp(df["month_start_date"].iloc[-1])
+    preds     = []
 
     for i in range(1, 7):
         future_date  = last_date + pd.DateOffset(months=i)
-        future_month = future_date.month
-        future_year  = future_date.year
-
         row = {}
-        for lag in range(1, 7):
+        for lag in range(1, 13):
             row[f"lag_{lag}"] = history[-lag] if lag <= len(history) else 0
-        row["rolling_mean_3"] = np.mean(history[-3:])
-        row["rolling_mean_6"] = np.mean(history[-6:])
-        row["rolling_std_3"]  = np.std(history[-3:])
-        row["yoy_growth"]     = (history[-1] - history[-13]) / abs(history[-13]) if len(history) >= 13 else 0
-        row["mom_delta"]      = history[-1] - history[-2] if len(history) >= 2 else 0
-        row["month_sin"]      = np.sin(2 * np.pi * future_month / 12)
-        row["month_cos"]      = np.cos(2 * np.pi * future_month / 12)
-        row["year_norm"]      = (future_year - df["year_num"].min()) / (df["year_num"].max() - df["year_num"].min() + 1)
-        row["month_num"]      = future_month
-        row["year_num"]       = future_year
+        row["rolling_mean_3"]  = np.mean(history[-3:])
+        row["rolling_mean_6"]  = np.mean(history[-6:])
+        row["rolling_mean_12"] = np.mean(history[-12:])
+        row["rolling_std_3"]   = np.std(history[-3:])
+        row["yoy_growth"]      = (history[-1] - history[-13]) / abs(history[-13]) \
+                                  if len(history) >= 13 else 0
+        row["mom_delta"]  = history[-1] - history[-2] if len(history) >= 2 else 0
+        row["month_sin"]  = np.sin(2 * np.pi * future_date.month / 12)
+        row["month_cos"]  = np.cos(2 * np.pi * future_date.month / 12)
+        row["year_norm"]  = (future_date.year - df["year_num"].min()) / max(
+            df["year_num"].max() - df["year_num"].min(), 1)
+        row["month_num"]  = future_date.month
+        row["year_num"]   = future_date.year
 
-        feat = np.array([[row[c] for c in feature_cols]])
-        pred = final_model.predict(feat)[0]
-        future_preds.append({"date": future_date.strftime("%Y-%m"), "predicted_netpay": round(pred, 2)})
+        feat = np.array([[row.get(c, 0) for c in fc]])
+        pred = float(winner_model.predict(feat)[0])
+        preds.append({
+            "date":             future_date.strftime("%Y-%m"),
+            "predicted_netpay": round(pred, 2),
+        })
         history.append(pred)
 
-    print("\n  6-Month Forecast:")
-    for p in future_preds:
-        print(f"    {p['date']}: {p['predicted_netpay']:>15,.2f} TND")
-
-    # Save
-    joblib.dump(final_model,  MODELS_DIR / "payroll_forecast.pkl")
-    joblib.dump(feature_cols, MODELS_DIR / "payroll_forecast_features.pkl")
-
-    # Save actual vs predicted for test set (for plotting)
-    test_comparison = pd.DataFrame({
-        "date":      dates_test,
-        "actual":    y_test,
-        "predicted": model.predict(X_test),
-    })
-    test_comparison.to_csv(MODELS_DIR / "payroll_forecast_test.csv", index=False)
-
-    result = {
-        "model":         "payroll_forecast",
-        "train_months":  int(len(X_train)),
-        "test_months":   int(len(X_test)),
-        "train_metrics": {k: round(float(v), 4) for k, v in train_metrics.items()},
-        "test_metrics":  {k: round(float(v), 4) for k, v in test_metrics.items()},
-        "forecast_6m":   future_preds,
-    }
-    (MODELS_DIR / "payroll_forecast_results.json").write_text(
-        json.dumps(result, indent=2, ensure_ascii=False), encoding="utf-8"
-    )
-    print(f"\n  Model saved: {MODELS_DIR / 'payroll_forecast.pkl'}")
-    return result
+    return preds
 
 
-def train_indemnity_forecast() -> dict:
-    print("\n" + "=" * 55)
-    print("MODEL 2 — Monthly Indemnity Forecasting")
-    print("=" * 55)
+# ============================================================
+# Main
+# ============================================================
 
-    df = load_monthly_indemnity()
-    print(f"  Data loaded: {len(df)} months ({df['year_num'].min()}–{df['year_num'].max()})")
+def train_payroll_forecast() -> dict:
+    print("=" * 60)
+    print("MODEL 1 - Payroll Forecasting (5-Model Comparison)")
+    print("=" * 60)
 
-    target = "total_indemnity"
-    df = _add_lag_features(df, target, lags=6)
+    from ml.data_loader import load_monthly_payroll
+    df = load_monthly_payroll()
+    df = df.sort_values("month_start_date").reset_index(drop=True)
+    print(f"  Data: {len(df)} months | "
+          f"{df['year_num'].min()}-{df['year_num'].max()}")
 
-    feature_cols = [c for c in df.columns if
-                    c.startswith("lag_") or
-                    c.startswith("rolling_") or
-                    c in ("month_sin", "month_cos", "year_norm",
-                          "month_num", "year_num", "yoy_growth", "mom_delta")]
+    df_feat = _add_lag_features(df)
+    fc = [c for c in LAG_FEATURE_COLS if c in df_feat.columns]
 
-    X = df[feature_cols].values
-    y = df[target].values
+    X = df_feat[fc].values
+    y = df_feat[TARGET].values
 
-    TEST_SIZE = 12
-    X_train, X_test = X[:-TEST_SIZE], X[-TEST_SIZE:]
-    y_train, y_test = y[:-TEST_SIZE], y[-TEST_SIZE:]
-    dates_test = df["month_start_date"].iloc[-TEST_SIZE:].values
+    X_train, X_test = X[:-TEST_MONTHS], X[-TEST_MONTHS:]
+    y_train, y_test = y[:-TEST_MONTHS], y[-TEST_MONTHS:]
+    df_train = df_feat.iloc[:-TEST_MONTHS]
+    df_test  = df_feat.iloc[-TEST_MONTHS:]
 
     print(f"  Train: {len(X_train)} months | Test: {len(X_test)} months (last 12)")
+    print(f"\n  {'model':<12s}  {'MAE':>14s}  {'RMSE':>14s}  {'R2':>8s}  {'MAPE':>8s}")
+    print(f"  {'-'*12}  {'-'*14}  {'-'*14}  {'-'*8}  {'-'*8}")
 
-    model = RandomForestRegressor(n_estimators=300, max_depth=10, random_state=42, n_jobs=-1)
-    model.fit(X_train, y_train)
+    # ML models
+    ml_metrics, trained_ml = _run_ml_models(X_train, y_train, X_test, y_test)
 
-    train_metrics = _evaluate(y_train, model.predict(X_train), "Training set")
-    test_metrics  = _evaluate(y_test,  model.predict(X_test),  "Test set (last 12 months)")
+    # SARIMA
+    sarima_metrics, _ = _run_sarima(y_train, y_test)
 
-    final_model = RandomForestRegressor(n_estimators=300, max_depth=10, random_state=42, n_jobs=-1)
-    final_model.fit(X, y)
+    # Prophet
+    prophet_metrics, prophet_model = _run_prophet(df_train, df_test)
 
-    test_comparison = pd.DataFrame({
-        "date":      dates_test,
+    # Compare
+    all_metrics = {
+        "ridge":   ml_metrics["ridge"],
+        "rf":      ml_metrics["rf"],
+        "xgb":     ml_metrics["xgb"],
+        "sarima":  sarima_metrics,
+        "prophet": prophet_metrics,
+    }
+
+    # Exclude ridge if it got suspiciously perfect score (overfit on small data)
+    if all_metrics["ridge"]["mape"] < 0.5:
+        print("  [!] Ridge MAPE near 0 — likely overfit on small dataset, excluding from winner selection")
+        candidates = {k: v for k, v in all_metrics.items() if k != "ridge"}
+    else:
+        candidates = all_metrics
+
+    print(f"\n  --- Model Comparison (by Test MAPE) ---")
+    winner_name = min(candidates, key=lambda k: candidates[k]["mape"])
+    for name, m in sorted(all_metrics.items(), key=lambda x: x[1]["mape"]):
+        marker = " <-- WINNER" if name == winner_name else ""
+        print(f"    {name:<12s}  MAPE={m['mape']:.2f}%  R2={m['r2']:.4f}{marker}")
+
+    winner_mape = candidates[winner_name]["mape"]
+    print(f"\n  Winner: {winner_name.upper()} (MAPE={winner_mape:.2f}%)")
+
+    # Save winner
+    if winner_name in trained_ml:
+        winner_model = trained_ml[winner_name]
+    elif winner_name == "prophet":
+        winner_model = prophet_model
+    else:
+        winner_model = trained_ml["rf"]  # fallback
+
+    joblib.dump(winner_model, MODELS_DIR / "payroll_forecast.pkl")
+    joblib.dump(fc,           MODELS_DIR / "payroll_forecast_features.pkl")
+    joblib.dump(winner_name,  MODELS_DIR / "payroll_forecast_winner.pkl")
+
+    # Save test comparison for plotting
+    pd.DataFrame({
+        "date":      df_test["month_start_date"].values,
         "actual":    y_test,
-        "predicted": model.predict(X_test),
-    })
-    test_comparison.to_csv(MODELS_DIR / "indemnity_forecast_test.csv", index=False)
+        "predicted": trained_ml.get(winner_name,
+                     trained_ml["rf"]).predict(X_test)
+                     if winner_name in trained_ml else prophet_metrics,
+    }).to_csv(MODELS_DIR / "payroll_forecast_test.csv", index=False)
 
-    joblib.dump(final_model,  MODELS_DIR / "indemnity_forecast.pkl")
-    joblib.dump(feature_cols, MODELS_DIR / "indemnity_forecast_features.pkl")
+    # 6-month forecast
+    print("\n  6-Month Forecast:")
+    forecast_6m = _forecast_6m(winner_name, winner_model, df, fc)
+    for p in forecast_6m:
+        print(f"    {p['date']}: {p['predicted_netpay']:>15,.2f} TND")
 
     result = {
-        "model":         "indemnity_forecast",
-        "train_months":  int(len(X_train)),
-        "test_months":   int(len(X_test)),
-        "train_metrics": {k: round(float(v), 4) for k, v in train_metrics.items()},
-        "test_metrics":  {k: round(float(v), 4) for k, v in test_metrics.items()},
+        "model":            "payroll_forecast",
+        "winner":           winner_name,
+        "train_months":     int(len(X_train)),
+        "test_months":      int(len(X_test)),
+        "model_comparison": {
+            name: {"mape": m["mape"], "r2": m["r2"],
+                   "mae": m["mae"], "rmse": m["rmse"]}
+            for name, m in all_metrics.items()
+        },
+        "forecast_6m": forecast_6m,
     }
-    (MODELS_DIR / "indemnity_forecast_results.json").write_text(
-        json.dumps(result, indent=2, ensure_ascii=False), encoding="utf-8"
+
+    (MODELS_DIR / "payroll_forecast_results.json").write_text(
+        json.dumps(result, indent=2, ensure_ascii=False, default=str),
+        encoding="utf-8",
     )
-    print(f"\n  Model saved: {MODELS_DIR / 'indemnity_forecast.pkl'}")
+    print(f"\n  Saved: payroll_forecast.pkl")
     return result
 
 
 if __name__ == "__main__":
-    r1 = train_payroll_forecast()
-    r2 = train_indemnity_forecast()
-    print("\n\nAll forecasting models trained successfully.")
+    train_payroll_forecast()

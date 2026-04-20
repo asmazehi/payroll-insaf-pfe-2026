@@ -1,43 +1,64 @@
 {
   "model": "payroll_forecast",
-  "train_months": 104,
+  "winner": "rf",
+  "train_months": 98,
   "test_months": 12,
-  "train_metrics": {
-    "mae": 289018.7063,
-    "rmse": 443531.3089,
-    "r2": 0.9815,
-    "mape": 3.6317
-  },
-  "test_metrics": {
-    "mae": 1328283.5725,
-    "rmse": 1875490.1916,
-    "r2": 0.4683,
-    "mape": 8.7499
+  "model_comparison": {
+    "ridge": {
+      "mape": 0.0,
+      "r2": 1.0,
+      "mae": 0.0,
+      "rmse": 0.0
+    },
+    "rf": {
+      "mape": 6.3595,
+      "r2": 0.5856,
+      "mae": 997570.45,
+      "rmse": 1655645.51
+    },
+    "xgb": {
+      "mape": 7.3075,
+      "r2": 0.6452,
+      "mae": 1097601.67,
+      "rmse": 1532018.75
+    },
+    "sarima": {
+      "mape": 9.1999,
+      "r2": 0.493,
+      "mae": 1367018.83,
+      "rmse": 1831273.52
+    },
+    "prophet": {
+      "mape": 9.9489,
+      "r2": 0.4598,
+      "mae": 1447829.77,
+      "rmse": 1890321.69
+    }
   },
   "forecast_6m": [
     {
       "date": "2026-03",
-      "predicted_netpay": 11921974.7
+      "predicted_netpay": 12294898.59
     },
     {
       "date": "2026-04",
-      "predicted_netpay": 12841169.23
+      "predicted_netpay": 13928212.34
     },
     {
       "date": "2026-05",
-      "predicted_netpay": 13377527.33
+      "predicted_netpay": 14183351.93
     },
     {
       "date": "2026-06",
-      "predicted_netpay": 13505473.12
+      "predicted_netpay": 13474099.74
     },
     {
       "date": "2026-07",
-      "predicted_netpay": 13183846.75
+      "predicted_netpay": 13019138.8
     },
     {
       "date": "2026-08",
-      "predicted_netpay": 12908859.32
+      "predicted_netpay": 12942087.6
     }
   ]
 }
