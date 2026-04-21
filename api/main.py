@@ -5,11 +5,12 @@ INSAF Payroll Intelligence Platform — FastAPI backend.
 
 Endpoints:
     GET  /                        Health check
-    POST /upload                  Upload payroll JSON file → ETL → DW
+    POST /upload                  Upload payroll JSON file -> ETL -> DW
     GET  /forecast?n=6            Next N months payroll forecast
-    POST /predict-salary          Predict individual salary
     GET  /anomalies?limit=50      Top anomalies from DW
+    POST /anomalies/explain       LLM explanation for a single anomaly
     GET  /summary                 DW summary stats
+    POST /chat                    RAG chatbot (Ollama + PostgreSQL DW)
     GET  /plots/{filename}        Serve ML plot images
 
 Run:
@@ -50,15 +51,28 @@ DATA_DIR   = Path(__file__).resolve().parent.parent / "data" / "raw"
 
 # ── Schemas ───────────────────────────────────────────────────────────────────
 
-class SalaryRequest(BaseModel):
-    grade_code:    str
-    nature_code:   str
-    ministry_code: str
-    pa_sitfam:     str   = "C"
-    pa_eche:       float = 5.0
-    year_num:      int   = 2026
-    month_num:     int   = 1
-    employee_sk:   Optional[int] = None
+class ChatRequest(BaseModel):
+    question: str
+    model:    str = "llama3.2"
+
+
+class AnomalyExplainRequest(BaseModel):
+    employee_sk:   int
+    grade_code:    str            = ""
+    nature_code:   str            = ""
+    ministry_code: str            = ""
+    month_num:     int            = 1
+    year_num:      int            = 2026
+    m_netpay:      float          = 0.0
+    emp_mean:      float          = 0.0
+    emp_std:       float          = 0.0
+    emp_median:    float          = 0.0
+    z_score:       float          = 0.0
+    pct_deviation: float          = 0.0
+    zscore_flag:   bool           = False
+    if_flag:       bool           = False
+    if_score:      float          = 0.0
+    model:         str            = "llama3.2"
 
 
 # ── Routes ────────────────────────────────────────────────────────────────────
@@ -187,42 +201,6 @@ def get_forecast(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/predict-salary", tags=["ML"])
-def predict_salary(req: SalaryRequest):
-    """
-    Predict the net salary for an employee given their attributes.
-
-    - grade_code, nature_code, ministry_code: employee classification
-    - pa_eche: echelon (seniority level within grade)
-    - pa_sitfam: family situation (C=celibataire, M=marie, etc.)
-    - employee_sk: if provided, uses that employee's personal pay history
-    """
-    try:
-        from ml.predict import predict_salary as _predict
-        result = _predict(
-            grade_code=req.grade_code,
-            nature_code=req.nature_code,
-            ministry_code=req.ministry_code,
-            pa_sitfam=req.pa_sitfam,
-            pa_eche=req.pa_eche,
-            year_num=req.year_num,
-            month_num=req.month_num,
-            employee_sk=req.employee_sk,
-        )
-        return {
-            "input":    req.model_dump(),
-            "output":   result,
-            "currency": "TND",
-        }
-    except FileNotFoundError:
-        raise HTTPException(
-            status_code=503,
-            detail="Salary model not found. Run 'python -m ml.run_all_models' first."
-        )
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
 @app.get("/anomalies", tags=["ML"])
 def get_anomalies(
     limit: int = Query(50, ge=1, le=500),
@@ -256,6 +234,50 @@ def get_anomalies(
         "filters":   {"ministry": ministry, "year": year},
         "anomalies": df.to_dict(orient="records"),
     }
+
+
+@app.post("/anomalies/explain", tags=["ML"])
+def explain_anomaly_record(req: AnomalyExplainRequest):
+    """
+    Generate a plain-language LLM explanation for a single anomalous payroll record.
+    Uses Ollama (llama3.2) running locally — must be started before calling.
+    """
+    try:
+        import pandas as pd
+        from ml.llm_explainer import explain_anomaly
+        row  = pd.Series(req.model_dump())
+        expl = explain_anomaly(row, model=req.model)
+        return {
+            "employee_sk": req.employee_sk,
+            "explanation": expl,
+            "model":       req.model,
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/chat", tags=["RAG Chatbot"])
+def chat_endpoint(req: ChatRequest):
+    """
+    RAG Chatbot — ask any question about the INSAF payroll data.
+
+    The system retrieves relevant data from PostgreSQL DW, then passes it
+    to Ollama (llama3.2) to generate a grounded, factual answer.
+
+    Examples:
+    - "What is the total payroll budget for 2025?"
+    - "Which ministry has the most employees?"
+    - "How many anomalies were detected?"
+    - "What is the average salary per grade?"
+
+    Requires: Ollama running locally with llama3.2 pulled.
+    """
+    try:
+        from api.chatbot import chat
+        result = chat(question=req.question, model=req.model)
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/plots", tags=["Visualizations"])
