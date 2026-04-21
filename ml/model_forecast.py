@@ -174,9 +174,12 @@ def _run_tft(df_full: pd.DataFrame, test_len: int) -> tuple[dict, object | None]
     """
     try:
         import torch
-        import pytorch_lightning as pl
+        try:
+            import lightning as pl                  # pytorch-forecasting >= 1.0
+        except ImportError:
+            import pytorch_lightning as pl          # fallback for older versions
         from pytorch_forecasting import TemporalFusionTransformer, TimeSeriesDataSet
-        from pytorch_forecasting.metrics import MAE as PF_MAE
+        from pytorch_forecasting.metrics import QuantileLoss
         from pytorch_forecasting.data import GroupNormalizer
     except ImportError as e:
         print(f"    tft           SKIPPED (missing deps: {e})")
@@ -189,7 +192,10 @@ def _run_tft(df_full: pd.DataFrame, test_len: int) -> tuple[dict, object | None]
         df_tft["time_idx"]  = df_tft.index.astype(int)
         df_tft["group"]     = "total"                      # single series
         df_tft["month_str"] = df_tft["month_num"].astype(str)
-        df_tft["year_str"]  = df_tft["year_num"].astype(str)
+        # year_norm: continuous [0,1] so unseen future years don't cause unknown-category error
+        year_min = df_tft["year_num"].min()
+        year_max = df_tft["year_num"].max()
+        df_tft["year_norm_tft"] = (df_tft["year_num"] - year_min) / max(year_max - year_min, 1)
 
         max_encoder = 24          # look-back window
         max_predict = test_len    # predict the test horizon
@@ -206,8 +212,8 @@ def _run_tft(df_full: pd.DataFrame, test_len: int) -> tuple[dict, object | None]
             min_prediction_length = 1,
             max_prediction_length = max_predict,
             static_categoricals   = ["group"],
-            time_varying_known_categoricals  = ["month_str", "year_str"],
-            time_varying_known_reals         = ["time_idx"],
+            time_varying_known_categoricals  = ["month_str"],   # month cycles 1-12, always seen
+            time_varying_known_reals         = ["time_idx", "year_norm_tft"],
             time_varying_unknown_reals       = [TARGET],
             target_normalizer  = GroupNormalizer(groups=["group"], transformation="softplus"),
             add_relative_time_idx  = True,
@@ -231,7 +237,7 @@ def _run_tft(df_full: pd.DataFrame, test_len: int) -> tuple[dict, object | None]
             dropout                = 0.1,
             hidden_continuous_size = 16,
             output_size            = 7,           # quantiles
-            loss                   = PF_MAE(),
+            loss                   = QuantileLoss(),
             log_interval           = -1,
             reduce_on_plateau_patience = 4,
         )
@@ -250,9 +256,15 @@ def _run_tft(df_full: pd.DataFrame, test_len: int) -> tuple[dict, object | None]
         trainer.fit(tft, train_dataloaders=train_dl, val_dataloaders=val_dl)
 
         # ---- evaluate --------------------------------------------------------
-        raw_preds = tft.predict(val_dl, mode="prediction", return_x=False)
-        y_pred    = raw_preds.numpy().flatten()[:test_len]
-        y_true    = df_tft[df_tft["time_idx"] > training_cutoff][TARGET].values[:test_len]
+        # mode="quantiles" returns shape (n, quantiles); take median (index 3 of 7)
+        raw_preds = tft.predict(val_dl, mode="quantiles", return_x=False)
+        raw_np    = raw_preds.numpy()
+        if raw_np.ndim == 2:
+            y_pred = raw_np[:, raw_np.shape[1] // 2]   # median quantile
+        else:
+            y_pred = raw_np.flatten()
+        y_pred = y_pred[:test_len]
+        y_true = df_tft[df_tft["time_idx"] > training_cutoff][TARGET].values[:test_len]
 
         m = _metrics(y_true, y_pred, "tft")
         return m, (tft, tft_train, df_tft)
@@ -265,7 +277,6 @@ def _run_tft(df_full: pd.DataFrame, test_len: int) -> tuple[dict, object | None]
 def _forecast_tft_6m(tft_bundle, df_full: pd.DataFrame) -> list[dict]:
     """Forecast next 6 months using a trained TFT."""
     try:
-        import torch
         from pytorch_forecasting import TimeSeriesDataSet
 
         tft, tft_train, df_tft = tft_bundle
@@ -274,18 +285,21 @@ def _forecast_tft_6m(tft_bundle, df_full: pd.DataFrame) -> list[dict]:
         last_idx   = df_tft["time_idx"].max()
         last_date  = pd.Timestamp(df_full["month_start_date"].iloc[-1])
         last_val   = df_tft[TARGET].iloc[-1]
+        year_min   = df_tft["year_num"].min()
+        year_max   = df_tft["year_num"].max()
+        year_denom = max(year_max - year_min, 1)
 
         future_rows = []
         for i in range(1, 7):
             fd = last_date + pd.DateOffset(months=i)
             future_rows.append({
-                "time_idx":     last_idx + i,
-                "group":        "total",
-                TARGET:         last_val,           # placeholder (required by dataset)
-                "month_num":    fd.month,
-                "year_num":     fd.year,
-                "month_str":    str(fd.month),
-                "year_str":     str(fd.year),
+                "time_idx":       last_idx + i,
+                "group":          "total",
+                TARGET:           last_val,         # placeholder (required by dataset)
+                "month_num":      fd.month,
+                "year_num":       fd.year,
+                "month_str":      str(fd.month),
+                "year_norm_tft":  (fd.year - year_min) / year_denom,
                 "month_start_date": fd,
             })
 
@@ -295,8 +309,13 @@ def _forecast_tft_6m(tft_bundle, df_full: pd.DataFrame) -> list[dict]:
             tft_train, df_ext, predict=True, stop_randomization=True
         )
         pred_dl  = pred_ds.to_dataloader(train=False, batch_size=32, num_workers=0)
-        raw      = tft.predict(pred_dl, mode="prediction", return_x=False)
-        y_pred   = raw.numpy().flatten()[-6:]
+        raw      = tft.predict(pred_dl, mode="quantiles", return_x=False)
+        raw_np   = raw.numpy()
+        if raw_np.ndim == 2:
+            y_pred = raw_np[:, raw_np.shape[1] // 2]   # median quantile
+        else:
+            y_pred = raw_np.flatten()
+        y_pred   = y_pred[-6:]
 
         preds = []
         for i, val in enumerate(y_pred):
