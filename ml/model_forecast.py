@@ -3,12 +3,13 @@ ml/model_forecast.py
 ====================
 MODEL 1 - Monthly Payroll Forecasting (Model Comparison)
 
-Compares 5 models on the same test set (last 12 months):
-  1. Linear Regression   (simple baseline)
+Compares 6 models on the same test set (last 12 months):
+  1. Ridge Regression    (simple baseline)
   2. Random Forest       (ensemble, lag features)
   3. XGBoost             (gradient boosting, lag features)
   4. SARIMA              (classical time series)
   5. Prophet             (Meta, handles seasonality + trend automatically)
+  6. TFT                 (Temporal Fusion Transformer - deep learning)
 
 Winner = lowest MAPE on test set.
 Final model retrained on full data and saved.
@@ -162,11 +163,163 @@ def _run_prophet(df_train, df_test) -> dict:
 
 
 # ============================================================
+# TFT (Temporal Fusion Transformer)
+# ============================================================
+
+def _run_tft(df_full: pd.DataFrame, test_len: int) -> tuple[dict, object | None]:
+    """
+    Train TFT via pytorch-forecasting on the monthly payroll series.
+    Returns (metrics_dict, tft_predictor_or_None).
+    Falls back gracefully if pytorch / pytorch-forecasting not installed.
+    """
+    try:
+        import torch
+        import pytorch_lightning as pl
+        from pytorch_forecasting import TemporalFusionTransformer, TimeSeriesDataSet
+        from pytorch_forecasting.metrics import MAE as PF_MAE
+        from pytorch_forecasting.data import GroupNormalizer
+    except ImportError as e:
+        print(f"    tft           SKIPPED (missing deps: {e})")
+        return {"mae": 999, "rmse": 999, "r2": -999, "mape": 999}, None
+
+    try:
+        # ---- prepare dataset -------------------------------------------------
+        df_tft = df_full[["month_start_date", TARGET, "month_num", "year_num"]].copy()
+        df_tft = df_tft.sort_values("month_start_date").reset_index(drop=True)
+        df_tft["time_idx"]  = df_tft.index.astype(int)
+        df_tft["group"]     = "total"                      # single series
+        df_tft["month_str"] = df_tft["month_num"].astype(str)
+        df_tft["year_str"]  = df_tft["year_num"].astype(str)
+
+        max_encoder = 24          # look-back window
+        max_predict = test_len    # predict the test horizon
+
+        training_cutoff = df_tft["time_idx"].max() - test_len
+
+        tft_train = TimeSeriesDataSet(
+            df_tft[df_tft["time_idx"] <= training_cutoff],
+            time_idx           = "time_idx",
+            target             = TARGET,
+            group_ids          = ["group"],
+            min_encoder_length = max_encoder // 2,
+            max_encoder_length = max_encoder,
+            min_prediction_length = 1,
+            max_prediction_length = max_predict,
+            static_categoricals   = ["group"],
+            time_varying_known_categoricals  = ["month_str", "year_str"],
+            time_varying_known_reals         = ["time_idx"],
+            time_varying_unknown_reals       = [TARGET],
+            target_normalizer  = GroupNormalizer(groups=["group"], transformation="softplus"),
+            add_relative_time_idx  = True,
+            add_target_scales      = True,
+            add_encoder_length     = True,
+        )
+
+        tft_val = TimeSeriesDataSet.from_dataset(
+            tft_train, df_tft, predict=True, stop_randomization=True
+        )
+
+        train_dl = tft_train.to_dataloader(train=True,  batch_size=32, num_workers=0)
+        val_dl   = tft_val.to_dataloader(train=False, batch_size=32, num_workers=0)
+
+        # ---- model -----------------------------------------------------------
+        tft = TemporalFusionTransformer.from_dataset(
+            tft_train,
+            learning_rate          = 0.03,
+            hidden_size            = 32,
+            attention_head_size    = 2,
+            dropout                = 0.1,
+            hidden_continuous_size = 16,
+            output_size            = 7,           # quantiles
+            loss                   = PF_MAE(),
+            log_interval           = -1,
+            reduce_on_plateau_patience = 4,
+        )
+
+        accelerator = "gpu" if torch.cuda.is_available() else "cpu"
+        trainer = pl.Trainer(
+            max_epochs           = 30,
+            accelerator          = accelerator,
+            devices              = 1,
+            gradient_clip_val    = 0.1,
+            enable_progress_bar  = False,
+            enable_model_summary = False,
+            logger               = False,
+        )
+
+        trainer.fit(tft, train_dataloaders=train_dl, val_dataloaders=val_dl)
+
+        # ---- evaluate --------------------------------------------------------
+        raw_preds = tft.predict(val_dl, mode="prediction", return_x=False)
+        y_pred    = raw_preds.numpy().flatten()[:test_len]
+        y_true    = df_tft[df_tft["time_idx"] > training_cutoff][TARGET].values[:test_len]
+
+        m = _metrics(y_true, y_pred, "tft")
+        return m, (tft, tft_train, df_tft)
+
+    except Exception as e:
+        print(f"    tft           FAILED: {e}")
+        return {"mae": 999, "rmse": 999, "r2": -999, "mape": 999}, None
+
+
+def _forecast_tft_6m(tft_bundle, df_full: pd.DataFrame) -> list[dict]:
+    """Forecast next 6 months using a trained TFT."""
+    try:
+        import torch
+        from pytorch_forecasting import TimeSeriesDataSet
+
+        tft, tft_train, df_tft = tft_bundle
+
+        # extend the dataframe with 6 placeholder future rows
+        last_idx   = df_tft["time_idx"].max()
+        last_date  = pd.Timestamp(df_full["month_start_date"].iloc[-1])
+        last_val   = df_tft[TARGET].iloc[-1]
+
+        future_rows = []
+        for i in range(1, 7):
+            fd = last_date + pd.DateOffset(months=i)
+            future_rows.append({
+                "time_idx":     last_idx + i,
+                "group":        "total",
+                TARGET:         last_val,           # placeholder (required by dataset)
+                "month_num":    fd.month,
+                "year_num":     fd.year,
+                "month_str":    str(fd.month),
+                "year_str":     str(fd.year),
+                "month_start_date": fd,
+            })
+
+        df_ext = pd.concat([df_tft, pd.DataFrame(future_rows)], ignore_index=True)
+
+        pred_ds = TimeSeriesDataSet.from_dataset(
+            tft_train, df_ext, predict=True, stop_randomization=True
+        )
+        pred_dl  = pred_ds.to_dataloader(train=False, batch_size=32, num_workers=0)
+        raw      = tft.predict(pred_dl, mode="prediction", return_x=False)
+        y_pred   = raw.numpy().flatten()[-6:]
+
+        preds = []
+        for i, val in enumerate(y_pred):
+            fd = last_date + pd.DateOffset(months=i + 1)
+            preds.append({
+                "date":             fd.strftime("%Y-%m"),
+                "predicted_netpay": round(float(val), 2),
+            })
+        return preds
+    except Exception as e:
+        print(f"  TFT 6m forecast failed: {e}")
+        return []
+
+
+# ============================================================
 # 6-month forecast using winner
 # ============================================================
 
 def _forecast_6m(winner_name, winner_model, df, feature_cols) -> list[dict]:
     """Forecast next 6 months using the winning model."""
+    if winner_name == "tft":
+        return _forecast_tft_6m(winner_model, df)
+
     if winner_name == "prophet":
         future   = winner_model.make_future_dataframe(periods=6, freq="MS")
         forecast = winner_model.predict(future)
@@ -229,7 +382,7 @@ def _forecast_6m(winner_name, winner_model, df, feature_cols) -> list[dict]:
 
 def train_payroll_forecast() -> dict:
     print("=" * 60)
-    print("MODEL 1 - Payroll Forecasting (5-Model Comparison)")
+    print("MODEL 1 - Payroll Forecasting (6-Model Comparison)")
     print("=" * 60)
 
     from ml.data_loader import load_monthly_payroll
@@ -262,6 +415,10 @@ def train_payroll_forecast() -> dict:
     # Prophet
     prophet_metrics, prophet_model = _run_prophet(df_train, df_test)
 
+    # TFT (deep learning - skipped gracefully if deps missing)
+    print("\n  Training TFT (Temporal Fusion Transformer)...")
+    tft_metrics, tft_bundle = _run_tft(df_feat, TEST_MONTHS)
+
     # Compare
     all_metrics = {
         "ridge":   ml_metrics["ridge"],
@@ -269,26 +426,33 @@ def train_payroll_forecast() -> dict:
         "xgb":     ml_metrics["xgb"],
         "sarima":  sarima_metrics,
         "prophet": prophet_metrics,
+        "tft":     tft_metrics,
     }
 
-    # Exclude ridge if it got suspiciously perfect score (overfit on small data)
+    # Exclude ridge if overfit; exclude any failed model (mape=999)
     if all_metrics["ridge"]["mape"] < 0.5:
-        print("  [!] Ridge MAPE near 0 — likely overfit on small dataset, excluding from winner selection")
-        candidates = {k: v for k, v in all_metrics.items() if k != "ridge"}
+        print("  [!] Ridge MAPE near 0 --- likely overfit on small dataset, excluding from winner selection")
+        candidates = {k: v for k, v in all_metrics.items() if k != "ridge" and v["mape"] < 999}
     else:
-        candidates = all_metrics
+        candidates = {k: v for k, v in all_metrics.items() if v["mape"] < 999}
+
+    if not candidates:
+        candidates = {"rf": ml_metrics["rf"]}
 
     print(f"\n  --- Model Comparison (by Test MAPE) ---")
     winner_name = min(candidates, key=lambda k: candidates[k]["mape"])
     for name, m in sorted(all_metrics.items(), key=lambda x: x[1]["mape"]):
         marker = " <-- WINNER" if name == winner_name else ""
-        print(f"    {name:<12s}  MAPE={m['mape']:.2f}%  R2={m['r2']:.4f}{marker}")
+        skip   = " [excluded/failed]" if m["mape"] >= 999 else ""
+        print(f"    {name:<12s}  MAPE={m['mape']:.2f}%  R2={m['r2']:.4f}{marker}{skip}")
 
     winner_mape = candidates[winner_name]["mape"]
     print(f"\n  Winner: {winner_name.upper()} (MAPE={winner_mape:.2f}%)")
 
     # Save winner
-    if winner_name in trained_ml:
+    if winner_name == "tft":
+        winner_model = tft_bundle
+    elif winner_name in trained_ml:
         winner_model = trained_ml[winner_name]
     elif winner_name == "prophet":
         winner_model = prophet_model
@@ -300,12 +464,17 @@ def train_payroll_forecast() -> dict:
     joblib.dump(winner_name,  MODELS_DIR / "payroll_forecast_winner.pkl")
 
     # Save test comparison for plotting
+    if winner_name in trained_ml:
+        test_preds = trained_ml[winner_name].predict(X_test)
+    elif winner_name == "prophet":
+        test_preds = [prophet_metrics] * len(y_test)  # placeholder
+    else:
+        test_preds = trained_ml["rf"].predict(X_test)
+
     pd.DataFrame({
         "date":      df_test["month_start_date"].values,
         "actual":    y_test,
-        "predicted": trained_ml.get(winner_name,
-                     trained_ml["rf"]).predict(X_test)
-                     if winner_name in trained_ml else prophet_metrics,
+        "predicted": test_preds,
     }).to_csv(MODELS_DIR / "payroll_forecast_test.csv", index=False)
 
     # 6-month forecast
