@@ -1,0 +1,11 @@
+.page-wrapper { padding: 24px; }
+.page-title   { font-size: 24px; font-weight: 600; margin-bottom: 24px; color: #1a237e; }
+.center       { display: flex; justify-content: center; margin: 60px 0; }
+.error-msg    { color: #f44336; padding: 16px; }
+.meta-row     { display: flex; gap: 16px; margin-bottom: 24px; }
+.meta-card    { padding: 16px 24px; text-align: center;
+  .meta-label { font-size: 12px; color: #666; }
+  .meta-value { font-size: 20px; font-weight: 700; color: #1a237e; }
+}
+.chart-card, .table-card { margin-bottom: 24px; }
+.full-width   { width: 100%; }

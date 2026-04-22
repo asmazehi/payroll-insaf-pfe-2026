@@ -1,0 +1,68 @@
+<div class="page-wrapper">
+  <h2 class="page-title">Anomaly Detection</h2>
+
+  <div *ngIf="loading" class="center"><mat-spinner></mat-spinner></div>
+  <div *ngIf="error"   class="error-msg">{{ error }}</div>
+
+  <ng-container *ngIf="!loading && result">
+    <div class="stats-row">
+      <mat-card class="stat-card warn">
+        <mat-icon>warning</mat-icon>
+        <div class="stat-value">{{ result.total_anomalies_in_report | number }}</div>
+        <div class="stat-label">Total Anomalies Detected</div>
+      </mat-card>
+      <mat-card class="stat-card">
+        <mat-icon>visibility</mat-icon>
+        <div class="stat-value">{{ result.returned | number }}</div>
+        <div class="stat-label">Showing</div>
+      </mat-card>
+    </div>
+
+    <mat-card>
+      <mat-card-content>
+        <table mat-table [dataSource]="result.anomalies" class="full-width">
+          <ng-container matColumnDef="employee_sk">
+            <th mat-header-cell *matHeaderCellDef>Employee ID</th>
+            <td mat-cell *matCellDef="let r">{{ r.employee_sk }}</td>
+          </ng-container>
+          <ng-container matColumnDef="grade_code">
+            <th mat-header-cell *matHeaderCellDef>Grade</th>
+            <td mat-cell *matCellDef="let r">{{ r.grade_code }}</td>
+          </ng-container>
+          <ng-container matColumnDef="ministry_code">
+            <th mat-header-cell *matHeaderCellDef>Ministry</th>
+            <td mat-cell *matCellDef="let r">{{ r.ministry_code }}</td>
+          </ng-container>
+          <ng-container matColumnDef="year_num">
+            <th mat-header-cell *matHeaderCellDef>Year</th>
+            <td mat-cell *matCellDef="let r">{{ r.year_num }}</td>
+          </ng-container>
+          <ng-container matColumnDef="month_num">
+            <th mat-header-cell *matHeaderCellDef>Month</th>
+            <td mat-cell *matCellDef="let r">{{ r.month_num }}</td>
+          </ng-container>
+          <ng-container matColumnDef="m_netpay">
+            <th mat-header-cell *matHeaderCellDef>Net Pay (TND)</th>
+            <td mat-cell *matCellDef="let r">{{ r.m_netpay | number:'1.0-0' }}</td>
+          </ng-container>
+          <ng-container matColumnDef="z_score">
+            <th mat-header-cell *matHeaderCellDef>Z-Score</th>
+            <td mat-cell *matCellDef="let r" [class.high-z]="r.z_score > 3">
+              {{ r.z_score | number:'1.2-2' }}
+            </td>
+          </ng-container>
+          <ng-container matColumnDef="anomaly_flag">
+            <th mat-header-cell *matHeaderCellDef>Flag</th>
+            <td mat-cell *matCellDef="let r">
+              <mat-icon [color]="r.anomaly_flag ? 'warn' : 'primary'">
+                {{ r.anomaly_flag ? 'warning' : 'check_circle' }}
+              </mat-icon>
+            </td>
+          </ng-container>
+          <tr mat-header-row *matHeaderRowDef="columns"></tr>
+          <tr mat-row *matRowDef="let row; columns: columns" [class.anomaly-row]="row.anomaly_flag"></tr>
+        </table>
+      </mat-card-content>
+    </mat-card>
+  </ng-container>
+</div>

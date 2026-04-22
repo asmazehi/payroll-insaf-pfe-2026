@@ -1,0 +1,34 @@
+<div class="page-wrapper">
+  <h2 class="page-title">Payroll Dashboard</h2>
+
+  <div *ngIf="loading" class="center"><mat-spinner></mat-spinner></div>
+
+  <div *ngIf="!loading && summary" class="kpi-grid">
+    <mat-card class="kpi-card">
+      <mat-icon color="primary">people</mat-icon>
+      <div class="kpi-value">{{ summary.total_employees | number }}</div>
+      <div class="kpi-label">Employees</div>
+    </mat-card>
+    <mat-card class="kpi-card">
+      <mat-icon color="primary">receipt_long</mat-icon>
+      <div class="kpi-value">{{ summary.total_records | number }}</div>
+      <div class="kpi-label">Payroll Records</div>
+    </mat-card>
+    <mat-card class="kpi-card">
+      <mat-icon color="primary">payments</mat-icon>
+      <div class="kpi-value">{{ fmt(summary.total_netpay) }}</div>
+      <div class="kpi-label">Total Net Payroll</div>
+    </mat-card>
+    <mat-card class="kpi-card">
+      <mat-icon color="primary">date_range</mat-icon>
+      <div class="kpi-value">{{ summary.year_min }} – {{ summary.year_max }}</div>
+      <div class="kpi-label">Coverage</div>
+    </mat-card>
+  </div>
+
+  <mat-card class="chart-card">
+    <mat-card-content>
+      <canvas baseChart [data]="barData" [options]="barOptions" type="bar"></canvas>
+    </mat-card-content>
+  </mat-card>
+</div>

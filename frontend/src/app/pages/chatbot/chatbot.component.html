@@ -1,0 +1,27 @@
+<div class="page-wrapper">
+  <h2 class="page-title">AI Assistant</h2>
+  <p class="page-sub">Ask questions about payroll data — powered by llama3.2 + RAG</p>
+
+  <mat-card class="chat-card">
+    <div class="messages" #msgContainer>
+      <div *ngFor="let m of messages" class="message" [class.user]="m.role === 'user'" [class.bot]="m.role === 'bot'">
+        <mat-icon class="msg-icon">{{ m.role === 'user' ? 'person' : 'smart_toy' }}</mat-icon>
+        <div class="bubble">{{ m.text }}</div>
+      </div>
+      <div *ngIf="loading" class="message bot">
+        <mat-icon class="msg-icon">smart_toy</mat-icon>
+        <div class="bubble thinking"><mat-spinner diameter="18"></mat-spinner> Thinking…</div>
+      </div>
+    </div>
+
+    <div class="input-row">
+      <mat-form-field appearance="outline" class="input-field">
+        <input matInput [(ngModel)]="input" (keydown)="onKey($event)"
+               placeholder="e.g. How many employees in 2025?" [disabled]="loading">
+      </mat-form-field>
+      <button mat-raised-button color="primary" (click)="send()" [disabled]="!input.trim() || loading">
+        <mat-icon>send</mat-icon>
+      </button>
+    </div>
+  </mat-card>
+</div>
