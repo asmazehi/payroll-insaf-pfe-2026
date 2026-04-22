@@ -1,0 +1,15 @@
+com\insaf\payroll\entity\User.class
+com\insaf\payroll\service\UserDetailsServiceImpl.class
+com\insaf\payroll\security\JwtAuthFilter.class
+com\insaf\payroll\config\SecurityConfig.class
+com\insaf\payroll\security\JwtUtils.class
+com\insaf\payroll\repository\UserRepository.class
+com\insaf\payroll\PayrollApplication.class
+com\insaf\payroll\service\DashboardService.class
+com\insaf\payroll\controller\MlController.class
+com\insaf\payroll\controller\DashboardController.class
+com\insaf\payroll\dto\JwtResponse.class
+com\insaf\payroll\service\MlService.class
+com\insaf\payroll\controller\AuthController.class
+com\insaf\payroll\dto\RegisterRequest.class
+com\insaf\payroll\dto\LoginRequest.class
