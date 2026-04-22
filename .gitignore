@@ -24,6 +24,9 @@ ml/plots/
 powerbi/*.pbix
 powerbi/*.pbit
 
+# Java/Maven build output
+backend/target/
+
 # TFT / PyTorch Lightning training artifacts
 lightning_logs/
 checkpoints/
