@@ -23,3 +23,8 @@ ml/plots/
 # Power BI binaries
 powerbi/*.pbix
 powerbi/*.pbit
+
+# TFT / PyTorch Lightning training artifacts
+lightning_logs/
+checkpoints/
+*.ckpt
