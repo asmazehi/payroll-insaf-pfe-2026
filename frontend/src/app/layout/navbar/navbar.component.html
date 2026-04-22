@@ -1,0 +1,8 @@
+<mat-toolbar color="primary" class="navbar">
+  <span class="brand">INSAF Payroll Intelligence</span>
+  <span class="spacer"></span>
+  <span class="user-info">{{ user?.username }} · {{ user?.role | slice:5 }}</span>
+  <button mat-icon-button (click)="logout()" title="Logout">
+    <mat-icon>logout</mat-icon>
+  </button>
+</mat-toolbar>

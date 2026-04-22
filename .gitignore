@@ -31,3 +31,5 @@ backend/target/
 lightning_logs/
 checkpoints/
 *.ckpt
+frontend/dist/
+frontend/node_modules/
