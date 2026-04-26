@@ -1,15 +1,13 @@
 <ng-container *ngIf="auth.hasToken(); else loginView">
-  <mat-sidenav-container class="app-container">
-    <mat-sidenav mode="side" opened class="sidenav">
-      <app-sidebar></app-sidebar>
-    </mat-sidenav>
-    <mat-sidenav-content class="main-content">
+  <div class="shell">
+    <app-sidebar></app-sidebar>
+    <div class="shell__body">
       <app-navbar></app-navbar>
-      <div class="page-content">
+      <main class="shell__content">
         <router-outlet></router-outlet>
-      </div>
-    </mat-sidenav-content>
-  </mat-sidenav-container>
+      </main>
+    </div>
+  </div>
 </ng-container>
 
 <ng-template #loginView>

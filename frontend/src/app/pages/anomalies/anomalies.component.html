@@ -1,68 +1,171 @@
-<div class="page-wrapper">
-  <h2 class="page-title">Anomaly Detection</h2>
+<div class="page">
 
-  <div *ngIf="loading" class="center"><mat-spinner></mat-spinner></div>
-  <div *ngIf="error"   class="error-msg">{{ error }}</div>
+  <!-- Hero -->
+  <div class="page-hero">
+    <div class="page-hero__inner">
+      <div class="page-hero__title">
+        <div class="hero-icon"><mat-icon>radar</mat-icon></div>
+        <div>
+          <h2>Anomaly Detection</h2>
+          <p>AI-identified payroll irregularities using Isolation Forest &amp; statistical methods</p>
+        </div>
+      </div>
+      <div class="page-hero__right" *ngIf="result">
+        <div class="anomaly-stat">
+          <span class="anomaly-stat__val">{{ result.total_anomalies_in_report | number }}</span>
+          <span class="anomaly-stat__label">Total Flagged</span>
+        </div>
+      </div>
+    </div>
+  </div>
 
-  <ng-container *ngIf="!loading && result">
-    <div class="stats-row">
-      <mat-card class="stat-card warn">
-        <mat-icon>warning</mat-icon>
-        <div class="stat-value">{{ result.total_anomalies_in_report | number }}</div>
-        <div class="stat-label">Total Anomalies Detected</div>
-      </mat-card>
-      <mat-card class="stat-card">
-        <mat-icon>visibility</mat-icon>
-        <div class="stat-value">{{ result.returned | number }}</div>
-        <div class="stat-label">Showing</div>
-      </mat-card>
+  <div class="loading-overlay" *ngIf="loading">
+    <div class="spinner"></div><span>Analyzing payroll data…</span>
+  </div>
+
+  <div class="error-banner" *ngIf="error" style="margin:0 32px 20px">
+    <mat-icon>warning_amber</mat-icon><span>{{ error }}</span>
+  </div>
+
+  <div class="page-body" *ngIf="!loading && result">
+
+    <!-- KPI row -->
+    <div class="kpi-grid" style="grid-template-columns:repeat(4,1fr)">
+      <div class="kpi-card accent-navy">
+        <div class="kpi-icon navy"><mat-icon>warning_amber</mat-icon></div>
+        <div class="kpi-body">
+          <div class="kpi-label">Total Anomalies</div>
+          <div class="kpi-value">{{ result.total_anomalies_in_report | number }}</div>
+          <div class="kpi-sub">Flagged records</div>
+        </div>
+      </div>
+      <div class="kpi-card accent-red" style="cursor:pointer" (click)="filter='high'">
+        <div class="kpi-icon red"><mat-icon>error</mat-icon></div>
+        <div class="kpi-body">
+          <div class="kpi-label">High Severity</div>
+          <div class="kpi-value">{{ count('high') }}</div>
+          <div class="kpi-sub">Z-score ≥ 3.5</div>
+        </div>
+      </div>
+      <div class="kpi-card accent-gold" style="cursor:pointer" (click)="filter='medium'">
+        <div class="kpi-icon gold"><mat-icon>report_problem</mat-icon></div>
+        <div class="kpi-body">
+          <div class="kpi-label">Medium Severity</div>
+          <div class="kpi-value">{{ count('medium') }}</div>
+          <div class="kpi-sub">Z-score 2.5 – 3.5</div>
+        </div>
+      </div>
+      <div class="kpi-card accent-blue" style="cursor:pointer" (click)="filter='low'">
+        <div class="kpi-icon blue"><mat-icon>info</mat-icon></div>
+        <div class="kpi-body">
+          <div class="kpi-label">Low Severity</div>
+          <div class="kpi-value">{{ count('low') }}</div>
+          <div class="kpi-sub">Z-score &lt; 2.5</div>
+        </div>
+      </div>
     </div>
 
-    <mat-card>
-      <mat-card-content>
-        <table mat-table [dataSource]="result.anomalies" class="full-width">
-          <ng-container matColumnDef="employee_sk">
-            <th mat-header-cell *matHeaderCellDef>Employee ID</th>
-            <td mat-cell *matCellDef="let r">{{ r.employee_sk }}</td>
-          </ng-container>
-          <ng-container matColumnDef="grade_code">
-            <th mat-header-cell *matHeaderCellDef>Grade</th>
-            <td mat-cell *matCellDef="let r">{{ r.grade_code }}</td>
-          </ng-container>
-          <ng-container matColumnDef="ministry_code">
-            <th mat-header-cell *matHeaderCellDef>Ministry</th>
-            <td mat-cell *matCellDef="let r">{{ r.ministry_code }}</td>
-          </ng-container>
-          <ng-container matColumnDef="year_num">
-            <th mat-header-cell *matHeaderCellDef>Year</th>
-            <td mat-cell *matCellDef="let r">{{ r.year_num }}</td>
-          </ng-container>
-          <ng-container matColumnDef="month_num">
-            <th mat-header-cell *matHeaderCellDef>Month</th>
-            <td mat-cell *matCellDef="let r">{{ r.month_num }}</td>
-          </ng-container>
-          <ng-container matColumnDef="m_netpay">
-            <th mat-header-cell *matHeaderCellDef>Net Pay (TND)</th>
-            <td mat-cell *matCellDef="let r">{{ r.m_netpay | number:'1.0-0' }}</td>
-          </ng-container>
-          <ng-container matColumnDef="z_score">
-            <th mat-header-cell *matHeaderCellDef>Z-Score</th>
-            <td mat-cell *matCellDef="let r" [class.high-z]="r.z_score > 3">
-              {{ r.z_score | number:'1.2-2' }}
-            </td>
-          </ng-container>
-          <ng-container matColumnDef="anomaly_flag">
-            <th mat-header-cell *matHeaderCellDef>Flag</th>
-            <td mat-cell *matCellDef="let r">
-              <mat-icon [color]="r.anomaly_flag ? 'warn' : 'primary'">
-                {{ r.anomaly_flag ? 'warning' : 'check_circle' }}
-              </mat-icon>
-            </td>
-          </ng-container>
-          <tr mat-header-row *matHeaderRowDef="columns"></tr>
-          <tr mat-row *matRowDef="let row; columns: columns" [class.anomaly-row]="row.anomaly_flag"></tr>
+    <!-- Filter bar -->
+    <div class="chart-card" style="padding:16px 24px;margin-bottom:18px">
+      <div class="filter-row">
+        <span class="filter-label">Filter by severity</span>
+        <div class="filter-pills">
+          <button class="fpill" [class.active]="filter==='all'" (click)="filter='all'">
+            <span class="fpill__dot"></span>All <em>{{ result.returned }}</em>
+          </button>
+          <button class="fpill fpill--danger" [class.active]="filter==='high'" (click)="filter='high'">
+            <span class="fpill__dot"></span>High <em>{{ count('high') }}</em>
+          </button>
+          <button class="fpill fpill--warning" [class.active]="filter==='medium'" (click)="filter='medium'">
+            <span class="fpill__dot"></span>Medium <em>{{ count('medium') }}</em>
+          </button>
+          <button class="fpill fpill--info" [class.active]="filter==='low'" (click)="filter='low'">
+            <span class="fpill__dot"></span>Low <em>{{ count('low') }}</em>
+          </button>
+        </div>
+        <span class="filter-count">{{ filtered.length }} records shown</span>
+      </div>
+    </div>
+
+    <!-- Table -->
+    <div class="chart-card">
+      <div class="section-header">
+        <h3>Anomalous Payroll Records</h3>
+        <span class="section-sub">Click any row for details</span>
+      </div>
+      <div class="table-container">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Severity</th><th>Employee ID</th><th>Grade</th>
+              <th>Ministry</th><th>Period</th><th>Net Pay</th>
+              <th>Z-Score</th><th>Method</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let r of filtered" (click)="openDetail(r)" class="clickable-row">
+              <td>
+                <span class="sev-badge"
+                  [class.sev-badge--high]="severity(r)==='high'"
+                  [class.sev-badge--medium]="severity(r)==='medium'"
+                  [class.sev-badge--low]="severity(r)==='low'">
+                  <span class="sev-dot"></span>{{ severityLabel(r) | titlecase }}
+                </span>
+              </td>
+              <td><code class="emp-id">{{ r.employee_sk }}</code></td>
+              <td>{{ r.grade_code || '—' }}</td>
+              <td class="ministry-cell">{{ r.ministry_code || r.organisme_code || '—' }}</td>
+              <td>{{ r.year_num }}/{{ r.month_num }}</td>
+              <td><strong>{{ fmt(r.m_netpay) }}</strong></td>
+              <td>
+                <span class="z-score-val"
+                  [class.z-high]="abs(r.z_score)>=3.5"
+                  [class.z-med]="abs(r.z_score)>=2.5 && abs(r.z_score)<3.5">
+                  {{ (r.z_score ?? r.anomaly_score) | number:'1.2-2' }}
+                </span>
+              </td>
+              <td><span class="badge neutral">{{ r.detection_method || 'IF' }}</span></td>
+            </tr>
+          </tbody>
         </table>
-      </mat-card-content>
-    </mat-card>
-  </ng-container>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- Detail Modal -->
+<div class="modal-overlay" *ngIf="selected" (click)="closeDetail()">
+  <div class="modal" (click)="$event.stopPropagation()">
+    <div class="modal__header">
+      <div class="modal__header-title">
+        <span class="sev-badge"
+          [class.sev-badge--high]="severity(selected)==='high'"
+          [class.sev-badge--medium]="severity(selected)==='medium'"
+          [class.sev-badge--low]="severity(selected)==='low'">
+          <span class="sev-dot"></span>{{ severityLabel(selected) | titlecase }}
+        </span>
+        <h3>Anomaly Detail</h3>
+      </div>
+      <button class="modal__close" (click)="closeDetail()"><mat-icon>close</mat-icon></button>
+    </div>
+    <div class="modal__body">
+      <div class="detail-grid">
+        <div class="detail-item"><span>Employee ID</span><strong>{{ selected.employee_sk }}</strong></div>
+        <div class="detail-item"><span>Period</span><strong>{{ selected.year_num }}/{{ selected.month_num }}</strong></div>
+        <div class="detail-item"><span>Net Pay</span><strong>{{ fmt(selected.m_netpay) }}</strong></div>
+        <div class="detail-item"><span>Grade</span><strong>{{ selected.grade_code || '—' }}</strong></div>
+        <div class="detail-item"><span>Ministry</span><strong>{{ selected.ministry_code || '—' }}</strong></div>
+        <div class="detail-item"><span>Z-Score</span><strong>{{ (selected.z_score ?? selected.anomaly_score) | number:'1.3-3' }}</strong></div>
+        <div class="detail-item"><span>Detection Method</span><strong>{{ selected.detection_method || 'Isolation Forest' }}</strong></div>
+      </div>
+      <div class="llm-box" *ngIf="selected.explanation">
+        <div class="llm-box__header">
+          <div class="llm-icon"><mat-icon>smart_toy</mat-icon></div>
+          <span>AI Explanation</span>
+        </div>
+        <p>{{ selected.explanation }}</p>
+      </div>
+    </div>
+  </div>
 </div>

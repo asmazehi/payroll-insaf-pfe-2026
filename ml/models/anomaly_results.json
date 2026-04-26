@@ -39,11 +39,11 @@
       "score": 0.6574
     },
     "autoencoder": {
-      "n_flagged": 22036,
-      "rate_pct": 3.0,
+      "n_flagged": 21955,
+      "rate_pct": 2.989,
       "agreement_pct": 94.2,
       "avg_zscore": 0.524,
-      "max_zscore": 7.282,
+      "max_zscore": 7.323,
       "score": 0.5408
     }
   },

@@ -1,8 +1,30 @@
-<mat-toolbar color="primary" class="navbar">
-  <span class="brand">INSAF Payroll Intelligence</span>
-  <span class="spacer"></span>
-  <span class="user-info">{{ user?.username }} · {{ user?.role | slice:5 }}</span>
-  <button mat-icon-button (click)="logout()" title="Logout">
-    <mat-icon>logout</mat-icon>
-  </button>
-</mat-toolbar>
+<header class="topbar">
+  <div class="topbar__left">
+    <div class="topbar__brand">
+      <img src="assets/images/LogoCNI.png" alt="CNI" class="topbar__cni-logo">
+      <div class="topbar__divider"></div>
+    </div>
+    <div>
+      <h1 class="topbar__title">{{ pageTitle }}</h1>
+      <p class="topbar__breadcrumb">INSAF Platform &rsaquo; {{ pageTitle }}</p>
+    </div>
+  </div>
+
+  <div class="topbar__right">
+    <div class="topbar__status">
+      <span class="status-dot"></span>
+      <span class="status-text">Live</span>
+    </div>
+    <div class="topbar__divider"></div>
+    <div class="topbar__user">
+      <div class="topbar__userinfo">
+        <span class="topbar__username">{{ user?.username }}</span>
+        <span class="topbar__role">{{ user?.role | slice:5 }}</span>
+      </div>
+      <div class="topbar__avatar">{{ (user?.username || 'U')[0].toUpperCase() }}</div>
+    </div>
+    <button class="topbar__logout" (click)="logout()" title="Sign out">
+      <mat-icon>logout</mat-icon>
+    </button>
+  </div>
+</header>

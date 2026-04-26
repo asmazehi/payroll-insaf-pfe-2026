@@ -1,9 +1,9 @@
 """
 DW1 Pipeline — Payroll (pa_type = "1")
 ═══════════════════════════════════════
-Source : data/raw/paie2015.json
+Source : any file in data/raw/ (JSON / JSONL / CSV / Excel)
 Output :
-  data/clean/fact_paie.jsonl        ← slim: FKs + measures + DQ flags only
+  data/clean/fact_paie.jsonl        ← slim: FKs + measures + DQ flags
   data/clean/dim_employee.jsonl
   data/clean/dim_grade.jsonl
   data/clean/dim_nature.jsonl
@@ -54,21 +54,29 @@ def run(source: Path = RAW_PAIE, run_id: str | None = None) -> dict:
 
     # ── Load reference lookups ────────────────────────────────────────────────
     log.info("Loading reference data...")
-    grade_lookup    = grade_map.build_lookup(RAW_GRADE)
-    nature_lookup   = nature_map.build_lookup(RAW_NATURE)
-    org_lookup      = org_map.build_lookup(RAW_ORGANISME)
-    region_lookup   = region_map.build_lookup(RAW_REGION)
+    grade_lookup  = grade_map.build_lookup(RAW_GRADE)
+    nature_lookup = nature_map.build_lookup(RAW_NATURE)
+    org_lookup    = org_map.build_lookup(RAW_ORGANISME)
+    region_lookup = region_map.build_lookup(RAW_REGION)
 
     log.info("Lookups — grade=%d  nature=%d  organisme=%d  region=%d",
              len(grade_lookup), len(nature_lookup),
              len(org_lookup["full"]), len(region_lookup["by_dep"]))
 
-    # ── Accumulators ──────────────────────────────────────────────────────────
-    employees:    dict[str, dict] = {}
-    time_periods: set[tuple]      = set()
+    # ── Accumulators ─────────────────────────────────────────────────────────
+    # Employees: keep the record with the most recent (year, month) for
+    # up-to-date attributes (name spelling, dates) without losing history.
+    employees:    dict[str, dict]         = {}
+    employee_ts:  dict[str, tuple]        = {}   # mat → (year, month)
+    time_periods: set[tuple[int, int]]    = set()
+
+    # Deduplication: natural key = (employee_id, year_num, month_num, pa_type)
+    # Track within this file — DB handles cross-run deduplication via ON CONFLICT.
+    seen_keys:    set[tuple]              = set()
 
     stats = {
         "total_raw": 0, "skipped_type": 0, "written": 0,
+        "duplicates_skipped": 0,
         "grade_matched": 0, "nature_matched": 0,
         "org_matched": 0,   "region_matched": 0,
         "has_issues": 0,
@@ -84,15 +92,24 @@ def run(source: Path = RAW_PAIE, run_id: str | None = None) -> dict:
                 stats["skipped_type"] += 1
                 continue
 
-            # Encoding fix
             raw = fix_record(raw)
-
-            # Field normalization
             rec, issues = normalize_payroll_record(raw)
             if issues:
                 stats["has_issues"] += 1
 
-            # Reference matching
+            mat = rec.get("pa_mat")
+            yr  = rec.get("pa_annee")
+            mo  = rec.get("pa_mois")
+
+            # ── Within-file deduplication ─────────────────────────────────────
+            nat_key = (mat, yr, mo, rec.get("pa_type"))
+            if nat_key in seen_keys:
+                stats["duplicates_skipped"] += 1
+                log.debug("Duplicate skipped: employee=%s year=%s month=%s", mat, yr, mo)
+                continue
+            seen_keys.add(nat_key)
+
+            # ── Reference matching ────────────────────────────────────────────
             grade,  gm = grade_map.match(rec.get("pa_grd"),  grade_lookup)
             nature, nm = nature_map.match(rec.get("pa_natu"), nature_lookup)
             org,    om = org_map.match(rec, org_lookup)
@@ -103,36 +120,37 @@ def run(source: Path = RAW_PAIE, run_id: str | None = None) -> dict:
             if org:    stats["org_matched"]    += 1
             if rgn:    stats["region_matched"] += 1
 
-            # ── Collect unique employees ──────────────────────────────────────
-            mat = rec.get("pa_mat")
-            if mat and mat not in employees:
-                employees[mat] = {
-                    "employee_id":      mat,
-                    "last_name":        rec.get("pa_noml"),
-                    "first_name":       rec.get("pa_prenl"),
-                    "gender":           rec.get("pa_sexe"),
-                    "birth_date":       rec.get("pa_datnais"),
-                    "hire_date":        rec.get("pa_datent"),
-                    "appointment_date": rec.get("pa_datnatu"),
-                }
+            # ── Employee dimension (keep most recent attributes) ───────────────
+            if mat:
+                rec_ts = (int(yr) if yr else 0, int(mo) if mo else 0)
+                if mat not in employees or rec_ts > employee_ts.get(mat, (0, 0)):
+                    employees[mat] = {
+                        "employee_id":      mat,
+                        "last_name":        rec.get("pa_noml"),
+                        "first_name":       rec.get("pa_prenl"),
+                        "gender":           rec.get("pa_sexe"),
+                        "birth_date":       rec.get("pa_datnais"),
+                        "hire_date":        rec.get("pa_datent"),
+                        "appointment_date": rec.get("pa_datnatu"),
+                    }
+                    employee_ts[mat] = rec_ts
 
-            # ── Collect time periods ──────────────────────────────────────────
-            yr, mo = rec.get("pa_annee"), rec.get("pa_mois")
-            if yr and mo:
+            # ── Time dimension ────────────────────────────────────────────────
+            if yr is not None and mo is not None:
                 time_periods.add((int(yr), int(mo)))
 
             # ── Build slim fact row ───────────────────────────────────────────
             fact_row = {
-                # Natural foreign keys (resolved to surrogate keys by load_dw)
+                # Natural foreign keys (resolved to SKs by load_dw)
                 "employee_id":  mat,
-                "year_num":     int(yr) if yr else None,
-                "month_num":    int(mo) if mo else None,
+                "year_num":     int(yr) if yr is not None else None,
+                "month_num":    int(mo) if mo is not None else None,
                 "grade_code":   rec.get("pa_grd"),
                 "nature_code":  rec.get("pa_natu"),
                 "org_codetab":  org["codetab"] if org else None,
                 "org_dire":     org["dire"]    if org else None,
                 "pa_loca_raw":  rec.get("pa_loca"),
-                # Degenerate dimensions (context that changes monthly)
+                # Degenerate dimensions
                 "pa_type":      rec.get("pa_type"),
                 "pa_sec":       rec.get("pa_sec"),
                 "pa_eche":      rec.get("pa_eche"),
@@ -145,7 +163,7 @@ def run(source: Path = RAW_PAIE, run_id: str | None = None) -> dict:
                 "pa_parag":     rec.get("pa_parag"),
                 "pa_mp":        rec.get("pa_mp"),
                 "pa_regcnr":    rec.get("pa_regcnr"),
-                # Measures (prefixed m_ to match DW schema)
+                # Measures
                 "m_salnimp":    rec.get("pa_salnimp"),
                 "m_avkm":       rec.get("pa_avkm"),
                 "m_rapni":      rec.get("pa_rapni"),
@@ -165,8 +183,8 @@ def run(source: Path = RAW_PAIE, run_id: str | None = None) -> dict:
                 "m_rapimp":     rec.get("pa_rapimp"),
                 "m_capdeces":   rec.get("pa_capdeces"),
                 # DQ flags
-                "dq_has_issues":     rec.get("dq_has_issues"),
-                "dq_issue_count":    rec.get("dq_issue_count"),
+                "dq_has_issues":     bool(issues),
+                "dq_issue_count":    len(issues),
                 "dq_grade_matched":  grade  is not None,
                 "dq_nature_matched": nature is not None,
                 "dq_org_matched":    org    is not None,
@@ -186,7 +204,8 @@ def run(source: Path = RAW_PAIE, run_id: str | None = None) -> dict:
             if stats["written"] % 50_000 == 0:
                 log.info("  %d rows written...", stats["written"])
 
-    log.info("Fact file written — %d rows", stats["written"])
+    log.info("Fact file written — %d rows (%d duplicates skipped within file)",
+             stats["written"], stats["duplicates_skipped"])
 
     # ── Write dimension files ─────────────────────────────────────────────────
     _write_jsonl(CLEAN_DIM_EMPLOYEE,  employees.values())
@@ -196,9 +215,22 @@ def run(source: Path = RAW_PAIE, run_id: str | None = None) -> dict:
     _write_jsonl(CLEAN_DIM_REGION,    _region_records(region_lookup))
     _write_jsonl(CLEAN_DIM_TIME,      _time_records(time_periods))
 
-    log.info("Dimension files written")
+    log.info("Dimension files written — employees=%d  time_periods=%d",
+             len(employees), len(time_periods))
 
     # ── Quality gate ──────────────────────────────────────────────────────────
+    report = _quality_gate_and_report(
+        run_id=run_id, pipeline="DW1_paie", started=started,
+        source=source, stats=stats, time_periods=time_periods,
+        log=log,
+    )
+    return report
+
+
+# ── Quality gate ──────────────────────────────────────────────────────────────
+
+def _quality_gate_and_report(run_id, pipeline, started, source, stats,
+                              time_periods, log) -> dict:
     n = stats["written"] or 1
     pcts = {
         "pct_grade_matched":  round(100 * stats["grade_matched"]  / n, 2),
@@ -206,25 +238,28 @@ def run(source: Path = RAW_PAIE, run_id: str | None = None) -> dict:
         "pct_org_matched":    round(100 * stats["org_matched"]    / n, 2),
         "pct_region_matched": round(100 * stats["region_matched"] / n, 2),
         "pct_has_issues":     round(100 * stats["has_issues"]     / n, 2),
+        "pct_duplicates":     round(100 * stats["duplicates_skipped"] /
+                                    max(stats["total_raw"] - stats["skipped_type"], 1), 2),
     }
 
-    qg_pass   = True
-    qg_errors = []
-    qg_warns  = []
+    qg_pass, qg_errors, qg_warns = True, [], []
 
     if pcts["pct_grade_matched"] / 100 < QG_GRADE_MIN_MATCH:
         qg_pass = False
-        qg_errors.append(f"grade match {pcts['pct_grade_matched']}% < {QG_GRADE_MIN_MATCH*100}%")
+        qg_errors.append(f"grade match {pcts['pct_grade_matched']}% < {QG_GRADE_MIN_MATCH*100:.0f}%")
 
     if pcts["pct_nature_matched"] / 100 < QG_NATURE_MIN_MATCH:
         qg_pass = False
-        qg_errors.append(f"nature match {pcts['pct_nature_matched']}% < {QG_NATURE_MIN_MATCH*100}%")
+        qg_errors.append(f"nature match {pcts['pct_nature_matched']}% < {QG_NATURE_MIN_MATCH*100:.0f}%")
 
     if pcts["pct_org_matched"] / 100 < QG_ORGANISME_WARN_AT:
-        qg_warns.append(f"org match {pcts['pct_org_matched']}% low (known limitation)")
+        qg_warns.append(f"org match {pcts['pct_org_matched']}% (known limitation — partial keys)")
 
     if pcts["pct_region_matched"] / 100 < QG_REGION_WARN_AT:
         qg_warns.append(f"region match {pcts['pct_region_matched']}% — pa_loca has no crosswalk")
+
+    if stats["duplicates_skipped"] > 0:
+        qg_warns.append(f"{stats['duplicates_skipped']} duplicate rows removed within source file")
 
     status = "PASS" if qg_pass else "FAIL"
     if qg_warns:
@@ -236,30 +271,19 @@ def run(source: Path = RAW_PAIE, run_id: str | None = None) -> dict:
         log.warning("QG warning: %s", w)
     log.info("Quality gate: %s", status)
 
-    # ── Write report ──────────────────────────────────────────────────────────
     report = {
         "run_id":       run_id,
-        "pipeline":     "DW1_paie",
+        "pipeline":     pipeline,
         "started_at":   started.isoformat(),
         "finished_at":  datetime.now(timezone.utc).isoformat(),
         "source":       str(source),
         "stats":        {**stats, **pcts},
         "quality_gate": {"status": status, "errors": qg_errors, "warnings": qg_warns},
-        "outputs": {
-            "fact_paie":      str(CLEAN_FACT_PAIE),
-            "dim_employee":   str(CLEAN_DIM_EMPLOYEE),
-            "dim_grade":      str(CLEAN_DIM_GRADE),
-            "dim_nature":     str(CLEAN_DIM_NATURE),
-            "dim_organisme":  str(CLEAN_DIM_ORGANISME),
-            "dim_region":     str(CLEAN_DIM_REGION),
-            "dim_time":       str(CLEAN_DIM_TIME),
-        },
     }
 
     report_path = REPORTS_DIR / f"pipeline_paie_{run_id}.json"
     report_path.write_text(json.dumps(report, indent=2, ensure_ascii=False), encoding="utf-8")
     log.info("Report written: %s", report_path.name)
-
     return report
 
 
@@ -281,22 +305,29 @@ def _org_records(lookup: dict):
 
 
 def _region_records(lookup: dict):
+    seen = set()
     for rec in lookup["by_full"].values():
-        yield rec
+        key = (rec["coddep"], rec.get("codreg", ""))
+        if key not in seen:
+            seen.add(key)
+            yield rec
 
 
-def _time_records(periods: set[tuple]):
+def _time_records(periods: set[tuple[int, int]]):
     for year, month in sorted(periods):
-        _, last = monthrange(year, month)
+        days_in_month = monthrange(year, month)[1]
         yield {
-            "year_num":         year,
-            "month_num":        month,
-            "year_month":       f"{year:04d}-{month:02d}",
-            "month_start_date": f"{year:04d}-{month:02d}-01",
+            "year_num":          year,
+            "month_num":         month,
+            "year_month":        f"{year:04d}-{month:02d}",
+            "month_start_date":  f"{year:04d}-{month:02d}-01",
+            "month_end_date":    f"{year:04d}-{month:02d}-{days_in_month:02d}",
+            "quarter":           (month - 1) // 3 + 1,
+            "semester":          1 if month <= 6 else 2,
         }
 
 
-# ── CLI entry point ───────────────────────────────────────────────────────────
+# ── CLI ───────────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run DW1 (payroll) ETL pipeline")

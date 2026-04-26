@@ -1,7 +1,13 @@
 """
 PostgreSQL DW loader for INSAF Payroll Intelligence Platform.
 
-Loads all clean JSONL files into the DW using psycopg2 + COPY FROM STDIN.
+Loads all clean JSONL files into the DW using psycopg2 batch inserts.
+All dimension loads use ON CONFLICT UPSERT — fully idempotent, safe to
+re-run any number of times without creating duplicates.
+
+All fact loads use ON CONFLICT DO UPDATE — the last run always wins,
+which means re-running after a corrected ETL pass automatically repairs data.
+
 Run AFTER the SQL DDL scripts (01-04) have been executed.
 
 Usage:
@@ -11,9 +17,8 @@ Usage:
 from __future__ import annotations
 
 import argparse
-import io
 import json
-import sys
+import re
 from pathlib import Path
 
 import psycopg2
@@ -28,8 +33,14 @@ from etl.core.logger import get_logger
 
 log = get_logger("load_dw")
 
+# Module-level regex (not re-imported on every call)
+_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
-# ── helpers ───────────────────────────────────────────────────────────────────
+# Supplementary indem-only time periods (written by pipeline_indem)
+_CLEAN_DIM_TIME_INDEM = CLEAN_DIR / "dim_time_indem.jsonl"
+
+
+# ── Type coercers ─────────────────────────────────────────────────────────────
 
 def _v(rec: dict, key: str):
     """Return None for empty/null strings, else the raw value."""
@@ -74,21 +85,26 @@ def _date(rec: dict, key: str):
     v = _v(rec, key)
     if not v:
         return None
-    import re
-    if re.match(r"^\d{4}-\d{2}-\d{2}$", str(v)):
-        return str(v)
-    return None
+    s = str(v)
+    return s if _DATE_RE.match(s) else None
 
 
 def load_jsonl(path: Path):
+    if not path.exists():
+        log.warning("JSONL file not found, skipping: %s", path)
+        return
     with open(path, "r", encoding="utf-8") as f:
-        for line in f:
+        for line_no, line in enumerate(f, 1):
             line = line.strip()
-            if line:
+            if not line:
+                continue
+            try:
                 yield json.loads(line)
+            except json.JSONDecodeError as exc:
+                log.warning("Bad JSON line %d in %s: %s", line_no, path.name, exc)
 
 
-# ── dimension loaders ─────────────────────────────────────────────────────────
+# ── Dimension loaders ─────────────────────────────────────────────────────────
 
 def load_dim_employee(cur, path: Path):
     log.info("Loading dim_employee from %s", path.name)
@@ -106,6 +122,10 @@ def load_dim_employee(cur, path: Path):
             _date(r, "hire_date"),
             _date(r, "appointment_date"),
         ))
+
+    if not rows:
+        log.warning("dim_employee: no rows to insert")
+        return
 
     cur.executemany("""
         INSERT INTO dw.dim_employee
@@ -139,6 +159,10 @@ def load_dim_grade(cur, path: Path):
             _int(r, "retire_age"),
         ))
 
+    if not rows:
+        log.warning("dim_grade: no rows to insert")
+        return
+
     cur.executemany("""
         INSERT INTO dw.dim_grade
             (grade_code, grade_label_fr, grade_label_ar, category, class_grade, retire_age)
@@ -164,6 +188,10 @@ def load_dim_nature(cur, path: Path):
             _v(r, "nature_label_fr"),
             _v(r, "nature_label_ar"),
         ))
+
+    if not rows:
+        log.warning("dim_nature: no rows to insert")
+        return
 
     cur.executemany("""
         INSERT INTO dw.dim_nature
@@ -192,6 +220,10 @@ def load_dim_organisme(cur, path: Path):
             _v(r, "codgouv"), _v(r, "deleg"), _v(r, "typstruct"),
         ))
 
+    if not rows:
+        log.warning("dim_organisme: no rows to insert")
+        return
+
     cur.executemany("""
         INSERT INTO dw.dim_organisme
             (codetab, cab, sg, dg, dire, sdir, serv, unite,
@@ -219,6 +251,10 @@ def load_dim_region(cur, path: Path):
             _v(r, "code_dept"), _v(r, "code_region"),
         ))
 
+    if not rows:
+        log.warning("dim_region: no rows to insert")
+        return
+
     cur.executemany("""
         INSERT INTO dw.dim_region
             (coddep, codreg, lib_reg, lib_rega, code_dept, code_region)
@@ -231,8 +267,8 @@ def load_dim_region(cur, path: Path):
     log.info("  dim_region: %d rows upserted", len(rows))
 
 
-def load_dim_temps(cur, path: Path):
-    log.info("Loading dim_temps from %s", path.name)
+def _load_dim_temps_from_file(cur, path: Path) -> int:
+    """Load one time-period JSONL file into dim_temps. Returns number of rows inserted."""
     rows = []
     for r in load_jsonl(path):
         yn = _int(r, "year_num")
@@ -244,14 +280,27 @@ def load_dim_temps(cur, path: Path):
             _v(r, "year_month"),
             _v(r, "month_start_date"),
         ))
-
+    if not rows:
+        return 0
     cur.executemany("""
         INSERT INTO dw.dim_temps
             (year_num, month_num, year_month, month_start_date)
         VALUES (%s, %s, %s, %s)
         ON CONFLICT (year_num, month_num) DO NOTHING
     """, rows)
-    log.info("  dim_temps: %d rows upserted", len(rows))
+    return len(rows)
+
+
+def load_dim_temps(cur, path: Path):
+    log.info("Loading dim_temps from %s", path.name)
+    n = _load_dim_temps_from_file(cur, path)
+    log.info("  dim_temps: %d rows upserted (main)", n)
+
+    # Also load indem-only supplementary periods
+    if _CLEAN_DIM_TIME_INDEM.exists():
+        n2 = _load_dim_temps_from_file(cur, _CLEAN_DIM_TIME_INDEM)
+        if n2:
+            log.info("  dim_temps: %d additional rows from indem-only months", n2)
 
 
 def load_dim_indemnite(cur, path: Path):
@@ -276,6 +325,10 @@ def load_dim_indemnite(cur, path: Path):
             _v(r, "insurance_code"),
         ))
 
+    if not rows:
+        log.warning("dim_indemnite: no rows to insert")
+        return
+
     cur.executemany("""
         INSERT INTO dw.dim_indemnite
             (indemnite_code, indemnite_label_fr, indemnite_label_fr_long,
@@ -291,50 +344,12 @@ def load_dim_indemnite(cur, path: Path):
     log.info("  dim_indemnite: %d rows upserted", len(rows))
 
 
-# ── fact loaders ──────────────────────────────────────────────────────────────
+# ── SK map builder ────────────────────────────────────────────────────────────
 
-MEASURE_FIELDS = [
-    "m_salimp","m_salnimp","m_salbrut","m_brutcnr","m_netord","m_netpay",
-    "m_cpe","m_retrait","m_cps","m_capdeces","m_avkm","m_avlog",
-    "m_rapimp","m_rapni","m_sub","m_sps","m_spl","m_rapsalb",
-]
+def _build_maps(cur) -> tuple[dict, dict, dict, dict, dict, dict, dict]:
+    """Fetch all surrogate keys from DB into in-memory dicts for fast FK resolution."""
+    log.info("Building SK lookup maps from DB...")
 
-def _fact_row(r: dict, employee_map: dict, time_map: dict, grade_map_: dict,
-              nature_map_: dict, org_map_: dict, region_map_: dict,
-              indemnite_sk: int = None):
-    """Build one fact row tuple, resolving all SKs.
-    Reads slim fact JSONL format produced by pipeline_paie / pipeline_indem.
-    """
-    emp_sk  = employee_map.get(_v(r, "employee_id"), 0)
-    time_sk = time_map.get((_int(r, "year_num"), _int(r, "month_num")), 0)
-    grd_sk  = grade_map_.get(_v(r, "grade_code"), 0)
-    nat_sk  = nature_map_.get(_v(r, "nature_code"), 0)
-    org_sk  = org_map_.get((_v(r, "org_codetab"), _v(r, "org_dire")), 0)
-    reg_sk  = region_map_.get(_v(r, "org_codetab"), 0)   # codetab == pa_codmin (ministry code)
-
-    measures = tuple(_num(r, f) for f in MEASURE_FIELDS)
-
-    base = (
-        emp_sk, time_sk, _v(r, "pa_type") or "1",
-        grd_sk, nat_sk, org_sk, reg_sk,
-        _int(r, "pa_eche"), _v(r, "pa_sitfam"), _v(r, "pa_loca_raw"),
-        *measures,
-        _bool(r, "dq_grade_matched"),  _bool(r, "dq_nature_matched"),
-        _bool(r, "dq_org_matched"),    _bool(r, "dq_region_matched"),
-        _bool(r, "dq_has_issues") or False,
-        _int(r, "dq_issue_count") or 0,
-        _v(r, "run_id") or "unknown",
-        _v(r, "source_file") or "unknown",
-    )
-
-    if indemnite_sk is not None:
-        return base[:7] + (indemnite_sk,) + base[7:]
-    return base
-
-
-def _build_maps(cur):
-    """Fetch surrogate keys from DB into in-memory dicts for fast FK resolution."""
-    log.info("Building SK lookup maps...")
     cur.execute("SELECT employee_id, employee_sk FROM dw.dim_employee WHERE NOT is_unknown")
     emp = {r[0]: r[1] for r in cur.fetchall()}
 
@@ -350,17 +365,83 @@ def _build_maps(cur):
     cur.execute("SELECT codetab, dire, organisme_sk FROM dw.dim_organisme WHERE NOT is_unknown")
     org = {(r[0], r[1]): r[2] for r in cur.fetchall()}
 
-    # Region: map by coddep (pa_codmin) — take first match if unique
+    # Region: map by coddep (which corresponds to pa_codmin / ministry code)
+    # Take only unambiguous coddep values (unique region per ministry code).
     cur.execute("SELECT coddep, region_sk FROM dw.dim_region WHERE NOT is_unknown")
     region: dict = {}
     for coddep, sk in cur.fetchall():
         if coddep not in region:
             region[coddep] = sk
 
-    log.info("  Maps: emp=%d  time=%d  grade=%d  nature=%d  org=%d  region=%d",
-             len(emp), len(time), len(grade), len(nature), len(org), len(region))
-    return emp, time, grade, nature, org, region
+    # Indemnite: map by indemnite_code → indemnite_sk
+    cur.execute("SELECT indemnite_code, indemnite_sk FROM dw.dim_indemnite WHERE NOT is_unknown")
+    indem = {r[0]: r[1] for r in cur.fetchall()}
 
+    log.info("  Maps: emp=%d  time=%d  grade=%d  nature=%d  org=%d  region=%d  indem=%d",
+             len(emp), len(time), len(grade), len(nature), len(org), len(region), len(indem))
+    return emp, time, grade, nature, org, region, indem
+
+
+# ── Fact row builders ─────────────────────────────────────────────────────────
+
+MEASURE_FIELDS = [
+    "m_salimp", "m_salnimp", "m_salbrut", "m_brutcnr", "m_netord", "m_netpay",
+    "m_cpe", "m_retrait", "m_cps", "m_capdeces", "m_avkm", "m_avlog",
+    "m_rapimp", "m_rapni", "m_sub", "m_sps", "m_spl", "m_rapsalb",
+]
+
+
+def _build_paie_row(r: dict, emp: dict, time: dict, grade: dict,
+                    nature: dict, org: dict, region: dict) -> tuple:
+    emp_sk  = emp.get(_v(r, "employee_id"), 0)
+    time_sk = time.get((_int(r, "year_num"), _int(r, "month_num")), 0)
+    grd_sk  = grade.get(_v(r, "grade_code"), 0)
+    nat_sk  = nature.get(_v(r, "nature_code"), 0)
+    org_sk  = org.get((_v(r, "org_codetab"), _v(r, "org_dire")), 0)
+    reg_sk  = region.get(_v(r, "org_codetab"), 0)
+    measures = tuple(_num(r, f) for f in MEASURE_FIELDS)
+
+    return (
+        emp_sk, time_sk, _v(r, "pa_type") or "1",
+        grd_sk, nat_sk, org_sk, reg_sk,
+        _int(r, "pa_eche"), _v(r, "pa_sitfam"), _v(r, "pa_loca_raw"),
+        *measures,
+        _bool(r, "dq_grade_matched"),  _bool(r, "dq_nature_matched"),
+        _bool(r, "dq_org_matched"),    _bool(r, "dq_region_matched"),
+        _bool(r, "dq_has_issues") or False,
+        _int(r, "dq_issue_count") or 0,
+        _v(r, "run_id") or "unknown",
+        _v(r, "source_file") or "unknown",
+    )
+
+
+def _build_indem_row(r: dict, emp: dict, time: dict, grade: dict,
+                     nature: dict, org: dict, region: dict, indem: dict) -> tuple:
+    emp_sk    = emp.get(_v(r, "employee_id"), 0)
+    time_sk   = time.get((_int(r, "year_num"), _int(r, "month_num")), 0)
+    grd_sk    = grade.get(_v(r, "grade_code"), 0)
+    nat_sk    = nature.get(_v(r, "nature_code"), 0)
+    org_sk    = org.get((_v(r, "org_codetab"), _v(r, "org_dire")), 0)
+    reg_sk    = region.get(_v(r, "org_codetab"), 0)
+    # Resolve actual indemnite_sk from the code stored in the fact JSONL
+    indem_sk  = indem.get(_v(r, "indemnite_code"), 0)
+    measures  = tuple(_num(r, f) for f in MEASURE_FIELDS)
+
+    return (
+        emp_sk, time_sk, _v(r, "pa_type") or "3",
+        grd_sk, nat_sk, org_sk, reg_sk, indem_sk,
+        _int(r, "pa_eche"), _v(r, "pa_sitfam"), _v(r, "pa_loca_raw"),
+        *measures,
+        _bool(r, "dq_grade_matched"),  _bool(r, "dq_nature_matched"),
+        _bool(r, "dq_org_matched"),    _bool(r, "dq_region_matched"),
+        _bool(r, "dq_has_issues") or False,
+        _int(r, "dq_issue_count") or 0,
+        _v(r, "run_id") or "unknown",
+        _v(r, "source_file") or "unknown",
+    )
+
+
+# ── SQL statements ────────────────────────────────────────────────────────────
 
 PAIE_INSERT = """
     INSERT INTO dw.fact_paie (
@@ -378,14 +459,19 @@ PAIE_INSERT = """
         %s,%s,%s,%s,%s,%s,%s,%s
     )
     ON CONFLICT (employee_sk, time_sk, pa_type) DO UPDATE SET
-        grade_sk       = EXCLUDED.grade_sk,
-        nature_sk      = EXCLUDED.nature_sk,
-        organisme_sk   = EXCLUDED.organisme_sk,
-        region_sk      = EXCLUDED.region_sk,
-        m_netpay       = EXCLUDED.m_netpay,
-        m_salbrut      = EXCLUDED.m_salbrut,
-        dq_has_issues  = EXCLUDED.dq_has_issues,
-        load_ts        = NOW()
+        grade_sk      = EXCLUDED.grade_sk,
+        nature_sk     = EXCLUDED.nature_sk,
+        organisme_sk  = EXCLUDED.organisme_sk,
+        region_sk     = EXCLUDED.region_sk,
+        m_netpay      = EXCLUDED.m_netpay,
+        m_salbrut     = EXCLUDED.m_salbrut,
+        m_salimp      = EXCLUDED.m_salimp,
+        m_netord      = EXCLUDED.m_netord,
+        m_retrait     = EXCLUDED.m_retrait,
+        dq_has_issues = EXCLUDED.dq_has_issues,
+        run_id        = EXCLUDED.run_id,
+        source_file   = EXCLUDED.source_file,
+        load_ts       = NOW()
 """
 
 INDEM_INSERT = """
@@ -404,24 +490,33 @@ INDEM_INSERT = """
         %s,%s,%s,%s,%s,%s,%s,%s
     )
     ON CONFLICT (employee_sk, time_sk, pa_type) DO UPDATE SET
-        grade_sk       = EXCLUDED.grade_sk,
-        nature_sk      = EXCLUDED.nature_sk,
-        organisme_sk   = EXCLUDED.organisme_sk,
-        region_sk      = EXCLUDED.region_sk,
-        m_netpay       = EXCLUDED.m_netpay,
-        m_salbrut      = EXCLUDED.m_salbrut,
-        dq_has_issues  = EXCLUDED.dq_has_issues,
-        load_ts        = NOW()
+        grade_sk      = EXCLUDED.grade_sk,
+        nature_sk     = EXCLUDED.nature_sk,
+        organisme_sk  = EXCLUDED.organisme_sk,
+        region_sk     = EXCLUDED.region_sk,
+        m_netpay      = EXCLUDED.m_netpay,
+        m_salbrut     = EXCLUDED.m_salbrut,
+        dq_has_issues = EXCLUDED.dq_has_issues,
+        run_id        = EXCLUDED.run_id,
+        source_file   = EXCLUDED.source_file,
+        load_ts       = NOW()
 """
 
 
-def load_fact_paie(cur, path: Path, maps: tuple, batch_size: int = 5000):
-    emp, time, grade, nature, org, region = maps
+# ── Fact loaders ──────────────────────────────────────────────────────────────
+
+def load_fact_paie(cur, path: Path, maps: tuple, batch_size: int = 5000) -> int:
+    emp, time, grade, nature, org, region, _ = maps
     log.info("Loading fact_paie from %s ...", path.name)
-    batch, total = [], 0
+    batch, total, unresolved_emp, unresolved_time = [], 0, 0, 0
 
     for r in load_jsonl(path):
-        batch.append(_fact_row(r, emp, time, grade, nature, org, region))
+        row = _build_paie_row(r, emp, time, grade, nature, org, region)
+        if row[0] == 0:
+            unresolved_emp += 1
+        if row[1] == 0:
+            unresolved_time += 1
+        batch.append(row)
         if len(batch) >= batch_size:
             cur.executemany(PAIE_INSERT, batch)
             total += len(batch)
@@ -433,27 +528,32 @@ def load_fact_paie(cur, path: Path, maps: tuple, batch_size: int = 5000):
         cur.executemany(PAIE_INSERT, batch)
         total += len(batch)
 
-    log.info("  fact_paie: %d rows total", total)
+    if unresolved_emp:
+        log.warning("  fact_paie: %d rows with unresolved employee_sk (-> 0/Unknown)", unresolved_emp)
+    if unresolved_time:
+        log.warning("  fact_paie: %d rows with unresolved time_sk (-> 0/Unknown)", unresolved_time)
+    log.info("  fact_paie: %d rows loaded", total)
     return total
 
 
-def load_fact_indem(cur, path: Path, maps: tuple, batch_size: int = 5000):
-    """
-    Load fact_indem — only records whose employee_id exists in dim_employee (paie employees).
-    Indem-only employees (emp_sk=0) are loaded but tracked separately for transparency.
-    The BI views filter emp_sk=0 out automatically, giving the paie/indem intersection.
-    """
-    emp, time, grade, nature, org, region = maps
+def load_fact_indem(cur, path: Path, maps: tuple, batch_size: int = 5000) -> int:
+    emp, time, grade, nature, org, region, indem = maps
     log.info("Loading fact_indem from %s ...", path.name)
     batch, total = [], 0
     matched_emp, unmatched_emp = 0, 0
+    matched_indem, unmatched_indem = 0, 0
 
     for r in load_jsonl(path):
-        row = _fact_row(r, emp, time, grade, nature, org, region, indemnite_sk=0)
-        if row[0] != 0:   # employee_sk resolved → exists in paie
+        row = _build_indem_row(r, emp, time, grade, nature, org, region, indem)
+        if row[0] != 0:
             matched_emp += 1
         else:
             unmatched_emp += 1
+        if row[7] != 0:   # indemnite_sk at position 7
+            matched_indem += 1
+        else:
+            unmatched_indem += 1
+
         batch.append(row)
         if len(batch) >= batch_size:
             cur.executemany(INDEM_INSERT, batch)
@@ -466,44 +566,43 @@ def load_fact_indem(cur, path: Path, maps: tuple, batch_size: int = 5000):
         cur.executemany(INDEM_INSERT, batch)
         total += len(batch)
 
-    pct = round(100 * matched_emp / total, 1) if total else 0
-    log.info("  fact_indem: %d rows total | paie-matched: %d (%s%%) | indem-only (excluded from BI): %d",
-             total, matched_emp, pct, unmatched_emp)
+    pct_emp   = round(100 * matched_emp   / total, 1) if total else 0
+    pct_indem = round(100 * matched_indem / total, 1) if total else 0
+    log.info("  fact_indem: %d rows | emp matched: %d (%.1f%%) | indem_sk matched: %d (%.1f%%)",
+             total, matched_emp, pct_emp, matched_indem, pct_indem)
+    if unmatched_emp:
+        log.warning("  %d indem rows have no matching employee in dim_employee (emp_sk=0)", unmatched_emp)
+    if unmatched_indem:
+        log.info("  %d indem rows have indemnite_sk=0 (Unknown) — source export does not carry pa_cind, expected", unmatched_indem)
     return total
 
 
-# ── main ──────────────────────────────────────────────────────────────────────
+# ── Main ──────────────────────────────────────────────────────────────────────
 
-def run(reset: bool = False):
+def run(reset: bool = False) -> dict:
     log.info("Connecting to PostgreSQL: %s:%s/%s",
              DB_CONFIG["host"], DB_CONFIG["port"], DB_CONFIG["dbname"])
 
     conn = psycopg2.connect(**DB_CONFIG)
     conn.autocommit = False
+    result = {}
 
     try:
         with conn.cursor() as cur:
             if reset:
                 log.info("Truncating fact tables (--reset flag)...")
-                cur.execute("TRUNCATE dw.fact_paie, dw.fact_indem")
+                cur.execute("TRUNCATE dw.fact_paie, dw.fact_indem RESTART IDENTITY")
 
             # ── Dimensions ────────────────────────────────────────────────────
-            load_dim_employee(cur,  CLEAN_DIM_EMPLOYEE)
-            conn.commit()
-            load_dim_grade(cur,     CLEAN_DIM_GRADE)
-            conn.commit()
-            load_dim_nature(cur,    CLEAN_DIM_NATURE)
-            conn.commit()
-            load_dim_organisme(cur, CLEAN_DIM_ORGANISME)
-            conn.commit()
-            load_dim_region(cur,    CLEAN_DIM_REGION)
-            conn.commit()
-            load_dim_temps(cur,     CLEAN_DIM_TIME)
-            conn.commit()
-            load_dim_indemnite(cur, CLEAN_DIM_INDEMNITE)
-            conn.commit()
+            load_dim_employee(cur,  CLEAN_DIM_EMPLOYEE);   conn.commit()
+            load_dim_grade(cur,     CLEAN_DIM_GRADE);      conn.commit()
+            load_dim_nature(cur,    CLEAN_DIM_NATURE);     conn.commit()
+            load_dim_organisme(cur, CLEAN_DIM_ORGANISME);  conn.commit()
+            load_dim_region(cur,    CLEAN_DIM_REGION);     conn.commit()
+            load_dim_temps(cur,     CLEAN_DIM_TIME);       conn.commit()
+            load_dim_indemnite(cur, CLEAN_DIM_INDEMNITE);  conn.commit()
 
-            # Reset sequences after bulk dimension load
+            # Reset sequences after bulk dimension upsert
             for tbl, col in [
                 ("dw.dim_employee",  "employee_sk"),
                 ("dw.dim_grade",     "grade_sk"),
@@ -522,36 +621,47 @@ def run(reset: bool = False):
             conn.commit()
             log.info("Sequences reset")
 
-            # ── Build SK maps from DB ─────────────────────────────────────────
+            # ── Build SK maps ─────────────────────────────────────────────────
             maps = _build_maps(cur)
 
             # ── Facts ─────────────────────────────────────────────────────────
-            load_fact_paie(cur,  CLEAN_FACT_PAIE,  maps)
-            conn.commit()
-            load_fact_indem(cur, CLEAN_FACT_INDEM, maps)
-            conn.commit()
+            n_paie  = load_fact_paie(cur,  CLEAN_FACT_PAIE,  maps);  conn.commit()
+            n_indem = load_fact_indem(cur, CLEAN_FACT_INDEM, maps);  conn.commit()
 
-        # ── Final counts ──────────────────────────────────────────────────────
+        # ── Final row counts ──────────────────────────────────────────────────
         with conn.cursor() as cur:
-            for tbl in ["dw.dim_employee","dw.dim_grade","dw.dim_nature",
-                        "dw.dim_organisme","dw.dim_region","dw.dim_temps",
-                        "dw.dim_indemnite","dw.fact_paie","dw.fact_indem"]:
+            counts = {}
+            for tbl in [
+                "dw.dim_employee", "dw.dim_grade", "dw.dim_nature",
+                "dw.dim_organisme", "dw.dim_region", "dw.dim_temps",
+                "dw.dim_indemnite", "dw.fact_paie", "dw.fact_indem",
+            ]:
                 cur.execute(f"SELECT COUNT(*) FROM {tbl}")
-                log.info("  %-30s %s rows", tbl, cur.fetchone()[0])
+                n = cur.fetchone()[0]
+                counts[tbl] = n
+                log.info("  %-30s %s rows", tbl, n)
 
+        result = {
+            "status": "success",
+            "records_loaded": {"fact_paie": n_paie, "fact_indem": n_indem},
+            "table_counts": counts,
+        }
         log.info("DW load complete.")
 
     except Exception as exc:
         conn.rollback()
         log.error("Load failed — rolled back: %s", exc)
+        result = {"status": "error", "error": str(exc)}
         raise
     finally:
         conn.close()
+
+    return result
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Load clean JSONL into PostgreSQL DW")
     parser.add_argument("--reset", action="store_true",
-                        help="Truncate fact tables before loading")
+                        help="Truncate fact tables before loading (full reload)")
     args = parser.parse_args()
     run(reset=args.reset)

@@ -1,27 +1,70 @@
-<div class="page-wrapper">
-  <h2 class="page-title">AI Assistant</h2>
-  <p class="page-sub">Ask questions about payroll data — powered by llama3.2 + RAG</p>
+<div class="chat-shell">
 
-  <mat-card class="chat-card">
-    <div class="messages" #msgContainer>
-      <div *ngFor="let m of messages" class="message" [class.user]="m.role === 'user'" [class.bot]="m.role === 'bot'">
-        <mat-icon class="msg-icon">{{ m.role === 'user' ? 'person' : 'smart_toy' }}</mat-icon>
-        <div class="bubble">{{ m.text }}</div>
+  <!-- Header -->
+  <div class="chat-header">
+    <div class="chat-header__left">
+      <div class="bot-avatar"><mat-icon>smart_toy</mat-icon></div>
+      <div>
+        <div class="chat-header__name">INSAF AI Assistant</div>
+        <div class="chat-header__sub">LLaMA 3.2 + RAG · Payroll Intelligence · Ask anything</div>
       </div>
-      <div *ngIf="loading" class="message bot">
-        <mat-icon class="msg-icon">smart_toy</mat-icon>
-        <div class="bubble thinking"><mat-spinner diameter="18"></mat-spinner> Thinking…</div>
+    </div>
+    <button class="clear-btn" *ngIf="hasMessages" (click)="clearHistory()">
+      <mat-icon>delete_outline</mat-icon>Clear chat
+    </button>
+  </div>
+
+  <!-- Messages -->
+  <div class="chat-messages" #msgContainer>
+
+    <!-- Empty state -->
+    <div class="empty-state" *ngIf="!hasMessages">
+      <div class="empty-icon"><mat-icon>auto_awesome</mat-icon></div>
+      <h3>How can I help you today?</h3>
+      <p>Ask me anything about the INSAF payroll dataset — employees, salaries, anomalies, ministry breakdowns, and trends across years.</p>
+      <div class="hints-grid">
+        <button class="hint-btn" *ngFor="let h of hints" (click)="send(h)">
+          <mat-icon>arrow_forward</mat-icon>{{ h }}
+        </button>
       </div>
     </div>
 
-    <div class="input-row">
-      <mat-form-field appearance="outline" class="input-field">
-        <input matInput [(ngModel)]="input" (keydown)="onKey($event)"
-               placeholder="e.g. How many employees in 2025?" [disabled]="loading">
-      </mat-form-field>
-      <button mat-raised-button color="primary" (click)="send()" [disabled]="!input.trim() || loading">
+    <!-- Messages list -->
+    <ng-container *ngFor="let m of messages">
+
+      <div class="msg-row msg-row--user" *ngIf="m.role === 'user'">
+        <div class="msg-bubble msg-bubble--user">
+          <div class="msg-text">{{ m.text }}</div>
+          <div class="msg-time">{{ fmtTime(m.timestamp) }}</div>
+        </div>
+        <div class="user-avatar"><mat-icon>person</mat-icon></div>
+      </div>
+
+      <div class="msg-row msg-row--bot" *ngIf="m.role === 'bot'">
+        <div class="bot-avatar bot-avatar--sm"><mat-icon>smart_toy</mat-icon></div>
+        <div class="msg-bubble msg-bubble--bot typing" *ngIf="m.isTyping">
+          <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+        </div>
+        <div class="msg-bubble msg-bubble--bot" *ngIf="!m.isTyping">
+          <div class="msg-text">{{ m.text }}</div>
+          <div class="msg-time">{{ fmtTime(m.timestamp) }}</div>
+        </div>
+      </div>
+
+    </ng-container>
+  </div>
+
+  <!-- Input -->
+  <div class="chat-input-bar">
+    <div class="input-wrap">
+      <textarea [(ngModel)]="input" (keydown)="onKey($event)" [disabled]="loading"
+        placeholder="Ask about payroll data… (Enter to send · Shift+Enter for newline)"
+        rows="1" class="chat-textarea"></textarea>
+      <button class="send-btn" (click)="send()" [disabled]="!input.trim() || loading">
         <mat-icon>send</mat-icon>
       </button>
     </div>
-  </mat-card>
+    <div class="input-hint">INSAF AI may make mistakes. Verify important figures against source data.</div>
+  </div>
+
 </div>

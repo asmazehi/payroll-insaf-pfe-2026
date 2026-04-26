@@ -1,24 +1,47 @@
-<div class="sidebar">
-  <div class="sidebar-logo">
-    <mat-icon class="logo-icon">bar_chart</mat-icon>
-    <span>INSAF</span>
+<aside class="sidebar">
+
+  <!-- Logo -->
+  <div class="sidebar__logo">
+    <div class="logo-icon">
+      <img src="assets/images/LogoCNI.png" alt="CNI">
+    </div>
+    <div class="logo-text">
+      <span class="logo-name">INSAF</span>
+      <span class="logo-sub">Payroll Intelligence</span>
+    </div>
   </div>
-  <mat-nav-list>
-    <a mat-list-item routerLink="/dashboard"  routerLinkActive="active">
-      <mat-icon matListItemIcon>dashboard</mat-icon>
-      <span matListItemTitle>Dashboard</span>
+
+  <!-- Nav -->
+  <nav class="sidebar__nav">
+    <span class="nav-section">MAIN MENU</span>
+    <a *ngFor="let item of visibleNav"
+       class="nav-item"
+       [routerLink]="item.route"
+       routerLinkActive="nav-item--active">
+      <div class="nav-item__icon-wrap">
+        <mat-icon class="nav-item__icon">{{ item.icon }}</mat-icon>
+      </div>
+      <span class="nav-item__label">{{ item.label }}</span>
+      <div class="nav-item__indicator"></div>
     </a>
-    <a mat-list-item routerLink="/forecast"   routerLinkActive="active">
-      <mat-icon matListItemIcon>trending_up</mat-icon>
-      <span matListItemTitle>Forecast</span>
-    </a>
-    <a mat-list-item routerLink="/anomalies"  routerLinkActive="active">
-      <mat-icon matListItemIcon>warning</mat-icon>
-      <span matListItemTitle>Anomalies</span>
-    </a>
-    <a mat-list-item routerLink="/chatbot"    routerLinkActive="active">
-      <mat-icon matListItemIcon>smart_toy</mat-icon>
-      <span matListItemTitle>AI Assistant</span>
-    </a>
-  </mat-nav-list>
-</div>
+  </nav>
+
+  <!-- Footer -->
+  <div class="sidebar__footer">
+    <div class="user-pill">
+      <div class="user-avatar">{{ (auth.getCurrentUser()?.username || 'U')[0].toUpperCase() }}</div>
+      <div class="user-info">
+        <span class="user-name">{{ auth.getCurrentUser()?.username }}</span>
+        <span class="user-role">
+          <span class="role-dot"></span>
+          {{ auth.getCurrentUser()?.role | slice:5 }}
+        </span>
+      </div>
+    </div>
+    <div class="footer-brand">
+      <img src="assets/images/LogoCNI.png" alt="CNI" class="footer-logo">
+      <span>CNI &copy; 2026</span>
+    </div>
+  </div>
+
+</aside>

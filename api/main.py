@@ -22,6 +22,7 @@ import json
 import shutil
 import tempfile
 import uuid
+from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
@@ -116,63 +117,94 @@ def get_summary():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+_ALLOWED_EXTENSIONS = {".json", ".jsonl", ".csv", ".xlsx", ".xls"}
+
+
 @app.post("/upload", tags=["ETL"])
 async def upload_payroll_file(
     file: UploadFile = File(...),
     file_type: str   = Query("paie", enum=["paie", "indem"],
-                             description="Type of payroll file: 'paie' or 'indem'"),
+                             description="'paie' (type 1) or 'indem' (type 3)"),
     retrain: bool    = Query(False, description="Retrain ML models after loading"),
+    reset: bool      = Query(False, description="Truncate fact tables before loading (full reload)"),
 ):
     """
-    Upload a raw payroll JSON file.
-    Triggers the ETL pipeline → loads into PostgreSQL DW.
-    Optionally retrains ML models after load.
+    Upload a payroll data file (JSON / JSONL / CSV / Excel).
 
-    - file_type=paie  → processes as payroll (paie2015.json format)
-    - file_type=indem → processes as indemnity (ind2015.json format)
+    Full automated pipeline:
+      1. Save file to data/raw/  (timestamped — never overwrites previous uploads)
+      2. Run ETL pipeline        (encoding fix, normalise, match references, DQ flags)
+      3. Load into PostgreSQL DW (UPSERT — idempotent, no duplicates)
+      4. Optionally retrain all ML models (6 forecast + 5 anomaly)
+
+    Returns run metadata, ETL stats, quality gate result, and DW row counts.
     """
-    if not file.filename.endswith(".json"):
-        raise HTTPException(status_code=400, detail="Only .json files are supported.")
+    suffix = Path(file.filename).suffix.lower()
+    if suffix not in _ALLOWED_EXTENSIONS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported file type '{suffix}'. Accepted: {', '.join(_ALLOWED_EXTENSIONS)}"
+        )
 
     run_id = uuid.uuid4().hex[:8]
+    started_at = datetime.utcnow().isoformat()
 
-    # Save uploaded file to data/raw/
+    # ── Save with timestamp — never overwrite previous uploads ───────────────
     DATA_DIR.mkdir(parents=True, exist_ok=True)
-    dest = DATA_DIR / file.filename
-    with dest.open("wb") as f:
-        shutil.copyfileobj(file.file, f)
+    stem = Path(file.filename).stem
+    dest = DATA_DIR / f"{stem}_{run_id}{suffix}"
+    with dest.open("wb") as out:
+        shutil.copyfileobj(file.file, out)
+
+    etl_report: dict = {}
+    dw_result:  dict = {}
+    ml_status = "not_requested"
 
     try:
+        # ── ETL ──────────────────────────────────────────────────────────────
         if file_type == "paie":
             from etl.pipeline_paie import run as run_paie
-            report = run_paie(run_id=run_id)
+            etl_report = run_paie(source=dest, run_id=run_id)
         else:
             from etl.pipeline_indem import run as run_indem
-            report = run_indem(run_id=run_id)
+            etl_report = run_indem(source=dest, run_id=run_id)
 
+        qg = etl_report.get("quality_gate", {})
+        if qg.get("status", "").startswith("FAIL") and not qg.get("status", "").endswith("WARNINGS"):
+            raise ValueError(f"ETL quality gate FAILED: {qg.get('errors')}")
+
+        # ── DW load ───────────────────────────────────────────────────────────
         from etl.load_dw import run as load_dw
-        load_dw(reset=False)
+        dw_result = load_dw(reset=reset)
 
-        ml_status = "not_requested"
+        # ── Optional ML retrain ───────────────────────────────────────────────
         if retrain:
             try:
                 from ml.run_all_models import main as run_ml
                 run_ml()
-                ml_status = "retrained"
+                ml_status = "retrained_ok"
             except Exception as ml_err:
                 ml_status = f"failed: {ml_err}"
 
-        return {
-            "status":    "success",
-            "run_id":    run_id,
-            "file":      file.filename,
-            "file_type": file_type,
-            "etl_stats": report.get("stats", {}),
-            "ml_status": ml_status,
-        }
+        return JSONResponse(content={
+            "status":       "success",
+            "run_id":       run_id,
+            "started_at":   started_at,
+            "file":         dest.name,
+            "original_name":file.filename,
+            "file_type":    file_type,
+            "etl_stats":    etl_report.get("stats", {}),
+            "quality_gate": qg,
+            "dw_counts":    dw_result.get("table_counts", {}),
+            "records_loaded": dw_result.get("records_loaded", {}),
+            "ml_status":    ml_status,
+        })
 
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"ETL failed: {e}")
+    except ValueError as ve:
+        # Quality gate failure — file was saved and partially processed
+        raise HTTPException(status_code=422, detail=str(ve))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Pipeline failed [{run_id}]: {exc}")
 
 
 @app.get("/forecast", tags=["ML"])

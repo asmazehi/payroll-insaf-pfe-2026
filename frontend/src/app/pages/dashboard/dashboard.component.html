@@ -1,34 +1,138 @@
-<div class="page-wrapper">
-  <h2 class="page-title">Payroll Dashboard</h2>
+<div class="page">
 
-  <div *ngIf="loading" class="center"><mat-spinner></mat-spinner></div>
-
-  <div *ngIf="!loading && summary" class="kpi-grid">
-    <mat-card class="kpi-card">
-      <mat-icon color="primary">people</mat-icon>
-      <div class="kpi-value">{{ summary.total_employees | number }}</div>
-      <div class="kpi-label">Employees</div>
-    </mat-card>
-    <mat-card class="kpi-card">
-      <mat-icon color="primary">receipt_long</mat-icon>
-      <div class="kpi-value">{{ summary.total_records | number }}</div>
-      <div class="kpi-label">Payroll Records</div>
-    </mat-card>
-    <mat-card class="kpi-card">
-      <mat-icon color="primary">payments</mat-icon>
-      <div class="kpi-value">{{ fmt(summary.total_netpay) }}</div>
-      <div class="kpi-label">Total Net Payroll</div>
-    </mat-card>
-    <mat-card class="kpi-card">
-      <mat-icon color="primary">date_range</mat-icon>
-      <div class="kpi-value">{{ summary.year_min }} – {{ summary.year_max }}</div>
-      <div class="kpi-label">Coverage</div>
-    </mat-card>
+  <!-- Hero Banner -->
+  <div class="page-hero">
+    <div class="page-hero__inner">
+      <div class="page-hero__title">
+        <div class="hero-icon">
+          <img src="assets/images/LogoCNI.png" alt="CNI">
+        </div>
+        <div>
+          <h2>Payroll Dashboard</h2>
+          <p>CNI government payroll analytics &mdash; real-time overview</p>
+        </div>
+      </div>
+      <div class="page-hero__right">
+        <div class="live-badge">
+          <span class="live-dot"></span>
+          <span>Live Data</span>
+        </div>
+      </div>
+    </div>
   </div>
 
-  <mat-card class="chart-card">
-    <mat-card-content>
-      <canvas baseChart [data]="barData" [options]="barOptions" type="bar"></canvas>
-    </mat-card-content>
-  </mat-card>
+  <!-- Loading -->
+  <div class="loading-overlay" *ngIf="loading">
+    <div class="spinner"></div><span>Loading payroll data…</span>
+  </div>
+
+  <div class="page-body" *ngIf="!loading && summary">
+
+    <!-- KPI Cards -->
+    <div class="kpi-grid">
+      <div class="kpi-card accent-blue">
+        <div class="kpi-icon blue"><mat-icon>people</mat-icon></div>
+        <div class="kpi-body">
+          <div class="kpi-label">Total Employees</div>
+          <div class="kpi-value">{{ summary.total_employees | number }}</div>
+          <div class="kpi-sub">Active civil servants</div>
+        </div>
+      </div>
+      <div class="kpi-card accent-green">
+        <div class="kpi-icon green"><mat-icon>payments</mat-icon></div>
+        <div class="kpi-body">
+          <div class="kpi-label">Total Net Payroll</div>
+          <div class="kpi-value">{{ fmt(summary.total_netpay) }}</div>
+          <div class="kpi-sub">Cumulative all years</div>
+        </div>
+      </div>
+      <div class="kpi-card accent-gold">
+        <div class="kpi-icon gold"><mat-icon>receipt_long</mat-icon></div>
+        <div class="kpi-body">
+          <div class="kpi-label">Payroll Records</div>
+          <div class="kpi-value">{{ summary.total_records | number }}</div>
+          <div class="kpi-sub">Historical transactions</div>
+        </div>
+      </div>
+      <div class="kpi-card accent-navy">
+        <div class="kpi-icon navy"><mat-icon>date_range</mat-icon></div>
+        <div class="kpi-body">
+          <div class="kpi-label">Data Coverage</div>
+          <div class="kpi-value">{{ summary.year_min }}–{{ summary.year_max }}</div>
+          <div class="kpi-sub">{{ summary.year_max - summary.year_min + 1 }} years of data</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Charts row -->
+    <div class="grid-2" style="margin-bottom:20px">
+      <div class="chart-card">
+        <div class="section-header">
+          <h3>Net Payroll by Year</h3>
+          <div class="chart-branding">
+            <img src="assets/images/LogoCNI.png" class="chart-logo" alt="CNI">
+            <span class="section-sub">TND (Millions)</span>
+          </div>
+        </div>
+        <div style="height:250px">
+          <canvas baseChart [data]="barData" [options]="barOptions" type="bar"></canvas>
+        </div>
+      </div>
+      <div class="chart-card">
+        <div class="section-header">
+          <h3>Distribution by Ministry</h3>
+          <div class="chart-branding">
+            <img src="assets/images/LogoCNI.png" class="chart-logo" alt="CNI">
+            <span class="section-sub">Top 8</span>
+          </div>
+        </div>
+        <div style="height:250px">
+          <canvas baseChart [data]="ministryData" [options]="doughnutOptions" type="doughnut"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tables row -->
+    <div class="grid-2">
+      <div class="chart-card">
+        <div class="section-header">
+          <h3>Top Ministries</h3>
+          <span class="badge info">by net payroll</span>
+        </div>
+        <div class="table-container">
+          <table class="data-table">
+            <thead><tr><th>#</th><th>Ministry</th><th>Employees</th><th>Net Pay (M TND)</th></tr></thead>
+            <tbody>
+              <tr *ngFor="let r of byMinistry; let i = index">
+                <td><span class="rank" [class.rank--top]="i<3">{{ i+1 }}</span></td>
+                <td class="ministry-name">{{ r.ministry }}</td>
+                <td>{{ r.employees | number }}</td>
+                <td><strong>{{ fmtM(r.total_netpay) }}</strong></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="chart-card">
+        <div class="section-header">
+          <h3>Top Grades</h3>
+          <span class="badge info">by average salary</span>
+        </div>
+        <div class="table-container">
+          <table class="data-table">
+            <thead><tr><th>#</th><th>Grade</th><th>Employees</th><th>Avg Net (TND)</th></tr></thead>
+            <tbody>
+              <tr *ngFor="let r of byGrade; let i = index">
+                <td><span class="rank" [class.rank--top]="i<3">{{ i+1 }}</span></td>
+                <td>{{ r.lib_grade || r.grade_code }}</td>
+                <td>{{ r.employees | number }}</td>
+                <td><strong>{{ r.avg_netpay | number:'1.0-0' }}</strong></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+  </div>
 </div>

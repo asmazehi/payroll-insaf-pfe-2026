@@ -1,11 +1,54 @@
-.page-wrapper { padding: 24px; }
-.page-title   { font-size: 24px; font-weight: 600; margin-bottom: 24px; color: #1a237e; }
-.center       { display: flex; justify-content: center; margin: 60px 0; }
-.error-msg    { color: #f44336; padding: 16px; }
-.meta-row     { display: flex; gap: 16px; margin-bottom: 24px; }
-.meta-card    { padding: 16px 24px; text-align: center;
-  .meta-label { font-size: 12px; color: #666; }
-  .meta-value { font-size: 20px; font-weight: 700; color: #1a237e; }
+.winner-chip {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 20px; border-radius: 24px;
+  background: rgba(201,168,76,.15);
+  border: 1px solid rgba(201,168,76,.3);
+  backdrop-filter: blur(10px);
+  color: var(--gold-light);
+  font-size: .82rem; font-weight: 600;
+
+  mat-icon { font-size: 18px; width: 18px; height: 18px; color: var(--gold); }
+
+  strong { color: #fff; font-weight: 800; }
+
+  .winner-mape {
+    padding: 3px 10px; border-radius: 12px;
+    background: rgba(16,185,129,.2);
+    border: 1px solid rgba(16,185,129,.3);
+    color: #6EE7B7; font-size: .72rem; font-weight: 700;
+  }
 }
-.chart-card, .table-card { margin-bottom: 24px; }
-.full-width   { width: 100%; }
+
+/* Model table */
+.winner-row td { background: linear-gradient(90deg, rgba(201,168,76,.06), rgba(201,168,76,.02)) !important; }
+
+.model-cell {
+  display: flex; align-items: center; gap: 8px;
+}
+.model-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--border); flex-shrink: 0;
+  &--winner { background: var(--gold); box-shadow: 0 0 8px var(--gold); }
+}
+.trophy-icon { font-size: 16px; width: 16px; height: 16px; color: var(--gold); flex-shrink: 0; }
+.model-name {
+  font-weight: 500;
+  &--winner { font-weight: 700; color: var(--text-primary); }
+}
+.mape-val {
+  font-weight: 600; color: var(--text-muted);
+  &--best { color: #10B981; font-weight: 800; font-size: .95rem; }
+}
+
+/* Forecast table */
+.forecast-date { font-weight: 600; color: var(--text-primary); }
+
+.trend-chip {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 4px 10px; border-radius: 20px;
+  font-size: .72rem; font-weight: 700;
+  mat-icon { font-size: 13px; width: 13px; height: 13px; }
+
+  &--up   { background: #DCFCE7; color: #15803D; border: 1px solid #A7F3D0; }
+  &--down { background: #FEF9C3; color: #854D0E; border: 1px solid #FDE047; }
+}

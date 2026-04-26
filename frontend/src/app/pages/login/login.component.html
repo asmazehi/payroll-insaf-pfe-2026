@@ -1,28 +1,113 @@
-<div class="login-wrapper">
-  <mat-card class="login-card">
-    <mat-card-header>
-      <mat-card-title>INSAF</mat-card-title>
-      <mat-card-subtitle>Payroll Intelligence Platform — CNI</mat-card-subtitle>
-    </mat-card-header>
-    <mat-card-content>
-      <form [formGroup]="form" (ngSubmit)="submit()">
-        <mat-form-field appearance="outline" class="full-width">
-          <mat-label>Username</mat-label>
-          <mat-icon matPrefix>person</mat-icon>
-          <input matInput formControlName="username" autocomplete="username">
-        </mat-form-field>
-        <mat-form-field appearance="outline" class="full-width">
-          <mat-label>Password</mat-label>
-          <mat-icon matPrefix>lock</mat-icon>
-          <input matInput type="password" formControlName="password">
-        </mat-form-field>
-        <div *ngIf="error" class="error-msg">{{ error }}</div>
-        <button mat-raised-button color="primary" type="submit"
-                [disabled]="loading || form.invalid" class="full-width">
-          <mat-spinner *ngIf="loading" diameter="20" style="display:inline-block"></mat-spinner>
-          <span *ngIf="!loading">Sign In</span>
+<div class="login-page">
+
+  <!-- Animated background blobs -->
+  <div class="blob blob-1"></div>
+  <div class="blob blob-2"></div>
+  <div class="blob blob-3"></div>
+  <div class="blob blob-4"></div>
+  <div class="dot-grid"></div>
+
+  <!-- Left panel -->
+  <div class="login-left">
+    <div class="login-left__inner">
+
+      <!-- Brand -->
+      <div class="brand">
+        <div class="brand__logo">
+          <img src="assets/images/LogoCNI.png" alt="CNI Logo">
+        </div>
+        <div class="brand__text">
+          <div class="brand__name">INSAF</div>
+          <div class="brand__sub">Payroll Intelligence Platform</div>
+        </div>
+      </div>
+
+      <!-- Headline -->
+      <div class="hero-text">
+        <h1>Data-Driven<br>Payroll Management<br><span class="gradient-text">for Tunisia</span></h1>
+        <p>Advanced analytics, AI-powered forecasting, and real-time anomaly detection for government payroll at CNI.</p>
+      </div>
+
+      <!-- Stats -->
+      <div class="stats-row">
+        <div class="stat">
+          <div class="stat__value">756K+</div>
+          <div class="stat__label">Records Analyzed</div>
+        </div>
+        <div class="stat-divider"></div>
+        <div class="stat">
+          <div class="stat__value">24.9K</div>
+          <div class="stat__label">Civil Servants</div>
+        </div>
+        <div class="stat-divider"></div>
+        <div class="stat">
+          <div class="stat__value">10+</div>
+          <div class="stat__label">Years of Data</div>
+        </div>
+      </div>
+
+      <!-- Feature chips -->
+      <div class="feature-chips">
+        <div class="chip"><span class="chip__dot chip__dot--blue"></span>AI Forecasting</div>
+        <div class="chip"><span class="chip__dot chip__dot--gold"></span>Anomaly Detection</div>
+        <div class="chip"><span class="chip__dot chip__dot--green"></span>RAG Chatbot</div>
+        <div class="chip"><span class="chip__dot chip__dot--purple"></span>Power BI Reports</div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Right panel — login form -->
+  <div class="login-right">
+    <div class="login-card">
+
+      <div class="login-card__logo">
+        <img src="assets/images/LogoCNI.png" alt="CNI">
+        <span>Centre National de l'Informatique</span>
+      </div>
+
+      <div class="login-card__header">
+        <h2>Welcome back</h2>
+        <p>Sign in to your INSAF account to continue</p>
+      </div>
+
+      <form [formGroup]="form" (ngSubmit)="submit()" class="login-form">
+
+        <div class="field">
+          <label>Username</label>
+          <div class="field__input-wrap">
+            <mat-icon class="field__icon">person_outline</mat-icon>
+            <input formControlName="username" type="text"
+                   placeholder="Enter your username" autocomplete="username">
+          </div>
+        </div>
+
+        <div class="field">
+          <label>Password</label>
+          <div class="field__input-wrap">
+            <mat-icon class="field__icon">lock_outline</mat-icon>
+            <input formControlName="password" type="password"
+                   placeholder="Enter your password" autocomplete="current-password">
+          </div>
+        </div>
+
+        <div class="error-msg" *ngIf="error">
+          <mat-icon>error_outline</mat-icon>
+          <span>{{ error }}</span>
+        </div>
+
+        <button type="submit" class="login-btn" [disabled]="loading || form.invalid">
+          <span class="login-btn__spinner" *ngIf="loading"></span>
+          <mat-icon *ngIf="!loading">login</mat-icon>
+          <span>{{ loading ? 'Signing in…' : 'Sign In' }}</span>
         </button>
+
       </form>
-    </mat-card-content>
-  </mat-card>
+
+      <p class="login-card__footer">
+        &copy; 2026 Centre National de l'Informatique — Tunisia
+      </p>
+    </div>
+  </div>
+
 </div>

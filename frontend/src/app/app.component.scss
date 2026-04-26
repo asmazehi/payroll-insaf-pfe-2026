@@ -1,4 +1,18 @@
-.app-container { height: 100vh; }
-.sidenav       { width: 220px; border-right: none; }
-.main-content  { display: flex; flex-direction: column; }
-.page-content  { flex: 1; overflow-y: auto; background: #f8f9fa; }
+.shell {
+  display: flex;
+  height: 100vh;
+  overflow: hidden;
+
+  &__body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background: var(--bg);
+  }
+
+  &__content {
+    flex: 1;
+    overflow-y: auto;
+  }
+}

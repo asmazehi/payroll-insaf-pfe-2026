@@ -1,9 +1,9 @@
 server:
-  port: 8080
+  port: 8081
 
 spring:
   datasource:
-    url: jdbc:postgresql://localhost:5432/insaf
+    url: jdbc:postgresql://localhost:5432/payroll_dw
     username: postgres
     password: postgres
     driver-class-name: org.postgresql.Driver

@@ -18,7 +18,7 @@ public class DashboardService {
                 COUNT(*)                        AS total_records,
                 COUNT(DISTINCT fp.employee_sk)  AS total_employees,
                 SUM(fp.m_netpay)                AS total_netpay,
-                SUM(fp.m_brut)                  AS total_grosspay,
+                SUM(fp.m_salbrut)               AS total_grosspay,
                 MIN(dt.year_num)                AS year_min,
                 MAX(dt.year_num)                AS year_max
             FROM dw.fact_paie fp
@@ -32,7 +32,7 @@ public class DashboardService {
             SELECT
                 dt.year_num,
                 SUM(fp.m_netpay)               AS total_netpay,
-                SUM(fp.m_brut)                 AS total_grosspay,
+                SUM(fp.m_salbrut)              AS total_grosspay,
                 COUNT(DISTINCT fp.employee_sk)  AS employees,
                 AVG(fp.m_netpay)               AS avg_netpay
             FROM dw.fact_paie fp

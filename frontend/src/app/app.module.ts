@@ -24,6 +24,8 @@ import { DashboardComponent } from './pages/dashboard/dashboard.component';
 import { ForecastComponent }  from './pages/forecast/forecast.component';
 import { AnomaliesComponent } from './pages/anomalies/anomalies.component';
 import { ChatbotComponent }   from './pages/chatbot/chatbot.component';
+import { ReportsComponent }   from './pages/reports/reports.component';
+import { IngestComponent }    from './pages/ingest/ingest.component';
 import { NavbarComponent }    from './layout/navbar/navbar.component';
 import { SidebarComponent }   from './layout/sidebar/sidebar.component';
 import { JwtInterceptor }     from './interceptors/jwt.interceptor';
@@ -32,7 +34,7 @@ import { JwtInterceptor }     from './interceptors/jwt.interceptor';
   declarations: [
     AppComponent, LoginComponent, DashboardComponent,
     ForecastComponent, AnomaliesComponent, ChatbotComponent,
-    NavbarComponent, SidebarComponent
+    ReportsComponent, IngestComponent, NavbarComponent, SidebarComponent
   ],
   imports: [
     BrowserModule, BrowserAnimationsModule,
