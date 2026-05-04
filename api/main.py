@@ -18,17 +18,20 @@ Run:
 """
 from __future__ import annotations
 
+import asyncio
 import json
+import os
 import shutil
 import tempfile
 import uuid
-from datetime import datetime
+from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Optional
+from typing import Callable, Optional
 
-from fastapi import FastAPI, File, HTTPException, Query, UploadFile
+from fastapi import BackgroundTasks, FastAPI, File, HTTPException, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from pydantic import BaseModel
 
 # ── App setup ─────────────────────────────────────────────────────────────────
@@ -45,9 +48,58 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-PLOTS_DIR  = Path(__file__).resolve().parent.parent / "ml" / "plots"
-MODELS_DIR = Path(__file__).resolve().parent.parent / "ml" / "models"
-DATA_DIR   = Path(__file__).resolve().parent.parent / "data" / "raw"
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+PLOTS_DIR    = PROJECT_ROOT / "ml" / "plots"
+MODELS_DIR   = PROJECT_ROOT / "ml" / "models"
+
+# Staging dirs live OUTSIDE the repo — raw kept 7 days, clean deleted after load
+_STAGING_BASE = Path(os.getenv("LOCALAPPDATA", tempfile.gettempdir())) / "insaf" / "staging"
+STAGING_RAW   = _STAGING_BASE / "raw"
+STAGING_CLEAN = _STAGING_BASE / "clean"
+STAGING_RAW.mkdir(parents=True, exist_ok=True)
+STAGING_CLEAN.mkdir(parents=True, exist_ok=True)
+
+RAW_BACKUP_DAYS = 7
+
+# ── Progress tracking (in-memory, per run) ────────────────────────────────────
+_progress: dict[str, dict] = {}
+_pipeline_executor = ThreadPoolExecutor(max_workers=2)
+
+
+def _prog(run_id: str, stage: str, pct: int, msg: str, **extra) -> None:
+    _progress[run_id] = {
+        "stage": stage, "pct": pct, "msg": msg,
+        "ts": datetime.utcnow().isoformat(), **extra
+    }
+
+
+def _cleanup_old_raw(days: int = RAW_BACKUP_DAYS) -> None:
+    cutoff = datetime.utcnow() - timedelta(days=days)
+    for f in STAGING_RAW.iterdir():
+        if f.is_file() and datetime.utcfromtimestamp(f.stat().st_mtime) < cutoff:
+            f.unlink(missing_ok=True)
+
+
+def _detect_file_type(path: Path) -> str | None:
+    """Read first record and return 'paie' if pa_type==1, 'indem' if pa_type==3, else None."""
+    try:
+        from etl.ingestion.readers import stream_records
+        for rec in stream_records(path):
+            pa_type = str(rec.get("pa_type") or rec.get("PA_TYPE") or "").strip()
+            if pa_type == "1":
+                return "paie"
+            if pa_type == "3":
+                return "indem"
+            # If no pa_type, try column-based heuristic
+            keys = {k.lower() for k in rec}
+            if "pa_netpay" in keys or "pa_salbrut" in keys:
+                return "paie"
+            if "pa_cind" in keys or "pa_natu" in keys and "pa_salbrut" not in keys:
+                return "indem"
+            break
+    except Exception:
+        pass
+    return None
 
 
 # ── Schemas ───────────────────────────────────────────────────────────────────
@@ -117,16 +169,200 @@ def get_summary():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# ── SSE progress endpoint ─────────────────────────────────────────────────────
+
+@app.get("/progress/{run_id}", tags=["ETL"])
+async def stream_progress(run_id: str):
+    """Server-Sent Events stream — push pipeline progress to the browser."""
+    async def _gen():
+        for _ in range(7_200):          # max 2 hours of 1s ticks
+            data = _progress.get(run_id, {"stage": "waiting", "pct": 0, "msg": "Waiting for pipeline…"})
+            yield f"data: {json.dumps(data)}\n\n"
+            if data.get("stage") in ("done", "error"):
+                break
+            await asyncio.sleep(1)
+
+    return StreamingResponse(
+        _gen(), media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no",
+                 "Access-Control-Allow-Origin": "*"},
+    )
+
+
+# ── Background pipeline runner ────────────────────────────────────────────────
+
+def _run_pipeline_sync(run_id: str, dest: Path, resolved_type: str,
+                       clean_dir: Path, reset: bool, retrain: bool,
+                       limit: int | None = None) -> None:
+    """Blocking ETL + DW load — runs in a thread pool."""
+    try:
+        def cb(pct: int, msg: str, **kw):
+            _prog(run_id, "etl", pct, msg, **kw)
+
+        _prog(run_id, "etl_start", 12,
+              f"Starting ETL pipeline…{' (test mode: first {:,} rows)'.format(limit) if limit else ''}")
+
+        if resolved_type == "paie":
+            from etl.pipeline_paie import run as run_paie
+            etl_report = run_paie(source=dest, run_id=run_id, out_dir=clean_dir,
+                                  progress_cb=cb, limit=limit)
+        else:
+            from etl.pipeline_indem import run as run_indem
+            etl_report = run_indem(source=dest, run_id=run_id, out_dir=clean_dir,
+                                   progress_cb=cb, limit=limit)
+
+        qg = etl_report.get("quality_gate", {})
+        _prog(run_id, "quality_gate", 75, "Quality gate checks…", qg_status=qg.get("status"))
+
+        if qg.get("status", "").startswith("FAIL") and not qg.get("status", "").endswith("WARNINGS"):
+            _etl_job_update(run_id, "FAIL", None, qg.get("status"), str(qg.get("errors")))
+            _prog(run_id, "error", 75, f"Quality gate FAILED: {qg.get('errors')}")
+            return
+
+        _prog(run_id, "dw_dims", 80, "Loading dimension tables into DW…")
+        from etl.load_dw import run as load_dw
+
+        def dw_cb(pct: int, msg: str, **kw):
+            _prog(run_id, "dw_facts" if pct > 85 else "dw_dims", pct, msg, **kw)
+
+        dw_result = load_dw(reset=reset, clean_dir=clean_dir, progress_cb=dw_cb)
+        rows_written = sum(dw_result.get("records_loaded", {}).values()) if dw_result else None
+
+        ml_status = "not_requested"
+        if retrain:
+            _prog(run_id, "ml", 97, "Retraining ML models…")
+            try:
+                from ml.run_all_models import main as run_ml
+                run_ml()
+                ml_status = "retrained_ok"
+            except Exception as ml_err:
+                ml_status = f"failed: {ml_err}"
+
+        _etl_job_update(run_id, "PASS", rows_written, qg.get("status", "PASS"), None)
+        _prog(run_id, "done", 100, "Pipeline complete!",
+              rows=rows_written, ml_status=ml_status,
+              etl_stats=etl_report.get("stats", {}),
+              dw_counts=dw_result.get("table_counts", {}),
+              records_loaded=dw_result.get("records_loaded", {}),
+              quality_gate=qg)
+
+    except Exception as exc:
+        _etl_job_update(run_id, "FAIL", None, None, str(exc))
+        _prog(run_id, "error", -1, f"Pipeline failed: {exc}")
+    finally:
+        shutil.rmtree(clean_dir, ignore_errors=True)
+
+
 _ALLOWED_EXTENSIONS = {".json", ".jsonl", ".csv", ".xlsx", ".xls"}
+
+
+def _etl_job_insert(run_id: str, file_name: str, file_type: str, uploaded_by: str | None):
+    try:
+        import psycopg2
+        from etl.core.config import DB_CONFIG
+        with psycopg2.connect(**DB_CONFIG) as conn:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    INSERT INTO public.etl_jobs (run_id, file_name, file_type, status, uploaded_by)
+                    VALUES (%s, %s, %s, 'RUNNING', %s)
+                    ON CONFLICT (run_id) DO NOTHING
+                """, (run_id, file_name, file_type, uploaded_by))
+    except Exception:
+        pass  # job tracking is non-critical
+
+
+def _etl_job_update(run_id: str, status: str, rows_written: int | None,
+                    qg_status: str | None, error_detail: str | None):
+    try:
+        import psycopg2
+        from etl.core.config import DB_CONFIG
+        with psycopg2.connect(**DB_CONFIG) as conn:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    UPDATE public.etl_jobs
+                    SET status = %s, finished_at = NOW(),
+                        rows_written = %s, qg_status = %s, error_detail = %s
+                    WHERE run_id = %s
+                """, (status, rows_written, qg_status, error_detail, run_id))
+    except Exception:
+        pass
+
+
+@app.post("/ingest-path", tags=["ETL"])
+async def ingest_from_path(
+    background_tasks: BackgroundTasks,
+    file_path: str           = Query(..., description="Absolute path to the file on the server"),
+    file_type: Optional[str] = Query(None, enum=["paie", "indem"],
+                                     description="'paie' or 'indem' — omit to auto-detect"),
+    retrain: bool            = Query(False),
+    reset: bool              = Query(False),
+    limit: Optional[int]     = Query(None, ge=1,
+                                     description="Stop after N written rows (test mode)"),
+    uploaded_by: Optional[str] = Query(None),
+):
+    """
+    Run the full ETL pipeline on a file that already exists on the server.
+    Avoids HTTP upload of large files — FastAPI reads the file directly from disk.
+    """
+    source = Path(file_path)
+    # Allow repo-relative paths like /data/newRawData/paie.json on Windows
+    if not source.exists():
+        relative = source.parts[1:] if source.parts and source.parts[0] in ('/', '\\') else source.parts
+        source = PROJECT_ROOT.joinpath(*relative)
+    if not source.exists():
+        raise HTTPException(status_code=404, detail=f"File not found: {file_path}")
+    if source.suffix.lower() not in _ALLOWED_EXTENSIONS:
+        raise HTTPException(status_code=400,
+                            detail=f"Unsupported file type '{source.suffix}'. "
+                                   f"Accepted: {', '.join(_ALLOWED_EXTENSIONS)}")
+
+    run_id     = uuid.uuid4().hex[:8]
+    started_at = datetime.utcnow().isoformat()
+
+    resolved_type = file_type or _detect_file_type(source)
+    if not resolved_type:
+        raise HTTPException(status_code=422,
+                            detail="Could not auto-detect file type. "
+                                   "Pass ?file_type=paie or ?file_type=indem explicitly.")
+
+    _etl_job_insert(run_id, source.name, resolved_type, uploaded_by)
+
+    clean_dir = STAGING_CLEAN / run_id
+    clean_dir.mkdir(parents=True, exist_ok=True)
+
+    size_mb = source.stat().st_size // 1_048_576
+    limit_note = f" · test limit: first {limit:,} rows" if limit else ""
+    _prog(run_id, "saved", 8, f"File found ({size_mb} MB){limit_note} — starting pipeline…")
+
+    loop = asyncio.get_event_loop()
+    background_tasks.add_task(
+        loop.run_in_executor,
+        _pipeline_executor,
+        _run_pipeline_sync,
+        run_id, source, resolved_type, clean_dir, reset, retrain, limit,
+    )
+
+    return JSONResponse(content={
+        "run_id":        run_id,
+        "started_at":    started_at,
+        "file":          source.name,
+        "original_name": source.name,
+        "detected_type": resolved_type,
+        "status":        "processing",
+        "limit":         limit,
+    })
 
 
 @app.post("/upload", tags=["ETL"])
 async def upload_payroll_file(
+    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
-    file_type: str   = Query("paie", enum=["paie", "indem"],
-                             description="'paie' (type 1) or 'indem' (type 3)"),
-    retrain: bool    = Query(False, description="Retrain ML models after loading"),
-    reset: bool      = Query(False, description="Truncate fact tables before loading (full reload)"),
+    file_type: Optional[str] = Query(None, enum=["paie", "indem", "auto"],
+                                     description="'paie', 'indem', or omit/auto to detect from content"),
+    retrain: bool         = Query(False, description="Retrain ML models after loading"),
+    reset: bool           = Query(False, description="Truncate fact tables before loading (full reload)"),
+    limit: Optional[int]  = Query(None, ge=1, description="Stop after N written rows (test mode)"),
+    uploaded_by: Optional[str] = Query(None, description="Username of the uploader"),
 ):
     """
     Upload a payroll data file (JSON / JSONL / CSV / Excel).
@@ -146,65 +382,51 @@ async def upload_payroll_file(
             detail=f"Unsupported file type '{suffix}'. Accepted: {', '.join(_ALLOWED_EXTENSIONS)}"
         )
 
-    run_id = uuid.uuid4().hex[:8]
+    run_id     = uuid.uuid4().hex[:8]
     started_at = datetime.utcnow().isoformat()
 
-    # ── Save with timestamp — never overwrite previous uploads ───────────────
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    # ── Save raw to staging (outside repo) — kept RAW_BACKUP_DAYS days ──────
+    _cleanup_old_raw()
     stem = Path(file.filename).stem
-    dest = DATA_DIR / f"{stem}_{run_id}{suffix}"
+    dest = STAGING_RAW / f"{stem}_{run_id}{suffix}"
     with dest.open("wb") as out:
         shutil.copyfileobj(file.file, out)
 
-    etl_report: dict = {}
-    dw_result:  dict = {}
-    ml_status = "not_requested"
+    # ── Auto-detect file type from content if not provided ───────────────────
+    resolved_type = file_type if file_type and file_type != "auto" else _detect_file_type(dest)
+    if not resolved_type:
+        dest.unlink(missing_ok=True)
+        raise HTTPException(status_code=422,
+                            detail="Could not auto-detect file type. "
+                                   "Pass ?file_type=paie or ?file_type=indem explicitly.")
 
-    try:
-        # ── ETL ──────────────────────────────────────────────────────────────
-        if file_type == "paie":
-            from etl.pipeline_paie import run as run_paie
-            etl_report = run_paie(source=dest, run_id=run_id)
-        else:
-            from etl.pipeline_indem import run as run_indem
-            etl_report = run_indem(source=dest, run_id=run_id)
+    _etl_job_insert(run_id, dest.name, resolved_type, uploaded_by)
 
-        qg = etl_report.get("quality_gate", {})
-        if qg.get("status", "").startswith("FAIL") and not qg.get("status", "").endswith("WARNINGS"):
-            raise ValueError(f"ETL quality gate FAILED: {qg.get('errors')}")
+    # ── Staging clean dir for this run — deleted by background runner ─────────
+    clean_dir = STAGING_CLEAN / run_id
+    clean_dir.mkdir(parents=True, exist_ok=True)
 
-        # ── DW load ───────────────────────────────────────────────────────────
-        from etl.load_dw import run as load_dw
-        dw_result = load_dw(reset=reset)
+    # ── Initialise progress and launch ETL in background ─────────────────────
+    limit_note = f" · test limit: first {limit:,} rows" if limit else ""
+    _prog(run_id, "saved", 8, f"File saved ({dest.stat().st_size // 1_048_576} MB){limit_note} — starting pipeline…")
 
-        # ── Optional ML retrain ───────────────────────────────────────────────
-        if retrain:
-            try:
-                from ml.run_all_models import main as run_ml
-                run_ml()
-                ml_status = "retrained_ok"
-            except Exception as ml_err:
-                ml_status = f"failed: {ml_err}"
+    loop = asyncio.get_event_loop()
+    background_tasks.add_task(
+        loop.run_in_executor,
+        _pipeline_executor,
+        _run_pipeline_sync,
+        run_id, dest, resolved_type, clean_dir, reset, retrain, limit,
+    )
 
-        return JSONResponse(content={
-            "status":       "success",
-            "run_id":       run_id,
-            "started_at":   started_at,
-            "file":         dest.name,
-            "original_name":file.filename,
-            "file_type":    file_type,
-            "etl_stats":    etl_report.get("stats", {}),
-            "quality_gate": qg,
-            "dw_counts":    dw_result.get("table_counts", {}),
-            "records_loaded": dw_result.get("records_loaded", {}),
-            "ml_status":    ml_status,
-        })
-
-    except ValueError as ve:
-        # Quality gate failure — file was saved and partially processed
-        raise HTTPException(status_code=422, detail=str(ve))
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Pipeline failed [{run_id}]: {exc}")
+    # Return immediately — frontend polls /progress/{run_id} via SSE
+    return JSONResponse(content={
+        "run_id":        run_id,
+        "started_at":    started_at,
+        "file":          dest.name,
+        "original_name": file.filename,
+        "detected_type": resolved_type,
+        "status":        "processing",
+    })
 
 
 @app.get("/forecast", tags=["ML"])
