@@ -205,9 +205,10 @@ def _stream_json_oracle(path: Path) -> Iterator[dict]:
         ]
         for item in block["items"]:
             if isinstance(item, dict):
-                yield {k.lower(): v for k, v in item.items()}
+                rec = {k.lower(): v for k, v in item.items()}
             else:
-                yield dict(zip(columns, item))
+                rec = dict(zip(columns, item))
+            yield fix_record_arabic(rec)
         return
 
     # ── Large file: ijson streaming ───────────────────────────────────────────
@@ -242,9 +243,12 @@ def _stream_json_oracle(path: Path) -> Iterator[dict]:
     with _FixedDecimalReader(path) as f:
         for item in ijson.items(f, items_prefix, use_float=True):
             if isinstance(item, dict):
-                yield {k.lower(): v for k, v in item.items()}
+                rec = {k.lower(): v for k, v in item.items()}
             elif isinstance(item, list):
-                yield dict(zip(columns, item))
+                rec = dict(zip(columns, item))
+            else:
+                continue
+            yield fix_record_arabic(rec)
 
 
 # ── JSONL reader ──────────────────────────────────────────────────────────────
