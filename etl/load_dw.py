@@ -291,14 +291,15 @@ def _load_dim_temps_from_file(cur, path: Path) -> int:
     return len(rows)
 
 
-def load_dim_temps(cur, path: Path):
+def load_dim_temps(cur, path: Path, time_indem_path: Path | None = None):
     log.info("Loading dim_temps from %s", path.name)
     n = _load_dim_temps_from_file(cur, path)
     log.info("  dim_temps: %d rows upserted (main)", n)
 
     # Also load indem-only supplementary periods
-    if _CLEAN_DIM_TIME_INDEM.exists():
-        n2 = _load_dim_temps_from_file(cur, _CLEAN_DIM_TIME_INDEM)
+    _ti = time_indem_path or _CLEAN_DIM_TIME_INDEM
+    if _ti.exists():
+        n2 = _load_dim_temps_from_file(cur, _ti)
         if n2:
             log.info("  dim_temps: %d additional rows from indem-only months", n2)
 
@@ -579,9 +580,23 @@ def load_fact_indem(cur, path: Path, maps: tuple, batch_size: int = 5000) -> int
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 
-def run(reset: bool = False) -> dict:
-    log.info("Connecting to PostgreSQL: %s:%s/%s",
-             DB_CONFIG["host"], DB_CONFIG["port"], DB_CONFIG["dbname"])
+def run(reset: bool = False, clean_dir: Path | None = None, progress_cb=None) -> dict:
+    _d = clean_dir or CLEAN_DIR
+    _dim_employee  = _d / "dim_employee.jsonl"
+    _dim_grade     = _d / "dim_grade.jsonl"
+    _dim_nature    = _d / "dim_nature.jsonl"
+    _dim_organisme = _d / "dim_organisme.jsonl"
+    _dim_region    = _d / "dim_region.jsonl"
+    _dim_time      = _d / "dim_time.jsonl"
+    _dim_indemnite = _d / "dim_indemnite.jsonl"
+    _fact_paie     = _d / "fact_paie.jsonl"
+    _fact_indem    = _d / "fact_indem.jsonl"
+    _dim_time_indem = _d / "dim_time_indem.jsonl"
+
+    log.info("Connecting to PostgreSQL: %s:%s/%s  clean_dir=%s",
+             DB_CONFIG["host"], DB_CONFIG["port"], DB_CONFIG["dbname"], _d)
+
+    _cb = progress_cb or (lambda pct, msg, **kw: None)
 
     conn = psycopg2.connect(**DB_CONFIG)
     conn.autocommit = False
@@ -594,13 +609,17 @@ def run(reset: bool = False) -> dict:
                 cur.execute("TRUNCATE dw.fact_paie, dw.fact_indem RESTART IDENTITY")
 
             # ── Dimensions ────────────────────────────────────────────────────
-            load_dim_employee(cur,  CLEAN_DIM_EMPLOYEE);   conn.commit()
-            load_dim_grade(cur,     CLEAN_DIM_GRADE);      conn.commit()
-            load_dim_nature(cur,    CLEAN_DIM_NATURE);     conn.commit()
-            load_dim_organisme(cur, CLEAN_DIM_ORGANISME);  conn.commit()
-            load_dim_region(cur,    CLEAN_DIM_REGION);     conn.commit()
-            load_dim_temps(cur,     CLEAN_DIM_TIME);       conn.commit()
-            load_dim_indemnite(cur, CLEAN_DIM_INDEMNITE);  conn.commit()
+            _cb(80, "Loading employee dimension…")
+            load_dim_employee(cur,  _dim_employee);   conn.commit()
+            _cb(81, "Loading grade and nature dimensions…")
+            load_dim_grade(cur,     _dim_grade);      conn.commit()
+            load_dim_nature(cur,    _dim_nature);     conn.commit()
+            _cb(82, "Loading organisme and region dimensions…")
+            load_dim_organisme(cur, _dim_organisme);  conn.commit()
+            load_dim_region(cur,    _dim_region);     conn.commit()
+            _cb(83, "Loading time and indemnite dimensions…")
+            load_dim_temps(cur,     _dim_time, _dim_time_indem);  conn.commit()
+            load_dim_indemnite(cur, _dim_indemnite);  conn.commit()
 
             # Reset sequences after bulk dimension upsert
             for tbl, col in [
@@ -622,11 +641,15 @@ def run(reset: bool = False) -> dict:
             log.info("Sequences reset")
 
             # ── Build SK maps ─────────────────────────────────────────────────
+            _cb(86, "Building surrogate key maps…")
             maps = _build_maps(cur)
 
             # ── Facts ─────────────────────────────────────────────────────────
-            n_paie  = load_fact_paie(cur,  CLEAN_FACT_PAIE,  maps);  conn.commit()
-            n_indem = load_fact_indem(cur, CLEAN_FACT_INDEM, maps);  conn.commit()
+            _cb(88, "Loading fact_paie into DW (large table — may take a few minutes)…")
+            n_paie  = load_fact_paie(cur,  _fact_paie,  maps);  conn.commit()
+            _cb(93, f"fact_paie loaded — {n_paie:,} rows. Loading fact_indem…")
+            n_indem = load_fact_indem(cur, _fact_indem, maps);  conn.commit()
+            _cb(96, f"DW load complete — {n_paie + n_indem:,} total rows written")
 
         # ── Final row counts ──────────────────────────────────────────────────
         with conn.cursor() as cur:

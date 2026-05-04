@@ -32,6 +32,7 @@ import uuid
 from calendar import monthrange
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Callable
 
 from etl.core.config import (
     CLEAN_DIR, CLEAN_FACT_INDEM, CLEAN_DIM_INDEMNITE, CLEAN_DIM_TIME,
@@ -54,17 +55,29 @@ from etl.mapping import indemnite as indem_map
 CLEAN_DIM_TIME_INDEM = CLEAN_DIR / "dim_time_indem.jsonl"
 
 
-def run(source: Path = RAW_INDEM, run_id: str | None = None) -> dict:
+def run(source: Path = RAW_INDEM, run_id: str | None = None,
+        out_dir: Path | None = None,
+        progress_cb: "Callable[[int,str],None] | None" = None,
+        limit: int | None = None) -> dict:
     run_id  = run_id or uuid.uuid4().hex[:8]
     started = datetime.now(timezone.utc)
     log     = get_logger("pipeline_indem", run_id=run_id)
 
-    log.info("DW2 pipeline started — source=%s", source.name)
-    CLEAN_DIR.mkdir(parents=True, exist_ok=True)
+    _out              = out_dir or CLEAN_DIR
+    _fact_indem       = _out / "fact_indem.jsonl"
+    _dim_indemnite    = _out / "dim_indemnite.jsonl"
+    _dim_time         = _out / "dim_time.jsonl"
+    _dim_time_indem   = _out / "dim_time_indem.jsonl"
+
+    log.info("DW2 pipeline started — source=%s  out=%s", source.name, _out)
+    _out.mkdir(parents=True, exist_ok=True)
     REPORTS_DIR.mkdir(parents=True, exist_ok=True)
+
+    _cb = progress_cb or (lambda pct, msg, **kw: None)
 
     # ── Load reference lookups ────────────────────────────────────────────────
     log.info("Loading reference data...")
+    _cb(15, "Loading reference lookups…")
     grade_lookup  = grade_map.build_lookup(RAW_GRADE)
     nature_lookup = nature_map.build_lookup(RAW_NATURE)
     org_lookup    = org_map.build_lookup(RAW_ORGANISME)
@@ -75,9 +88,10 @@ def run(source: Path = RAW_INDEM, run_id: str | None = None) -> dict:
              len(grade_lookup), len(nature_lookup),
              len(org_lookup["full"]), len(region_lookup["by_dep"]),
              len(indem_lookup))
+    _cb(18, f"Reference data loaded — {len(grade_lookup)} grades, {len(indem_lookup)} indemnity codes")
 
     # Write dim_indemnite from the reference file
-    _write_jsonl(CLEAN_DIM_INDEMNITE, indem_lookup.values())
+    _write_jsonl(_dim_indemnite, indem_lookup.values())
     log.info("dim_indemnite written — %d codes", len(indem_lookup))
 
     # ── Accumulators ─────────────────────────────────────────────────────────
@@ -93,7 +107,7 @@ def run(source: Path = RAW_INDEM, run_id: str | None = None) -> dict:
     }
 
     # ── Stream + clean + map ──────────────────────────────────────────────────
-    with open(CLEAN_FACT_INDEM, "w", encoding="utf-8") as fout:
+    with open(_fact_indem, "w", encoding="utf-8") as fout:
         for raw in stream_records(source):
             stats["total_raw"] += 1
 
@@ -211,21 +225,32 @@ def run(source: Path = RAW_INDEM, run_id: str | None = None) -> dict:
 
             if stats["written"] % 20_000 == 0:
                 log.info("  %d rows written...", stats["written"])
+                _cb(min(18 + stats["written"] // 10_000, 62),
+                    f"{stats['written']:,} rows processed…",
+                    rows=stats["written"])
+
+            if limit and stats["written"] >= limit:
+                log.info("Row limit %d reached — stopping early (test mode)", limit)
+                _cb(62, f"Test limit reached — {stats['written']:,} rows written", rows=stats["written"])
+                break
 
     log.info("Fact file written — %d rows (%d duplicates skipped)",
              stats["written"], stats["duplicates_skipped"])
+    _cb(63, f"Fact file complete — {stats['written']:,} rows written", rows=stats["written"])
 
     # ── Supplement dim_time with indem-only periods ───────────────────────────
+    _cb(65, "Writing supplementary dimension files…")
     # Load time periods already in paie dim_time, write only new ones
-    existing_periods = _load_existing_time_periods(CLEAN_DIR / "dim_time.jsonl")
+    existing_periods = _load_existing_time_periods(_dim_time)
     new_periods = time_periods - existing_periods
     if new_periods:
         log.info("Writing %d new time periods (indem-only months not in paie)", len(new_periods))
-        _write_jsonl(CLEAN_DIM_TIME_INDEM, _time_records(new_periods))
+        _write_jsonl(_dim_time_indem, _time_records(new_periods))
     else:
-        # Write empty file so load_dw doesn't fail on missing path
-        CLEAN_DIM_TIME_INDEM.write_text("", encoding="utf-8")
+        _dim_time_indem.write_text("", encoding="utf-8")
         log.info("No new time periods (all indem months already in paie dim_time)")
+
+    _cb(68, "Dimension files written — running quality checks…")
 
     # ── Quality gate ──────────────────────────────────────────────────────────
     n = stats["written"] or 1

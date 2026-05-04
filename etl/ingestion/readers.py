@@ -25,6 +25,77 @@ from typing import Iterator
 
 log = logging.getLogger(__name__)
 
+# Files larger than this use ijson streaming instead of full in-memory load
+_LARGE_FILE_THRESHOLD = 50 * 1024 * 1024  # 50 MB
+
+
+class _FixedDecimalReader(io.RawIOBase):
+    """
+    Wraps a binary file and fixes French decimal commas on the fly.
+    e.g.  "pa_indice":0,04  →  "pa_indice":0.04
+    Allows ijson to stream files that would otherwise fail json.loads.
+
+    Chunk-boundary correctness: we apply the regex to ALL accumulated raw
+    bytes each fill, emit all but the last _MARGIN bytes, then put those
+    _MARGIN raw (unprocessed) bytes back into _raw for the next fill.
+    Because the regex is idempotent (replacing , → . never re-matches),
+    overlapping the margin across fills is safe and guarantees every match
+    is seen whole regardless of where the 64 KB chunk boundary falls.
+    """
+    _CHUNK  = 1 << 16  # 64 KB read buffer
+    _MARGIN = 50       # > max possible match length (":\s*-?\d+,\d" ≈ 25 bytes)
+    _PAT    = re.compile(rb'(:\s*-?\d+),(\d)')
+
+    def __init__(self, path: Path):
+        self._fp  = open(path, "rb")
+        self._out = bytearray()   # fixed bytes ready to emit
+        self._raw = bytearray()   # raw bytes pending regex (includes overlap)
+        self._eof = False
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        self.close()
+
+    def readable(self):
+        return True
+
+    def _fill(self):
+        chunk = self._fp.read(self._CHUNK)
+        if not chunk:
+            self._eof = True
+            self._out.extend(self._PAT.sub(rb'\1.\2', bytes(self._raw)))
+            self._raw.clear()
+            return
+        self._raw.extend(chunk)
+        if len(self._raw) > self._MARGIN:
+            # Apply regex to everything we have — catches cross-boundary matches
+            fixed = self._PAT.sub(rb'\1.\2', bytes(self._raw))
+            # Emit all but the last _MARGIN bytes of the FIXED output
+            emit = len(fixed) - self._MARGIN   # same length since , and . are 1 byte each
+            self._out.extend(fixed[:emit])
+            # Keep the last _MARGIN bytes of the FIXED output as the new overlap.
+            # Using fixed (not self._raw) is critical: if the comma was right at the
+            # emit boundary, the replacement dot must carry over into the next fill,
+            # not the original comma from self._raw.
+            self._raw = bytearray(fixed[-self._MARGIN:])
+
+    def readinto(self, b):
+        while len(self._out) < len(b) and not self._eof:
+            self._fill()
+        n = min(len(b), len(self._out))
+        if n == 0:
+            return 0
+        b[:n] = self._out[:n]
+        del self._out[:n]
+        return n
+
+    def close(self):
+        if not self._fp.closed:
+            self._fp.close()
+        super().close()
+
 
 # ── Format detection ─────────────────────────────────────────────────────────
 
@@ -84,49 +155,73 @@ def _repair_comma_decimals(text: str) -> str:
 
 def _stream_json_oracle(path: Path) -> Iterator[dict]:
     """
-    Handle two Oracle export flavours:
-      A)  {"columns":[...], "items":[[v,v,...], ...]}    (array-of-arrays)
-      B)  {"results":[{"columns":[...], "items":[{...}, ...]}]}
-      C)  {"results":[{"columns":[...], "items":[[v,...], ...]}]}
+    Handle Oracle export flavours:
+      A)  {"columns":[...], "items":[[v,v,...], ...]}    — array-of-arrays
+      B)  {"results":[{"columns":[...], "items":[{...},...]}]}  — results wrapper
 
-    Also repairs French comma decimals before parsing.
+    Small files (<50 MB): full in-memory parse (fast).
+    Large files: ijson streaming — constant memory regardless of file size.
+    French comma decimals repaired in both paths.
     """
-    log.debug("Reading Oracle JSON: %s", path.name)
-    raw = path.read_bytes()
+    log.debug("Reading Oracle JSON: %s (%.1f MB)",
+              path.name, path.stat().st_size / 1e6)
 
-    # Try UTF-8 first; fall back to latin-1 (never raises)
-    try:
-        text = raw.decode("utf-8")
-    except UnicodeDecodeError:
-        text = raw.decode("latin-1")
-
-    # Repair comma decimals BEFORE json.loads
-    text = _repair_comma_decimals(text)
-
-    try:
+    if path.stat().st_size < _LARGE_FILE_THRESHOLD:
+        # ── Small file: full in-memory load ──────────────────────────────────
+        raw = path.read_bytes()
+        try:
+            text = raw.decode("utf-8")
+        except UnicodeDecodeError:
+            text = raw.decode("latin-1")
+        text = _repair_comma_decimals(text)
         data = json.loads(text)
-    except json.JSONDecodeError as exc:
-        log.error("JSON parse failed for %s: %s", path.name, exc)
-        raise
+        block = data["results"][0] if "results" in data else data
+        columns = [
+            (col["name"] if isinstance(col, dict) else col).lower()
+            for col in block["columns"]
+        ]
+        for item in block["items"]:
+            if isinstance(item, dict):
+                yield {k.lower(): v for k, v in item.items()}
+            else:
+                yield dict(zip(columns, item))
+        return
 
-    # Unwrap "results" envelope if present
-    if isinstance(data, dict) and "results" in data:
-        block = data["results"][0]
-    else:
-        block = data
+    # ── Large file: ijson streaming ───────────────────────────────────────────
+    import ijson
 
-    columns: list[str] = [
-        col["name"] if isinstance(col, dict) else col
-        for col in block["columns"]
-    ]
+    # Peek to detect "results" wrapper
+    with open(path, "rb") as f:
+        head = f.read(2048).decode("utf-8", errors="replace").lstrip()
+    has_results = '"results"' in head[:500]
 
-    for item in block["items"]:
-        if isinstance(item, dict):
-            # Already a dict (format B) — lowercase all keys
-            yield {k.lower(): v for k, v in item.items()}
-        else:
-            # Array of values (format A / C)
-            yield dict(zip([c.lower() for c in columns], item))
+    col_prefix   = "results.item.columns.item" if has_results else "columns.item"
+    items_prefix = "results.item.items.item"    if has_results else "items.item"
+
+    # Pass 1 — extract column names (fast: stops once "items" key is reached)
+    columns: list[str] = []
+    with _FixedDecimalReader(path) as f:
+        for prefix, event, value in ijson.parse(f, use_float=True):
+            if prefix == col_prefix and isinstance(value, str):
+                columns.append(value.lower())
+            # dict-format columns: {"name": "PA_ANNEE"}
+            if prefix == col_prefix + ".name" and isinstance(value, str):
+                columns.append(value.lower())
+            if "items" in prefix and columns:
+                break
+
+    if not columns:
+        raise ValueError(f"No columns found in Oracle JSON: {path.name}")
+
+    log.info("Oracle JSON columns (%d): %s…", len(columns), columns[:5])
+
+    # Pass 2 — stream items one at a time
+    with _FixedDecimalReader(path) as f:
+        for item in ijson.items(f, items_prefix, use_float=True):
+            if isinstance(item, dict):
+                yield {k.lower(): v for k, v in item.items()}
+            elif isinstance(item, list):
+                yield dict(zip(columns, item))
 
 
 # ── JSONL reader ──────────────────────────────────────────────────────────────
@@ -196,12 +291,17 @@ def stream_records(path: Path) -> Iterator[dict]:
     elif fmt == "jsonl":
         yield from _stream_jsonl(path)
     elif fmt in ("json_array", "json_object"):
-        # Small flat JSON files
-        data = json.loads(path.read_text(encoding="utf-8", errors="replace"))
-        if isinstance(data, list):
-            yield from data
+        if fmt == "json_array" and path.stat().st_size >= _LARGE_FILE_THRESHOLD:
+            import ijson
+            with _FixedDecimalReader(path) as f:
+                for item in ijson.items(f, "item", use_float=True):
+                    yield item
         else:
-            yield data
+            data = json.loads(path.read_text(encoding="utf-8", errors="replace"))
+            if isinstance(data, list):
+                yield from data
+            else:
+                yield data
     elif fmt == "csv":
         yield from _stream_csv(path)
     elif fmt == "excel":

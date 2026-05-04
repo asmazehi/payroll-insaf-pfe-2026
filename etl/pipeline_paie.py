@@ -43,17 +43,35 @@ from etl.mapping import organisme as org_map
 from etl.mapping import region as region_map
 
 
-def run(source: Path = RAW_PAIE, run_id: str | None = None) -> dict:
+def run(source: Path = RAW_PAIE, run_id: str | None = None,
+        out_dir: Path | None = None,
+        progress_cb: "Callable[[int,str],None] | None" = None,
+        limit: int | None = None,
+        year_min: int | None = None,
+        year_max: int | None = None) -> dict:
     run_id  = run_id or uuid.uuid4().hex[:8]
     started = datetime.now(timezone.utc)
     log     = get_logger("pipeline_paie", run_id=run_id)
 
-    log.info("DW1 pipeline started — source=%s", source.name)
-    CLEAN_DIR.mkdir(parents=True, exist_ok=True)
+    _out = out_dir or CLEAN_DIR
+    _fact_paie     = _out / "fact_paie.jsonl"
+    _dim_employee  = _out / "dim_employee.jsonl"
+    _dim_grade     = _out / "dim_grade.jsonl"
+    _dim_nature    = _out / "dim_nature.jsonl"
+    _dim_organisme = _out / "dim_organisme.jsonl"
+    _dim_region    = _out / "dim_region.jsonl"
+    _dim_time      = _out / "dim_time.jsonl"
+
+    year_label = f"  year_filter={year_min or '*'}–{year_max or '*'}" if (year_min or year_max) else ""
+    log.info("DW1 pipeline started — source=%s  out=%s%s", source.name, _out, year_label)
+    _out.mkdir(parents=True, exist_ok=True)
     REPORTS_DIR.mkdir(parents=True, exist_ok=True)
+
+    _cb = progress_cb or (lambda pct, msg, **kw: None)
 
     # ── Load reference lookups ────────────────────────────────────────────────
     log.info("Loading reference data...")
+    _cb(15, "Loading reference lookups…")
     grade_lookup  = grade_map.build_lookup(RAW_GRADE)
     nature_lookup = nature_map.build_lookup(RAW_NATURE)
     org_lookup    = org_map.build_lookup(RAW_ORGANISME)
@@ -62,6 +80,7 @@ def run(source: Path = RAW_PAIE, run_id: str | None = None) -> dict:
     log.info("Lookups — grade=%d  nature=%d  organisme=%d  region=%d",
              len(grade_lookup), len(nature_lookup),
              len(org_lookup["full"]), len(region_lookup["by_dep"]))
+    _cb(18, f"Reference data loaded — {len(grade_lookup)} grades, {len(nature_lookup)} natures")
 
     # ── Accumulators ─────────────────────────────────────────────────────────
     # Employees: keep the record with the most recent (year, month) for
@@ -83,7 +102,7 @@ def run(source: Path = RAW_PAIE, run_id: str | None = None) -> dict:
     }
 
     # ── Stream + clean + map ──────────────────────────────────────────────────
-    with open(CLEAN_FACT_PAIE, "w", encoding="utf-8") as fout:
+    with open(_fact_paie, "w", encoding="utf-8") as fout:
         for raw in stream_records(source):
             stats["total_raw"] += 1
 
@@ -91,6 +110,17 @@ def run(source: Path = RAW_PAIE, run_id: str | None = None) -> dict:
             if str(raw.get("pa_type") or raw.get("PA_TYPE") or "").strip() != PAIE_TYPE_FILTER:
                 stats["skipped_type"] += 1
                 continue
+
+            # Optional year filter (for targeted re-runs)
+            if year_min or year_max:
+                try:
+                    yr_raw = int(float(str(raw.get("pa_annee") or raw.get("PA_ANNEE") or 0)))
+                except (TypeError, ValueError):
+                    yr_raw = 0
+                if year_min and yr_raw < year_min:
+                    continue
+                if year_max and yr_raw > year_max:
+                    continue
 
             raw = fix_record(raw)
             rec, issues = normalize_payroll_record(raw)
@@ -203,20 +233,31 @@ def run(source: Path = RAW_PAIE, run_id: str | None = None) -> dict:
 
             if stats["written"] % 50_000 == 0:
                 log.info("  %d rows written...", stats["written"])
+                _cb(min(18 + stats["written"] // 25_000, 62),
+                    f"{stats['written']:,} rows processed…",
+                    rows=stats["written"])
+
+            if limit and stats["written"] >= limit:
+                log.info("Row limit %d reached — stopping early (test mode)", limit)
+                _cb(62, f"Test limit reached — {stats['written']:,} rows written", rows=stats["written"])
+                break
 
     log.info("Fact file written — %d rows (%d duplicates skipped within file)",
              stats["written"], stats["duplicates_skipped"])
+    _cb(63, f"Fact file complete — {stats['written']:,} rows written", rows=stats["written"])
 
     # ── Write dimension files ─────────────────────────────────────────────────
-    _write_jsonl(CLEAN_DIM_EMPLOYEE,  employees.values())
-    _write_jsonl(CLEAN_DIM_GRADE,     grade_lookup.values())
-    _write_jsonl(CLEAN_DIM_NATURE,    nature_lookup.values())
-    _write_jsonl(CLEAN_DIM_ORGANISME, _org_records(org_lookup))
-    _write_jsonl(CLEAN_DIM_REGION,    _region_records(region_lookup))
-    _write_jsonl(CLEAN_DIM_TIME,      _time_records(time_periods))
+    _cb(65, "Writing dimension files…")
+    _write_jsonl(_dim_employee,  employees.values())
+    _write_jsonl(_dim_grade,     grade_lookup.values())
+    _write_jsonl(_dim_nature,    nature_lookup.values())
+    _write_jsonl(_dim_organisme, _org_records(org_lookup))
+    _write_jsonl(_dim_region,    _region_records(region_lookup))
+    _write_jsonl(_dim_time,      _time_records(time_periods))
 
     log.info("Dimension files written — employees=%d  time_periods=%d",
              len(employees), len(time_periods))
+    _cb(68, f"Dimension files written — {len(employees):,} employees, {len(time_periods)} time periods")
 
     # ── Quality gate ──────────────────────────────────────────────────────────
     report = _quality_gate_and_report(
@@ -331,6 +372,9 @@ def _time_records(periods: set[tuple[int, int]]):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run DW1 (payroll) ETL pipeline")
-    parser.add_argument("--source", type=Path, default=RAW_PAIE)
+    parser.add_argument("--source",   type=Path, default=RAW_PAIE)
+    parser.add_argument("--year-min", type=int,  default=None, help="Only process records from this year onwards")
+    parser.add_argument("--year-max", type=int,  default=None, help="Only process records up to this year")
+    parser.add_argument("--limit",    type=int,  default=None, help="Stop after N rows (test mode)")
     args = parser.parse_args()
-    run(source=args.source)
+    run(source=args.source, year_min=args.year_min, year_max=args.year_max, limit=args.limit)
