@@ -126,6 +126,29 @@ def detect_format(path: Path) -> str:
     return "unknown"
 
 
+# ── Arabic encoding repair ───────────────────────────────────────────────────
+# Oracle exports from AR8MSWIN1256 (cp1256) databases dump raw Arabic bytes
+# into JSON that is labeled UTF-8. Each cp1256 byte gets misread as Latin-1
+# and stored as a 2-byte UTF-8 sequence (U+00C0–U+00FF range).
+# Fix: re-encode as Latin-1 to recover the original cp1256 bytes, then decode.
+
+def fix_arabic_mojibake(s: str) -> str:
+    if not s:
+        return s
+    try:
+        return s.encode('latin-1').decode('cp1256')
+    except (UnicodeEncodeError, UnicodeDecodeError):
+        return s
+
+
+def fix_record_arabic(record: dict) -> dict:
+    """Apply Arabic mojibake fix to all string values in a record."""
+    return {
+        k: fix_arabic_mojibake(v) if isinstance(v, str) else v
+        for k, v in record.items()
+    }
+
+
 # ── Malformed-JSON repair ─────────────────────────────────────────────────────
 
 _COMMA_DECIMAL_RE = re.compile(
