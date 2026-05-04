@@ -26,6 +26,36 @@ CREATE TABLE IF NOT EXISTS public.etl_jobs (
     uploaded_by  VARCHAR(50)
 );
 
+-- Establishment dimension (ministry-level, joins to dim_organisme via codetab)
+CREATE TABLE IF NOT EXISTS dw.dim_etablissement (
+    etablissement_sk  BIGSERIAL    PRIMARY KEY,
+    codetab           CHAR(3)      NOT NULL UNIQUE,
+    natorg            VARCHAR(5),
+    libcetabl         TEXT,
+    libcetaba         TEXT,
+    libletabl         TEXT,
+    libletaba         TEXT,
+    sigle_etab        VARCHAR(20),
+    typgest           VARCHAR(5),
+    codgest           VARCHAR(5),
+    adretabl          TEXT,
+    adretaba          TEXT,
+    teletab           VARCHAR(30),
+    resp_etabl        TEXT,
+    resp_etaba        TEXT,
+    etat_etab         VARCHAR(5),
+    code_resp         VARCHAR(5),
+    stutel            VARCHAR(20),
+    codtutel          VARCHAR(10),
+    codchap           VARCHAR(10),
+    codsec            VARCHAR(10),
+    subv              VARCHAR(20),
+    dw_load_ts        TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+);
+
+-- Raw codetab on fact_paie for direct join to dim_etablissement
+ALTER TABLE dw.fact_paie ADD COLUMN IF NOT EXISTS codetab CHAR(3);
+
 -- Default admin (password: admin123)
 INSERT INTO public.users (username, email, password, role)
 VALUES ('admin', 'admin@insaf.tn',

@@ -134,6 +134,7 @@ FACT_SQL = """
     INSERT INTO dw.fact_paie (
         employee_sk, time_sk, pa_type,
         grade_sk, nature_sk, organisme_sk, region_sk,
+        codetab,
         pa_eche, pa_sitfam, pa_loca_raw,
         m_salimp, m_salnimp, m_salbrut, m_brutcnr, m_netord, m_netpay,
         m_cpe, m_retrait, m_cps, m_capdeces, m_avkm, m_avlog,
@@ -144,6 +145,7 @@ FACT_SQL = """
     ON CONFLICT (employee_sk, time_sk, pa_type) DO UPDATE SET
         grade_sk=EXCLUDED.grade_sk, nature_sk=EXCLUDED.nature_sk,
         organisme_sk=EXCLUDED.organisme_sk, region_sk=EXCLUDED.region_sk,
+        codetab=EXCLUDED.codetab,
         m_netpay=EXCLUDED.m_netpay, m_salbrut=EXCLUDED.m_salbrut,
         m_salimp=EXCLUDED.m_salimp, m_netord=EXCLUDED.m_netord,
         m_retrait=EXCLUDED.m_retrait, dq_has_issues=EXCLUDED.dq_has_issues,
@@ -174,6 +176,7 @@ def fast_load(conn, path: Path, maps):
                 nature.get(_v(r,"nature_code"), 0),
                 org.get((_v(r,"org_codetab"), _v(r,"org_dire")), 0),
                 region.get(_v(r,"org_codetab"), 0),
+                _v(r,"org_codetab"),
                 _int(r,"pa_eche"), _v(r,"pa_sitfam"), _v(r,"pa_loca_raw"),
                 *[_num(r,m) for m in MEASURES],
                 _bool(r,"dq_grade_matched"), _bool(r,"dq_nature_matched"),
