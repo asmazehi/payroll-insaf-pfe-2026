@@ -1,29 +1,40 @@
 <header class="topbar">
   <div class="topbar__left">
-    <div class="topbar__brand">
-      <img src="assets/images/LogoCNI.png" alt="CNI" class="topbar__cni-logo">
-      <div class="topbar__divider"></div>
-    </div>
-    <div>
-      <h1 class="topbar__title">{{ pageTitle }}</h1>
-      <p class="topbar__breadcrumb">INSAF Platform &rsaquo; {{ pageTitle }}</p>
-    </div>
+    <span class="topbar__bc-section">INSAF</span>
+    <span class="topbar__bc-sep">/</span>
+    <span class="topbar__bc-page">{{ pageTitle }}</span>
   </div>
 
   <div class="topbar__right">
-    <div class="topbar__status">
-      <span class="status-dot"></span>
-      <span class="status-text">Live</span>
+    <!-- Language switcher -->
+    <div class="lang-switcher">
+      <button
+        *ngFor="let l of lang.langs"
+        class="lang-btn"
+        [class.lang-btn--active]="lang.current === l.code"
+        (click)="setLang(l.code)">
+        {{ l.label }}
+      </button>
     </div>
-    <div class="topbar__divider"></div>
+
+    <div class="topbar__sep"></div>
+
+    <div class="topbar__live">
+      <span class="live-dot"></span>
+      <span class="live-txt">{{ 'topbar.live' | translate }}</span>
+    </div>
+
+    <div class="topbar__sep"></div>
+
     <div class="topbar__user">
-      <div class="topbar__userinfo">
-        <span class="topbar__username">{{ user?.username }}</span>
-        <span class="topbar__role">{{ user?.role | slice:5 }}</span>
-      </div>
       <div class="topbar__avatar">{{ (user?.username || 'U')[0].toUpperCase() }}</div>
+      <div class="topbar__uinfo">
+        <span class="topbar__uname">{{ user?.username }}</span>
+        <span class="topbar__urole">{{ user?.role | slice:5 | lowercase }}</span>
+      </div>
     </div>
-    <button class="topbar__logout" (click)="logout()" title="Sign out">
+
+    <button class="topbar__logout" (click)="logout()" [title]="'common.logout' | translate">
       <mat-icon>logout</mat-icon>
     </button>
   </div>

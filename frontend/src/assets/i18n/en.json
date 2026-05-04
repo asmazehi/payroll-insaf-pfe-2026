@@ -1,0 +1,89 @@
+{
+  "nav": {
+    "analytics":  "Analytics",
+    "overview":   "Overview",
+    "forecast":   "Forecast",
+    "anomalies":  "Anomalies",
+    "assistant":  "AI Assistant",
+    "pipeline":   "Pipeline",
+    "ingest":     "Data Ingest",
+    "admin":      "Admin",
+    "users":      "Users",
+    "reports":    "Reports"
+  },
+  "topbar": {
+    "live": "Live"
+  },
+  "lang": {
+    "en": "English",
+    "fr": "Français",
+    "ar": "العربية"
+  },
+  "dashboard": {
+    "eyebrow":     "Government Payroll Intelligence",
+    "title":       "Overview",
+    "employees":   "Civil Servants",
+    "netpay":      "Total Net Payroll",
+    "records":     "Records",
+    "dataspan":    "Years of Data",
+    "trend":       "Net Payroll Trend",
+    "trend_sub":   "Annual total net pay — TND millions",
+    "all_years":   "All years",
+    "by_ministry": "By Ministry",
+    "min_dist":    "Distribution of net payroll",
+    "top_grades":  "Top Grades",
+    "avg_salary":  "By average salary",
+    "top8":        "Top 8",
+    "min_rank":    "Ministry Rankings",
+    "by_netpay":   "By total net payroll",
+    "grade":       "Grade",
+    "avg_net":     "Avg Net",
+    "emp":         "emp."
+  },
+  "ingest": {
+    "title":       "Data Ingestion",
+    "subtitle":    "Upload payroll files → ETL pipeline → Data Warehouse",
+    "drop":        "Drop your file here",
+    "or_browse":   "or browse",
+    "formats":     "Supports JSON · CSV · XLSX · JSONL",
+    "type_paie":   "Payroll (Paie)",
+    "type_indem":  "Indemnity (Indem)",
+    "retrain":     "Retrain ML after upload",
+    "upload_btn":  "Upload & Run Pipeline",
+    "uploading":   "Processing…",
+    "success":     "Pipeline completed successfully",
+    "history":     "Recent Jobs"
+  },
+  "users": {
+    "title":        "User Management",
+    "subtitle":     "Create users, assign ministries, manage access.",
+    "new_user":     "New User",
+    "username":     "Username",
+    "email":        "Email",
+    "role":         "Role",
+    "ministry":     "Ministry",
+    "status":       "Status",
+    "actions":      "Actions",
+    "active":       "Active",
+    "disabled":     "Disabled",
+    "admin":        "Admin",
+    "user":         "User",
+    "create":       "Create User",
+    "edit":         "Edit User",
+    "save":         "Save",
+    "cancel":       "Cancel",
+    "delete_conf":  "Delete this user?"
+  },
+  "common": {
+    "loading":   "Loading…",
+    "error":     "An error occurred",
+    "no_data":   "No data available",
+    "save":      "Save",
+    "cancel":    "Cancel",
+    "delete":    "Delete",
+    "edit":      "Edit",
+    "logout":    "Sign out",
+    "tnd":       "TND",
+    "m_tnd":     "M TND"
+  }
+}

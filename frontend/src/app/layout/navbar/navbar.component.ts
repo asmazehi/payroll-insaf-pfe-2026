@@ -1,6 +1,7 @@
 import { Component } from '@angular/core';
 import { Router, NavigationEnd } from '@angular/router';
 import { AuthService } from '../../services/auth.service';
+import { LangService, Lang } from '../../services/lang.service';
 import { filter } from 'rxjs/operators';
 
 const TITLES: Record<string, string> = {
@@ -20,12 +21,17 @@ export class NavbarComponent {
   user = this.auth.getCurrentUser();
   pageTitle = 'Dashboard';
 
-  constructor(private auth: AuthService, private router: Router) {
+  constructor(
+    private auth: AuthService,
+    private router: Router,
+    public lang: LangService
+  ) {
     this.router.events.pipe(filter(e => e instanceof NavigationEnd)).subscribe((e: any) => {
       this.pageTitle = TITLES[e.urlAfterRedirects] || 'INSAF';
     });
     this.pageTitle = TITLES[this.router.url] || 'INSAF';
   }
 
+  setLang(code: Lang): void { this.lang.setLang(code); }
   logout(): void { this.auth.logout(); }
 }

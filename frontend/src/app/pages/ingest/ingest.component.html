@@ -23,52 +23,105 @@
   </div>
 
   <div class="page-body">
+
+    <!-- ── Keep-open warning ─────────────────────────────────────────── -->
+    <div class="keep-open-banner" *ngIf="uploading">
+      <div class="keep-open-icon"><mat-icon>warning_amber</mat-icon></div>
+      <div class="keep-open-text">
+        <strong>Keep this tab open</strong>
+        <span>The ETL pipeline is running on the server. Closing this tab won't stop the process, but you'll lose live progress tracking.</span>
+      </div>
+      <div class="keep-open-timer">
+        <mat-icon>timer</mat-icon>
+        {{ elapsedLabel }}
+      </div>
+    </div>
+
     <div class="ingest-layout">
 
       <!-- ── Upload card ──────────────────────────────────────────── -->
       <div class="upload-card chart-card">
 
         <div class="section-header">
-          <h3>Upload Payroll File</h3>
-          <span class="section-sub">JSON or CSV accepted</span>
+          <h3>Run Pipeline</h3>
+          <span class="section-sub">Choose how to provide the file</span>
         </div>
 
-        <!-- Drop zone -->
-        <div class="dropzone"
-             [class.dropzone--active]="dragging"
-             [class.dropzone--has-file]="selectedFile"
-             (dragover)="onDragOver($event)"
-             (dragleave)="onDragLeave()"
-             (drop)="onDrop($event)"
-             (click)="!selectedFile && openPicker()">
+        <!-- Mode switcher -->
+        <div class="mode-switcher">
+          <button class="mode-btn" [class.mode-btn--active]="mode==='path'" (click)="mode='path'">
+            <mat-icon>folder_open</mat-icon>
+            Server File Path
+          </button>
+          <button class="mode-btn" [class.mode-btn--active]="mode==='upload'" (click)="mode='upload'">
+            <mat-icon>upload_file</mat-icon>
+            Upload File
+            <span class="mode-hint">(&lt;2 GB)</span>
+          </button>
+        </div>
 
-          <input #fileInput type="file" accept=".json,.csv" hidden (change)="onFileChange($event)">
+        <!-- ── PATH mode ─────────────────────────────────────── -->
+        <div *ngIf="mode==='path'" class="path-mode">
+          <label class="path-label">
+            <mat-icon>insert_drive_file</mat-icon>
+            Full path to the data file on this machine
+          </label>
+          <div class="path-input-wrap">
+            <input
+              class="path-input"
+              type="text"
+              [(ngModel)]="serverPath"
+              placeholder="e.g.  C:\Users\you\paie.json  or  /data/paie.json"
+              [disabled]="uploading"
+            >
+          </div>
+          <p class="path-hint">
+            <mat-icon>info</mat-icon>
+            Use this for large files (&gt;1 GB). The API reads the file directly from disk — no HTTP transfer needed.
+          </p>
+        </div>
 
-          <ng-container *ngIf="!selectedFile">
-            <div class="dz-icon"><mat-icon>upload_file</mat-icon></div>
-            <p class="dz-title">Drop your file here</p>
-            <p class="dz-sub">or <span class="dz-link">click to browse</span> · JSON / CSV</p>
-          </ng-container>
+        <!-- ── UPLOAD mode ─────────────────────────────────── -->
+        <ng-container *ngIf="mode==='upload'">
+          <div class="dropzone"
+               [class.dropzone--active]="dragging"
+               [class.dropzone--has-file]="selectedFile"
+               (dragover)="onDragOver($event)"
+               (dragleave)="onDragLeave()"
+               (drop)="onDrop($event)"
+               (click)="!selectedFile && openPicker()">
 
-          <ng-container *ngIf="selectedFile">
-            <div class="file-preview">
-              <div class="file-icon"><mat-icon>description</mat-icon></div>
-              <div class="file-meta">
-                <span class="file-name">{{ selectedFile.name }}</span>
-                <span class="file-size">{{ fileSizeLabel }}</span>
+            <input #fileInput type="file" accept=".json,.jsonl,.csv,.xlsx,.xls" hidden (change)="onFileChange($event)">
+
+            <ng-container *ngIf="!selectedFile">
+              <div class="dz-icon"><mat-icon>upload_file</mat-icon></div>
+              <p class="dz-title">Drop your file here</p>
+              <p class="dz-sub">or <span class="dz-link">click to browse</span> · JSON / JSONL / CSV / Excel</p>
+            </ng-container>
+
+            <ng-container *ngIf="selectedFile">
+              <div class="file-preview">
+                <div class="file-icon"><mat-icon>description</mat-icon></div>
+                <div class="file-meta">
+                  <span class="file-name">{{ selectedFile.name }}</span>
+                  <span class="file-size">{{ fileSizeLabel }}</span>
+                </div>
+                <button class="file-remove" (click)="$event.stopPropagation(); removeFile()">
+                  <mat-icon>close</mat-icon>
+                </button>
               </div>
-              <button class="file-remove" (click)="$event.stopPropagation(); removeFile()">
-                <mat-icon>close</mat-icon>
-              </button>
-            </div>
-          </ng-container>
-        </div>
+            </ng-container>
+          </div>
+        </ng-container>
 
         <!-- Options -->
         <div class="options-row">
           <div class="option-group">
             <label class="opt-label">File Type</label>
             <div class="seg-ctrl">
+              <button class="seg-btn" [class.seg-btn--active]="fileType==='auto'" (click)="fileType='auto'">
+                <mat-icon>auto_awesome</mat-icon>Auto
+              </button>
               <button class="seg-btn" [class.seg-btn--active]="fileType==='paie'" (click)="fileType='paie'">
                 <mat-icon>payments</mat-icon>Paie
               </button>
@@ -89,37 +142,93 @@
                 Retrain ML models
               </span>
             </label>
-            <p class="toggle-hint" *ngIf="retrain">All 6 forecast &amp; 5 anomaly models will retrain (~2–5 min)</p>
+            <p class="toggle-hint" *ngIf="retrain">All forecast &amp; anomaly models will retrain (~2–5 min)</p>
           </div>
         </div>
+
+        <!-- Test mode -->
+        <div class="test-mode-row">
+          <label class="toggle-wrap">
+            <div class="toggle" [class.toggle--on]="testMode" (click)="testMode=!testMode">
+              <div class="toggle-thumb"></div>
+            </div>
+            <span class="toggle-label">
+              <mat-icon>science</mat-icon>
+              Test mode — limit rows
+            </span>
+          </label>
+          <div class="limit-input-wrap" *ngIf="testMode">
+            <input
+              class="limit-input"
+              type="number"
+              [(ngModel)]="testLimit"
+              min="1000"
+              step="10000"
+              [disabled]="uploading"
+            >
+            <span class="limit-unit">rows</span>
+          </div>
+        </div>
+        <p class="test-mode-hint" *ngIf="testMode">
+          Pipeline will stop after the first {{ testLimit | number }} matching rows — useful for validating the full stack before running on the complete file.
+        </p>
 
         <!-- Error -->
         <div class="error-banner" *ngIf="error">
           <mat-icon>error_outline</mat-icon><span>{{ error }}</span>
         </div>
 
-        <!-- Upload button -->
-        <button class="upload-btn" [disabled]="!selectedFile || uploading" (click)="upload()">
+        <!-- Run button -->
+        <button class="upload-btn" [disabled]="!canRun" (click)="run()">
           <mat-icon>{{ uploading ? 'hourglass_top' : 'rocket_launch' }}</mat-icon>
-          {{ uploading ? 'Processing…' : 'Run Pipeline' }}
+          {{ uploading ? 'Running…' : 'Run Pipeline' }}
         </button>
 
-        <!-- Progress -->
-        <div class="progress-area" *ngIf="uploading">
+        <!-- ── Progress tracker ─────────────────────────────── -->
+        <div class="progress-area" *ngIf="uploading || (progress && currentApiStage !== 'idle')">
+
+          <!-- Stage nodes -->
+          <div class="stage-tracker">
+            <ng-container *ngFor="let stage of displayStages; let last = last">
+              <div class="stage-node"
+                   [class.stage-node--active]="isStageActive(stage)"
+                   [class.stage-node--done]="isStageDone(stage)"
+                   [class.stage-node--error]="currentApiStage === 'error' && isStageActive(stage)"
+                   [class.stage-node--skip]="stage.key === 'ml' && !retrain && !isStageActive(stage) && !isStageDone(stage)">
+                <div class="stage-bubble">
+                  <mat-icon *ngIf="!isStageDone(stage)">{{ stage.icon }}</mat-icon>
+                  <mat-icon *ngIf="isStageDone(stage) && currentApiStage !== 'error'">check</mat-icon>
+                </div>
+                <span class="stage-name">{{ stage.label }}</span>
+              </div>
+              <div *ngIf="!last" class="stage-line" [class.stage-line--done]="isStageDone(stage)"></div>
+            </ng-container>
+          </div>
+
+          <!-- Progress bar -->
           <div class="prog-track">
-            <div class="prog-bar" [style.width.%]="progress"></div>
+            <div class="prog-bar" [style.width.%]="currentPct"
+                 [class.prog-bar--error]="currentApiStage === 'error'"></div>
           </div>
-          <div class="prog-steps">
-            <span [class.prog-step--active]="progress>0">
-              <mat-icon>upload</mat-icon>Upload
-            </span>
-            <span [class.prog-step--active]="progress===100">
-              <mat-icon>account_tree</mat-icon>ETL
-            </span>
-            <span [class.prog-step--active]="progress===100 && retrain">
-              <mat-icon>model_training</mat-icon>ML
-            </span>
+
+          <!-- Live message + pct -->
+          <div class="prog-meta">
+            <span class="prog-msg">{{ progress?.msg || (uploadPct < 100 ? 'Transferring file…' : 'Starting pipeline…') }}</span>
+            <span class="prog-pct">{{ currentPct }}%</span>
           </div>
+
+          <!-- Row counter -->
+          <div class="row-counter" *ngIf="progress?.rows">
+            <mat-icon>table_rows</mat-icon>
+            <span>{{ fmt(progress?.rows) }} rows processed</span>
+          </div>
+
+          <!-- Upload file progress (only during transfer) -->
+          <div class="upload-progress" *ngIf="mode === 'upload' && uploadPct < 100">
+            <mat-icon>upload</mat-icon>
+            <span>Uploading file… {{ uploadPct }}%</span>
+          </div>
+
         </div>
 
       </div>
@@ -159,15 +268,15 @@
           <div class="etl-stat etl-stat--red" *ngIf="result.etl_stats?.errors">
             <mat-icon>cancel</mat-icon>
             <div>
-              <span>Errors</span>
+              <span>DQ Issues</span>
               <strong>{{ fmt(result.etl_stats.errors) }}</strong>
             </div>
           </div>
-          <div class="etl-stat etl-stat--blue" *ngIf="result.etl_stats?.duration_s">
+          <div class="etl-stat etl-stat--blue">
             <mat-icon>timer</mat-icon>
             <div>
               <span>Duration</span>
-              <strong>{{ result.etl_stats.duration_s?.toFixed(2) }}s</strong>
+              <strong>{{ result.etl_stats.duration_s }}s</strong>
             </div>
           </div>
         </div>
@@ -181,7 +290,7 @@
         </div>
 
         <!-- ML status -->
-        <div class="ml-status" *ngIf="result.ml_status">
+        <div class="ml-status" *ngIf="result.ml_status && result.ml_status !== 'not_requested'">
           <div class="ml-status__header">
             <div class="ml-icon"><mat-icon>model_training</mat-icon></div>
             <span>ML Retrain Status</span>
@@ -189,7 +298,7 @@
           <p>{{ result.ml_status }}</p>
         </div>
 
-        <!-- DW + BI reminder -->
+        <!-- DW reminder -->
         <div class="reminder-box">
           <mat-icon>info</mat-icon>
           <p>Data Warehouse updated. Power BI will reflect changes on next scheduled refresh or manual refresh in the Reports page.</p>
@@ -210,20 +319,20 @@
           <thead>
             <tr>
               <th>Time</th><th>Run ID</th><th>File</th><th>Type</th>
-              <th>Loaded</th><th>Errors</th><th>ML</th><th>Status</th>
+              <th>Loaded</th><th>Duration</th><th>ML</th><th>Status</th>
             </tr>
           </thead>
           <tbody>
             <tr *ngFor="let r of history">
               <td>{{ fmtTime(r.ts) }}</td>
-              <td><code class="emp-id">{{ r.run_id | slice:0:12 }}…</code></td>
+              <td><code class="emp-id">{{ r.run_id }}</code></td>
               <td>{{ r.file }}</td>
               <td><span class="badge neutral">{{ r.file_type | uppercase }}</span></td>
               <td><strong>{{ fmt(r.etl_stats?.records_loaded ?? r.etl_stats?.records_processed) }}</strong></td>
-              <td>{{ r.etl_stats?.errors ?? 0 }}</td>
+              <td>{{ r.etl_stats?.duration_s }}s</td>
               <td>
-                <span class="badge" [ngClass]="r.ml_status ? 'badge-success' : 'neutral'">
-                  {{ r.ml_status ? 'Done' : 'Skipped' }}
+                <span class="badge" [ngClass]="r.ml_status && r.ml_status !== 'not_requested' ? 'badge-success' : 'neutral'">
+                  {{ r.ml_status && r.ml_status !== 'not_requested' ? 'Done' : 'Skipped' }}
                 </span>
               </td>
               <td>

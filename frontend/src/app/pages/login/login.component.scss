@@ -2,8 +2,17 @@
   display: flex;
   height: 100vh;
   overflow: hidden;
-  background: var(--navy);
+  background: var(--bg-base, #0d0d1f);
   position: relative;
+
+  /* Local tokens for the white right panel */
+  --white:        #ffffff;
+  --navy:         #0d1b2a;
+  --gold:         #c9a84c;
+  --gold-light:   #f0d080;
+  --text-primary: #0d1b2a;
+  --text-muted:   #64748b;
+  --border:       #e2e8f0;
 }
 
 /* ── Animated background blobs ─────────────────────────────────── */

@@ -1,0 +1,89 @@
+{
+  "nav": {
+    "analytics":  "Analytique",
+    "overview":   "Vue d'ensemble",
+    "forecast":   "Prévisions",
+    "anomalies":  "Anomalies",
+    "assistant":  "Assistant IA",
+    "pipeline":   "Pipeline",
+    "ingest":     "Ingestion des données",
+    "admin":      "Administration",
+    "users":      "Utilisateurs",
+    "reports":    "Rapports"
+  },
+  "topbar": {
+    "live": "En direct"
+  },
+  "lang": {
+    "en": "English",
+    "fr": "Français",
+    "ar": "العربية"
+  },
+  "dashboard": {
+    "eyebrow":     "Intelligence salariale gouvernementale",
+    "title":       "Vue d'ensemble",
+    "employees":   "Fonctionnaires",
+    "netpay":      "Masse salariale nette",
+    "records":     "Enregistrements",
+    "dataspan":    "Années de données",
+    "trend":       "Évolution de la masse salariale",
+    "trend_sub":   "Total annuel net — Millions TND",
+    "all_years":   "Toutes les années",
+    "by_ministry": "Par ministère",
+    "min_dist":    "Répartition de la masse salariale",
+    "top_grades":  "Meilleurs grades",
+    "avg_salary":  "Par salaire moyen",
+    "top8":        "Top 8",
+    "min_rank":    "Classement des ministères",
+    "by_netpay":   "Par masse salariale nette",
+    "grade":       "Grade",
+    "avg_net":     "Moy. net",
+    "emp":         "agents"
+  },
+  "ingest": {
+    "title":       "Ingestion des données",
+    "subtitle":    "Importer des fichiers → Pipeline ETL → Entrepôt de données",
+    "drop":        "Déposez votre fichier ici",
+    "or_browse":   "ou parcourir",
+    "formats":     "Formats acceptés : JSON · CSV · XLSX · JSONL",
+    "type_paie":   "Salaires (Paie)",
+    "type_indem":  "Indemnités (Indem)",
+    "retrain":     "Réentraîner le ML après l'import",
+    "upload_btn":  "Importer et exécuter le pipeline",
+    "uploading":   "Traitement en cours…",
+    "success":     "Pipeline exécuté avec succès",
+    "history":     "Traitements récents"
+  },
+  "users": {
+    "title":        "Gestion des utilisateurs",
+    "subtitle":     "Créer des utilisateurs, assigner des ministères, gérer les accès.",
+    "new_user":     "Nouvel utilisateur",
+    "username":     "Nom d'utilisateur",
+    "email":        "E-mail",
+    "role":         "Rôle",
+    "ministry":     "Ministère",
+    "status":       "Statut",
+    "actions":      "Actions",
+    "active":       "Actif",
+    "disabled":     "Désactivé",
+    "admin":        "Administrateur",
+    "user":         "Utilisateur",
+    "create":       "Créer l'utilisateur",
+    "edit":         "Modifier l'utilisateur",
+    "save":         "Enregistrer",
+    "cancel":       "Annuler",
+    "delete_conf":  "Supprimer cet utilisateur ?"
+  },
+  "common": {
+    "loading":   "Chargement…",
+    "error":     "Une erreur est survenue",
+    "no_data":   "Aucune donnée disponible",
+    "save":      "Enregistrer",
+    "cancel":    "Annuler",
+    "delete":    "Supprimer",
+    "edit":      "Modifier",
+    "logout":    "Déconnexion",
+    "tnd":       "TND",
+    "m_tnd":     "M TND"
+  }
+}

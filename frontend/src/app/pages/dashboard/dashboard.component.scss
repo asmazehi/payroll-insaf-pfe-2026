@@ -1,37 +1,171 @@
-.live-badge {
-  display: flex; align-items: center; gap: 8px;
-  padding: 9px 18px; border-radius: 24px;
-  background: rgba(16,185,129,.15);
-  border: 1px solid rgba(16,185,129,.3);
-  font-size: .78rem; font-weight: 700;
-  color: #6EE7B7;
-  backdrop-filter: blur(10px);
-}
-.live-dot {
-  width: 8px; height: 8px; border-radius: 50%;
-  background: #34D399; box-shadow: 0 0 8px #34D399;
-  animation: livePulse 2s ease infinite;
-}
-@keyframes livePulse {
-  0%,100% { transform: scale(1); opacity: 1; }
-  50%      { transform: scale(1.4); opacity: .7; }
-}
+/* ── Page header ──────────────────────────────────────── */
+.dash-header {
+  padding: 24px 32px 0;
+  display: flex; align-items: flex-start; justify-content: space-between;
+  margin-bottom: 20px;
 
-.rank {
-  display: inline-flex; align-items: center; justify-content: center;
-  width: 26px; height: 26px; border-radius: 8px;
-  background: var(--bg); color: var(--text-muted);
-  font-size: .75rem; font-weight: 800;
-  border: 1px solid var(--border);
+  &__eyebrow {
+    font-size: 11px; font-weight: 600; letter-spacing: 0.08em;
+    text-transform: uppercase; color: var(--t3); margin-bottom: 5px;
+    display: flex; align-items: center; gap: 8px;
+    &::before {
+      content: ''; display: inline-block; width: 16px; height: 1px;
+      background: var(--brand); opacity: 0.7;
+    }
+  }
 
-  &--top {
-    background: linear-gradient(135deg, var(--gold), #B45309);
-    color: #fff; border-color: transparent;
-    box-shadow: 0 3px 10px rgba(201,168,76,.4);
+  &__title {
+    font-size: 1.4rem; font-weight: 700; color: var(--t1);
+    letter-spacing: -0.025em;
+  }
+
+  &__live {
+    display: flex; align-items: center; gap: 7px;
+    padding: 6px 14px; border-radius: 20px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid var(--border);
+    font-size: 12px; font-weight: 600;
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--t2);
+    margin-top: 4px;
   }
 }
 
-.ministry-name {
-  max-width: 180px; white-space: nowrap;
-  overflow: hidden; text-overflow: ellipsis; font-weight: 500;
+.live-pulse {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--green); box-shadow: 0 0 8px var(--green);
+  animation: gp 2.5s ease infinite;
 }
+@keyframes gp { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+/* ── Metric strip — THE KEY DIFFERENTIATOR ─────────────── */
+.metric-strip {
+  display: flex; align-items: stretch;
+  margin: 0 32px 20px;
+  background: rgba(255,255,255,0.03);
+  backdrop-filter: blur(16px);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  overflow: hidden;
+  transition: border-color var(--ease);
+
+  &:hover { border-color: var(--border-hi); }
+}
+
+.metric {
+  flex: 1; padding: 20px 24px;
+  display: flex; flex-direction: column; gap: 4px;
+  position: relative;
+  cursor: default;
+
+  &:hover { background: rgba(255,255,255,0.02); }
+
+  &__val {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 1.55rem; font-weight: 600; line-height: 1;
+    color: var(--t1); letter-spacing: -0.03em;
+  }
+
+  &__label {
+    font-size: 11px; color: var(--t3); font-weight: 500;
+    text-transform: uppercase; letter-spacing: 0.06em;
+  }
+
+  &__bar {
+    position: absolute; bottom: 0; left: 0; right: 0; height: 2px;
+    opacity: 0.5;
+    transition: opacity var(--ease);
+  }
+
+  &:hover &__bar { opacity: 1; }
+}
+
+.bar-violet { background: linear-gradient(90deg, transparent, var(--brand), transparent); }
+.bar-cyan   { background: linear-gradient(90deg, transparent, var(--cyan),  transparent); }
+.bar-green  { background: linear-gradient(90deg, transparent, var(--green), transparent); }
+.bar-amber  { background: linear-gradient(90deg, transparent, var(--amber), transparent); }
+
+.metric-divider { width: 1px; background: var(--border); flex-shrink: 0; margin: 14px 0; }
+
+/* ── Dashboard body ────────────────────────────────────── */
+.dash-body {
+  padding: 0 32px 32px;
+  display: flex; flex-direction: column; gap: 14px;
+}
+
+/* ── Chart card (overrides global) ────────────────────── */
+.chart-card {
+  padding: 22px 24px !important;
+  border-radius: var(--r-lg) !important;
+
+  &__header {
+    display: flex; align-items: flex-start; justify-content: space-between;
+    margin-bottom: 18px; gap: 12px;
+  }
+
+  &__title {
+    font-size: 13px; font-weight: 600; color: var(--t1); letter-spacing: -0.01em;
+  }
+
+  &__sub {
+    font-size: 11px; color: var(--t3); margin-top: 2px;
+    font-family: 'JetBrains Mono', monospace;
+  }
+}
+
+.main-chart .chart-canvas-wrap {
+  height: 220px; position: relative;
+}
+
+.donut-wrap { height: 220px; position: relative; }
+
+/* ── Bottom row ─────────────────────────────────────────── */
+.bottom-row { align-items: start; }
+
+/* ── Ministry bar rows ─────────────────────────────────── */
+.ministry-rows {
+  display: flex; flex-direction: column; gap: 2px;
+}
+
+.ministry-row {
+  display: grid;
+  grid-template-columns: 28px 1fr 160px 90px 80px;
+  align-items: center; gap: 12px;
+  padding: 8px 4px;
+  border-radius: 6px;
+  transition: background var(--ease);
+
+  &:hover { background: rgba(255,255,255,0.03); }
+}
+
+.ministry-name {
+  font-size: 12px; color: var(--t1); font-weight: 500;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+.ministry-bar-wrap {
+  height: 4px; background: rgba(255,255,255,0.06); border-radius: 4px; overflow: hidden;
+}
+
+.ministry-bar {
+  height: 100%;
+  background: linear-gradient(90deg, var(--brand), var(--cyan));
+  border-radius: 4px;
+  transition: width 800ms var(--ease-out);
+  min-width: 2px;
+}
+
+.ministry-val {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px; font-weight: 600; color: var(--t1);
+  text-align: right; white-space: nowrap;
+}
+
+.ministry-emp {
+  font-size: 11px; color: var(--t3); text-align: right; white-space: nowrap;
+}
+
+/* ── Table cells ─────────────────────────────────────────── */
+.cell-primary { color: var(--t1) !important; font-weight: 500; }
+.cell-mono    { font-family: 'JetBrains Mono', monospace; color: var(--t1) !important; }
+.cell-unit    { color: var(--t3); font-size: 10px; }

@@ -2,6 +2,8 @@ import { NgModule } from '@angular/core';
 import { BrowserModule } from '@angular/platform-browser';
 import { BrowserAnimationsModule } from '@angular/platform-browser/animations';
 import { HttpClientModule, HTTP_INTERCEPTORS } from '@angular/common/http';
+import { TranslateModule, TranslateLoader } from '@ngx-translate/core';
+import { TranslateHttpLoader, provideTranslateHttpLoader } from '@ngx-translate/http-loader';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 
 import { MatToolbarModule }   from '@angular/material/toolbar';
@@ -26,6 +28,7 @@ import { AnomaliesComponent } from './pages/anomalies/anomalies.component';
 import { ChatbotComponent }   from './pages/chatbot/chatbot.component';
 import { ReportsComponent }   from './pages/reports/reports.component';
 import { IngestComponent }    from './pages/ingest/ingest.component';
+import { UsersComponent }     from './pages/users/users.component';
 import { NavbarComponent }    from './layout/navbar/navbar.component';
 import { SidebarComponent }   from './layout/sidebar/sidebar.component';
 import { JwtInterceptor }     from './interceptors/jwt.interceptor';
@@ -34,18 +37,23 @@ import { JwtInterceptor }     from './interceptors/jwt.interceptor';
   declarations: [
     AppComponent, LoginComponent, DashboardComponent,
     ForecastComponent, AnomaliesComponent, ChatbotComponent,
-    ReportsComponent, IngestComponent, NavbarComponent, SidebarComponent
+    ReportsComponent, IngestComponent, UsersComponent, NavbarComponent, SidebarComponent
   ],
   imports: [
     BrowserModule, BrowserAnimationsModule,
     HttpClientModule, FormsModule, ReactiveFormsModule,
     AppRoutingModule, NgChartsModule,
+    TranslateModule.forRoot({
+      loader: { provide: TranslateLoader, useClass: TranslateHttpLoader },
+      defaultLanguage: 'en'
+    }),
     MatToolbarModule, MatSidenavModule, MatListModule, MatCardModule,
     MatButtonModule, MatInputModule, MatFormFieldModule, MatIconModule,
     MatTableModule, MatProgressSpinnerModule, MatSnackBarModule,
   ],
   providers: [
-    { provide: HTTP_INTERCEPTORS, useClass: JwtInterceptor, multi: true }
+    { provide: HTTP_INTERCEPTORS, useClass: JwtInterceptor, multi: true },
+    ...provideTranslateHttpLoader({ prefix: './assets/i18n/', suffix: '.json' })
   ],
   bootstrap: [AppComponent]
 })

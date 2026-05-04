@@ -1,0 +1,129 @@
+<div class="page">
+
+  <div class="page-hero">
+    <div class="page-hero__inner">
+      <div class="page-hero__title">
+        <div class="hero-icon"><mat-icon>manage_accounts</mat-icon></div>
+        <div>
+          <h2>User Management</h2>
+          <p>Create users, assign ministries, enable or disable access.</p>
+        </div>
+      </div>
+      <button mat-raised-button color="primary" (click)="openCreate()">
+        <mat-icon>person_add</mat-icon> New User
+      </button>
+    </div>
+  </div>
+
+  <div class="page-body">
+
+    <!-- Error -->
+    <div class="alert-error" *ngIf="error">{{ error }}</div>
+
+    <!-- Loading -->
+    <div class="loading-wrap" *ngIf="loading">
+      <mat-spinner diameter="40"></mat-spinner>
+    </div>
+
+    <!-- Users table -->
+    <div class="chart-card" *ngIf="!loading">
+      <table mat-table [dataSource]="users" class="users-table">
+
+        <ng-container matColumnDef="username">
+          <th mat-header-cell *matHeaderCellDef>Username</th>
+          <td mat-cell *matCellDef="let u">{{ u.username }}</td>
+        </ng-container>
+
+        <ng-container matColumnDef="email">
+          <th mat-header-cell *matHeaderCellDef>Email</th>
+          <td mat-cell *matCellDef="let u">{{ u.email }}</td>
+        </ng-container>
+
+        <ng-container matColumnDef="role">
+          <th mat-header-cell *matHeaderCellDef>Role</th>
+          <td mat-cell *matCellDef="let u">
+            <span class="badge" [ngClass]="roleBadge(u.role)">{{ roleLabel(u.role) }}</span>
+          </td>
+        </ng-container>
+
+        <ng-container matColumnDef="ministryCode">
+          <th mat-header-cell *matHeaderCellDef>Ministry</th>
+          <td mat-cell *matCellDef="let u">{{ u.ministryCode || '—' }}</td>
+        </ng-container>
+
+        <ng-container matColumnDef="status">
+          <th mat-header-cell *matHeaderCellDef>Status</th>
+          <td mat-cell *matCellDef="let u">
+            <span class="badge" [ngClass]="u.enabled ? 'badge-active' : 'badge-disabled'">
+              {{ u.enabled ? 'Active' : 'Disabled' }}
+            </span>
+          </td>
+        </ng-container>
+
+        <ng-container matColumnDef="actions">
+          <th mat-header-cell *matHeaderCellDef>Actions</th>
+          <td mat-cell *matCellDef="let u">
+            <button mat-icon-button title="Edit" (click)="openEdit(u)">
+              <mat-icon>edit</mat-icon>
+            </button>
+            <button mat-icon-button [title]="u.enabled ? 'Disable' : 'Enable'" (click)="toggle(u)">
+              <mat-icon>{{ u.enabled ? 'block' : 'check_circle' }}</mat-icon>
+            </button>
+            <button mat-icon-button color="warn" title="Delete" (click)="delete(u)">
+              <mat-icon>delete</mat-icon>
+            </button>
+          </td>
+        </ng-container>
+
+        <tr mat-header-row *matHeaderRowDef="['username','email','role','ministryCode','status','actions']"></tr>
+        <tr mat-row *matRowDef="let row; columns: ['username','email','role','ministryCode','status','actions'];"></tr>
+      </table>
+
+      <p class="no-data" *ngIf="users.length === 0">No users found.</p>
+    </div>
+
+    <!-- Create / Edit form modal -->
+    <div class="modal-backdrop" *ngIf="showForm" (click)="showForm=false"></div>
+    <div class="modal-panel chart-card" *ngIf="showForm">
+      <h3>{{ editingUser ? 'Edit User' : 'Create User' }}</h3>
+
+      <div class="alert-error" *ngIf="saveError">{{ saveError }}</div>
+
+      <mat-form-field appearance="outline" class="full-width">
+        <mat-label>Username</mat-label>
+        <input matInput [(ngModel)]="form.username" [disabled]="!!editingUser" />
+      </mat-form-field>
+
+      <mat-form-field appearance="outline" class="full-width">
+        <mat-label>Email</mat-label>
+        <input matInput type="email" [(ngModel)]="form.email" />
+      </mat-form-field>
+
+      <mat-form-field appearance="outline" class="full-width">
+        <mat-label>{{ editingUser ? 'New password (leave blank to keep)' : 'Password' }}</mat-label>
+        <input matInput type="password" [(ngModel)]="form.password" />
+      </mat-form-field>
+
+      <mat-form-field appearance="outline" class="full-width">
+        <mat-label>Role</mat-label>
+        <select matNativeControl [(ngModel)]="form.role">
+          <option value="ROLE_USER">User</option>
+          <option value="ROLE_ADMIN">Admin</option>
+        </select>
+      </mat-form-field>
+
+      <mat-form-field appearance="outline" class="full-width">
+        <mat-label>Ministry Code (e.g. H00, S00)</mat-label>
+        <input matInput [(ngModel)]="form.ministryCode" placeholder="Leave blank for all ministries" />
+      </mat-form-field>
+
+      <div class="form-actions">
+        <button mat-button (click)="showForm=false">Cancel</button>
+        <button mat-raised-button color="primary" (click)="save()" [disabled]="saving">
+          {{ saving ? 'Saving...' : (editingUser ? 'Update' : 'Create') }}
+        </button>
+      </div>
+    </div>
+
+  </div>
+</div>

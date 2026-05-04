@@ -16,7 +16,11 @@ export class AuthService {
     return this.http.post(`${environment.apiUrl}/auth/login`, { username, password }).pipe(
       tap((res: any) => {
         localStorage.setItem(this.TOKEN_KEY, res.token);
-        localStorage.setItem(this.USER_KEY, JSON.stringify({ username: res.username, role: res.role }));
+        localStorage.setItem(this.USER_KEY, JSON.stringify({
+          username: res.username,
+          role: res.role,
+          ministryCode: res.ministryCode ?? null
+        }));
         this.loggedIn$.next(true);
       })
     );
@@ -33,8 +37,12 @@ export class AuthService {
   isLoggedIn(): Observable<boolean>  { return this.loggedIn$.asObservable(); }
   hasToken(): boolean                { return !!localStorage.getItem(this.TOKEN_KEY); }
 
-  getCurrentUser(): { username: string; role: string } | null {
+  getCurrentUser(): { username: string; role: string; ministryCode: string | null } | null {
     const raw = localStorage.getItem(this.USER_KEY);
     return raw ? JSON.parse(raw) : null;
+  }
+
+  isAdmin(): boolean {
+    return this.getCurrentUser()?.role === 'ROLE_ADMIN';
   }
 }
