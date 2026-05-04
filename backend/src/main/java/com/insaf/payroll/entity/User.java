@@ -20,26 +20,26 @@ public class User {
     private String email;
 
     @Column(length = 20)
-    private String role = "ROLE_ANALYST";
+    private String role = "ROLE_USER";
+
+    @Column(name = "ministry_code", length = 10)
+    private String ministryCode;
 
     @Column(nullable = false)
     private boolean enabled = true;
 
-    public Long getId()                  { return id; }
-    public void setId(Long id)           { this.id = id; }
-
-    public String getUsername()          { return username; }
-    public void setUsername(String u)    { this.username = u; }
-
-    public String getPassword()          { return password; }
-    public void setPassword(String p)    { this.password = p; }
-
-    public String getEmail()             { return email; }
-    public void setEmail(String e)       { this.email = e; }
-
-    public String getRole()              { return role; }
-    public void setRole(String r)        { this.role = r; }
-
-    public boolean isEnabled()           { return enabled; }
-    public void setEnabled(boolean e)    { this.enabled = e; }
+    public Long getId()                        { return id; }
+    public void setId(Long id)                 { this.id = id; }
+    public String getUsername()                { return username; }
+    public void setUsername(String u)          { this.username = u; }
+    public String getPassword()                { return password; }
+    public void setPassword(String p)          { this.password = p; }
+    public String getEmail()                   { return email; }
+    public void setEmail(String e)             { this.email = e; }
+    public String getRole()                    { return role; }
+    public void setRole(String r)              { this.role = r; }
+    public String getMinistryCode()            { return ministryCode; }
+    public void setMinistryCode(String m)      { this.ministryCode = m; }
+    public boolean isEnabled()                 { return enabled; }
+    public void setEnabled(boolean e)          { this.enabled = e; }
 }

@@ -25,8 +25,23 @@ public class JwtUtils {
 
     public String generateToken(Authentication authentication) {
         UserDetails user = (UserDetails) authentication.getPrincipal();
+        String role = user.getAuthorities().iterator().next().getAuthority();
         return Jwts.builder()
                 .setSubject(user.getUsername())
+                .claim("role", role)
+                .setIssuedAt(new Date())
+                .setExpiration(new Date(System.currentTimeMillis() + jwtExpirationMs))
+                .signWith(key(), SignatureAlgorithm.HS256)
+                .compact();
+    }
+
+    public String generateTokenWithMinistry(Authentication authentication, String ministryCode) {
+        UserDetails user = (UserDetails) authentication.getPrincipal();
+        String role = user.getAuthorities().iterator().next().getAuthority();
+        return Jwts.builder()
+                .setSubject(user.getUsername())
+                .claim("role", role)
+                .claim("ministryCode", ministryCode)
                 .setIssuedAt(new Date())
                 .setExpiration(new Date(System.currentTimeMillis() + jwtExpirationMs))
                 .signWith(key(), SignatureAlgorithm.HS256)
@@ -36,6 +51,11 @@ public class JwtUtils {
     public String getUsernameFromToken(String token) {
         return Jwts.parserBuilder().setSigningKey(key()).build()
                 .parseClaimsJws(token).getBody().getSubject();
+    }
+
+    public Claims getClaimsFromToken(String token) {
+        return Jwts.parserBuilder().setSigningKey(key()).build()
+                .parseClaimsJws(token).getBody();
     }
 
     public boolean validateToken(String token) {

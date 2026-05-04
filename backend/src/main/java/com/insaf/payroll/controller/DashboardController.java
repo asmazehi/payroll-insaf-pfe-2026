@@ -1,9 +1,10 @@
 package com.insaf.payroll.controller;
 
+import com.insaf.payroll.repository.UserRepository;
 import com.insaf.payroll.service.DashboardService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -11,34 +12,44 @@ import org.springframework.web.bind.annotation.*;
 public class DashboardController {
 
     @Autowired private DashboardService dashboardService;
+    @Autowired private UserRepository userRepository;
+
+    private String resolveMinistryCode(Authentication auth) {
+        boolean isAdmin = auth.getAuthorities().stream()
+                .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
+        if (isAdmin) return null;
+        return userRepository.findByUsername(auth.getName())
+                .map(u -> u.getMinistryCode())
+                .orElse(null);
+    }
 
     @GetMapping("/summary")
-    public ResponseEntity<?> summary() {
-        return ResponseEntity.ok(dashboardService.getSummary());
+    public ResponseEntity<?> summary(Authentication auth) {
+        return ResponseEntity.ok(dashboardService.getSummary(resolveMinistryCode(auth)));
     }
 
     @GetMapping("/payroll-by-year")
-    public ResponseEntity<?> payrollByYear() {
-        return ResponseEntity.ok(dashboardService.getPayrollByYear());
+    public ResponseEntity<?> payrollByYear(Authentication auth) {
+        return ResponseEntity.ok(dashboardService.getPayrollByYear(resolveMinistryCode(auth)));
     }
 
     @GetMapping("/payroll-by-month")
-    public ResponseEntity<?> payrollByMonth(@RequestParam(defaultValue = "2025") int year) {
-        return ResponseEntity.ok(dashboardService.getPayrollByMonth(year));
+    public ResponseEntity<?> payrollByMonth(@RequestParam(defaultValue = "2025") int year, Authentication auth) {
+        return ResponseEntity.ok(dashboardService.getPayrollByMonth(year, resolveMinistryCode(auth)));
     }
 
     @GetMapping("/by-grade")
-    public ResponseEntity<?> byGrade() {
-        return ResponseEntity.ok(dashboardService.getPayrollByGrade());
+    public ResponseEntity<?> byGrade(Authentication auth) {
+        return ResponseEntity.ok(dashboardService.getPayrollByGrade(resolveMinistryCode(auth)));
     }
 
     @GetMapping("/by-ministry")
-    public ResponseEntity<?> byMinistry() {
-        return ResponseEntity.ok(dashboardService.getPayrollByMinistry());
+    public ResponseEntity<?> byMinistry(Authentication auth) {
+        return ResponseEntity.ok(dashboardService.getPayrollByMinistry(resolveMinistryCode(auth)));
     }
 
     @GetMapping("/indemnity-summary")
-    public ResponseEntity<?> indemnitySummary() {
-        return ResponseEntity.ok(dashboardService.getIndemnitySummary());
+    public ResponseEntity<?> indemnitySummary(Authentication auth) {
+        return ResponseEntity.ok(dashboardService.getIndemnitySummary(resolveMinistryCode(auth)));
     }
 }

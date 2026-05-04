@@ -34,12 +34,15 @@ public class AuthController {
                 new UsernamePasswordAuthenticationToken(req.getUsername(), req.getPassword())
         );
         SecurityContextHolder.getContext().setAuthentication(auth);
-        String token = jwtUtils.generateToken(auth);
 
-        UserDetails user = (UserDetails) auth.getPrincipal();
-        String role = user.getAuthorities().iterator().next().getAuthority();
+        UserDetails userDetails = (UserDetails) auth.getPrincipal();
+        String role = userDetails.getAuthorities().iterator().next().getAuthority();
 
-        return ResponseEntity.ok(new JwtResponse(token, user.getUsername(), role));
+        User dbUser = userRepository.findByUsername(userDetails.getUsername()).orElse(null);
+        String ministryCode = dbUser != null ? dbUser.getMinistryCode() : null;
+
+        String token = jwtUtils.generateTokenWithMinistry(auth, ministryCode);
+        return ResponseEntity.ok(new JwtResponse(token, userDetails.getUsername(), role, ministryCode));
     }
 
     @PostMapping("/register")
