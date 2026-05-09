@@ -1,7 +1,7 @@
 {
   "model": "payroll_forecast",
-  "winner": "rf",
-  "train_months": 98,
+  "winner": "sarima",
+  "train_months": 112,
   "test_months": 12,
   "model_comparison": {
     "ridge": {
@@ -11,60 +11,60 @@
       "rmse": 0.0
     },
     "rf": {
-      "mape": 6.3595,
-      "r2": 0.5856,
-      "mae": 997570.45,
-      "rmse": 1655645.51
+      "mape": 4.9977,
+      "r2": -9.0883,
+      "mae": 26564396.71,
+      "rmse": 27271587.44
     },
     "xgb": {
-      "mape": 7.3075,
-      "r2": 0.6452,
-      "mae": 1097601.67,
-      "rmse": 1532018.75
+      "mape": 6.275,
+      "r2": -14.6691,
+      "mae": 33313922.88,
+      "rmse": 33987936.67
     },
     "sarima": {
-      "mape": 9.1999,
-      "r2": 0.493,
-      "mae": 1367018.83,
-      "rmse": 1831273.52
+      "mape": 4.9576,
+      "r2": -9.1653,
+      "mae": 26287683.26,
+      "rmse": 27375584.38
     },
     "prophet": {
-      "mape": 9.9489,
-      "r2": 0.4598,
-      "mae": 1447829.77,
-      "rmse": 1890321.69
+      "mape": 5.0783,
+      "r2": -9.7111,
+      "mae": 26937859.53,
+      "rmse": 28100845.96
     },
     "tft": {
-      "mape": 14.3641,
-      "r2": -0.1063,
-      "mae": 1971201.73,
-      "rmse": 2705251.81
+      "mape": 5.8751,
+      "r2": -14.1894,
+      "mae": 31273738.88,
+      "rmse": 33463643.53
     }
   },
   "forecast_6m": [
     {
-      "date": "2026-03",
-      "predicted_netpay": 12294898.59
-    },
-    {
-      "date": "2026-04",
-      "predicted_netpay": 13928212.34
-    },
-    {
       "date": "2026-05",
-      "predicted_netpay": 14183351.93
+      "predicted_netpay": 539519505.03
     },
     {
       "date": "2026-06",
-      "predicted_netpay": 13474099.74
+      "predicted_netpay": 527711529.59
     },
     {
       "date": "2026-07",
-      "predicted_netpay": 13019138.8
+      "predicted_netpay": 526047676.53
     },
     {
       "date": "2026-08",
-      "predicted_netpay": 12942087.6
+      "predicted_netpay": 527162611.78
+    },
+    {
+      "date": "2026-09",
+      "predicted_netpay": 527313589.14
+    },
+    {
+      "date": "2026-10",
+      "predicted_netpay": 527555820.5
     }
   ]
 }

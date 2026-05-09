@@ -410,12 +410,21 @@ def train_payroll_forecast() -> dict:
     print(f"  Data: {len(df)} months | "
           f"{df['year_num'].min()}-{df['year_num'].max()}")
 
+    # Split BEFORE adding lag features to prevent data leakage.
+    # Lag features for test rows must not see future (test) target values.
+    df_train_raw = df.iloc[:-TEST_MONTHS].copy()
+    df_test_raw  = df.iloc[-TEST_MONTHS:].copy()
+
+    # Add lags on the full series (needed for train rows that look back into history)
     df_feat = _add_lag_features(df)
     fc = [c for c in LAG_FEATURE_COLS if c in df_feat.columns]
 
+    # Align split with lag-featured df (dropna removes first ~12 rows)
+    n_feat = len(df_feat)
     X = df_feat[fc].values
     y = df_feat[TARGET].values
 
+    # Test set is the last TEST_MONTHS rows of the featured df
     X_train, X_test = X[:-TEST_MONTHS], X[-TEST_MONTHS:]
     y_train, y_test = y[:-TEST_MONTHS], y[-TEST_MONTHS:]
     df_train = df_feat.iloc[:-TEST_MONTHS]
@@ -478,7 +487,13 @@ def train_payroll_forecast() -> dict:
     else:
         winner_model = trained_ml["rf"]  # fallback
 
-    joblib.dump(winner_model, MODELS_DIR / "payroll_forecast.pkl")
+    if winner_name == "tft":
+        # pytorch_forecasting TFT can't be pickled with joblib — use torch.save
+        import torch
+        torch.save(winner_model, MODELS_DIR / "payroll_forecast_tft.pt")
+        joblib.dump("tft_torch", MODELS_DIR / "payroll_forecast.pkl")  # sentinel
+    else:
+        joblib.dump(winner_model, MODELS_DIR / "payroll_forecast.pkl")
     joblib.dump(fc,           MODELS_DIR / "payroll_forecast_features.pkl")
     joblib.dump(winner_name,  MODELS_DIR / "payroll_forecast_winner.pkl")
 

@@ -79,12 +79,18 @@ def load_monthly_payroll_by_ministry() -> pd.DataFrame:
     return df
 
 
-def load_individual_payroll() -> pd.DataFrame:
+def load_individual_payroll(sample_pct: float = 5.0) -> pd.DataFrame:
     """
-    Individual-level payroll records with dimension attributes.
-    Used for: salary prediction and anomaly detection.
+    Individual-level payroll records for anomaly detection.
+
+    Uses fp.codetab (backfilled for all 42M rows) instead of dim_organisme,
+    so all ministries and etablissements are covered — not just the 3 that
+    matched the old organisme.json lookup.
+
+    sample_pct: TABLESAMPLE percentage (1–100). Default 5% ≈ 2M rows,
+    enough for statistically valid anomaly detection without memory issues.
     """
-    sql = """
+    sql = f"""
         SELECT
             fp.employee_sk,
             dt.year_num,
@@ -96,8 +102,8 @@ def load_individual_payroll() -> pd.DataFrame:
             dg.retire_age,
             dn.nature_code,
             dn.nature_label_fr,
-            do2.codetab           AS ministry_code,
-            do2.liborgl           AS ministry_name_fr,
+            fp.codetab            AS ministry_code,
+            de.libletabl          AS ministry_name_fr,
             fp.pa_eche,
             fp.pa_sitfam,
             fp.m_netpay,
@@ -110,18 +116,18 @@ def load_individual_payroll() -> pd.DataFrame:
             fp.m_sub,
             fp.m_avkm,
             fp.m_avlog
-        FROM dw.fact_paie fp
-        JOIN dw.dim_temps     dt  ON dt.time_sk       = fp.time_sk
-        JOIN dw.dim_grade     dg  ON dg.grade_sk       = fp.grade_sk
-        JOIN dw.dim_nature    dn  ON dn.nature_sk      = fp.nature_sk
-        JOIN dw.dim_organisme do2 ON do2.organisme_sk  = fp.organisme_sk
-        WHERE fp.employee_sk   <> 0
-          AND fp.grade_sk      <> 0
-          AND fp.nature_sk     <> 0
-          AND fp.organisme_sk  <> 0
-          AND dt.year_num      >  0
-          AND fp.m_netpay IS NOT NULL
-          AND fp.m_salbrut IS NOT NULL
+        FROM dw.fact_paie fp TABLESAMPLE SYSTEM({sample_pct})
+        JOIN dw.dim_temps          dt ON dt.time_sk   = fp.time_sk
+        JOIN dw.dim_grade          dg ON dg.grade_sk  = fp.grade_sk
+        JOIN dw.dim_nature         dn ON dn.nature_sk = fp.nature_sk
+        LEFT JOIN dw.dim_etablissement de ON de.codetab = fp.codetab
+        WHERE fp.employee_sk <> 0
+          AND fp.grade_sk    <> 0
+          AND fp.nature_sk   <> 0
+          AND fp.codetab IS NOT NULL
+          AND dt.year_num    >  0
+          AND fp.m_netpay   IS NOT NULL
+          AND fp.m_salbrut  IS NOT NULL
     """
     with _conn() as conn:
         df = pd.read_sql(sql, conn, parse_dates=["month_start_date"])

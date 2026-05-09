@@ -26,7 +26,14 @@ _anomaly_cache:  dict = {}
 
 def _load_forecast():
     if not _forecast_cache:
-        _forecast_cache["model"]    = joblib.load(MODELS_DIR / "payroll_forecast.pkl")
+        sentinel = joblib.load(MODELS_DIR / "payroll_forecast.pkl")
+        if sentinel == "tft_torch":
+            import torch
+            _forecast_cache["model"] = torch.load(
+                MODELS_DIR / "payroll_forecast_tft.pt", weights_only=False
+            )
+        else:
+            _forecast_cache["model"] = sentinel
         _forecast_cache["features"] = joblib.load(MODELS_DIR / "payroll_forecast_features.pkl")
         _forecast_cache["winner"]   = joblib.load(MODELS_DIR / "payroll_forecast_winner.pkl")
     return _forecast_cache
