@@ -41,6 +41,17 @@ public class MlService {
         return restTemplate.postForObject(url, Map.of("question", question), Object.class);
     }
 
+    public Object getForecastDimensions() {
+        return restTemplate.getForObject(mlApiUrl + "/forecast/dimensions", Object.class);
+    }
+
+    public Object getForecastHistorical(String ministry, String grade) {
+        UriComponentsBuilder b = UriComponentsBuilder.fromHttpUrl(mlApiUrl + "/forecast/historical");
+        if (ministry != null && !ministry.isBlank()) b.queryParam("ministry", ministry);
+        if (grade    != null && !grade.isBlank())    b.queryParam("grade",    grade);
+        return restTemplate.getForObject(b.toUriString(), Object.class);
+    }
+
     public Object getMlStatus() {
         try {
             return restTemplate.getForObject(mlApiUrl + "/", Object.class);

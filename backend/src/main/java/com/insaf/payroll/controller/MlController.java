@@ -35,6 +35,18 @@ public class MlController {
         return ResponseEntity.ok(mlService.chat(question));
     }
 
+    @GetMapping("/forecast/dimensions")
+    public ResponseEntity<?> forecastDimensions() {
+        return ResponseEntity.ok(mlService.getForecastDimensions());
+    }
+
+    @GetMapping("/forecast/historical")
+    public ResponseEntity<?> forecastHistorical(
+            @RequestParam(required = false) String ministry,
+            @RequestParam(required = false) String grade) {
+        return ResponseEntity.ok(mlService.getForecastHistorical(ministry, grade));
+    }
+
     @GetMapping("/status")
     public ResponseEntity<?> status() {
         return ResponseEntity.ok(mlService.getMlStatus());

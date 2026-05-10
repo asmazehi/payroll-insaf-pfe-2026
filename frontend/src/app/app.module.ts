@@ -17,6 +17,10 @@ import { MatIconModule }      from '@angular/material/icon';
 import { MatTableModule }     from '@angular/material/table';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSnackBarModule }  from '@angular/material/snack-bar';
+import { MatSelectModule }    from '@angular/material/select';
+import { MatTooltipModule }   from '@angular/material/tooltip';
+import { MatTabsModule }      from '@angular/material/tabs';
+import { MatChipsModule }     from '@angular/material/chips';
 import { NgChartsModule }     from 'ng2-charts';
 
 import { AppRoutingModule } from './app-routing.module';
@@ -50,6 +54,7 @@ import { JwtInterceptor }     from './interceptors/jwt.interceptor';
     MatToolbarModule, MatSidenavModule, MatListModule, MatCardModule,
     MatButtonModule, MatInputModule, MatFormFieldModule, MatIconModule,
     MatTableModule, MatProgressSpinnerModule, MatSnackBarModule,
+    MatSelectModule, MatTooltipModule, MatTabsModule, MatChipsModule,
   ],
   providers: [
     { provide: HTTP_INTERCEPTORS, useClass: JwtInterceptor, multi: true },

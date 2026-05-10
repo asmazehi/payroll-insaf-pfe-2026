@@ -434,23 +434,170 @@ def get_forecast(
     n: int = Query(6, ge=1, le=24, description="Number of months to forecast"),
 ):
     """
-    Forecast total monthly payroll for the next N months.
-    Uses the trained Random Forest model with lag features.
+    Full forecast payload: winner model, all model metrics, historical series,
+    6-month forecast with confidence band.
     """
     try:
+        import json as _json
         from ml.predict import predict_payroll_next_months
+        from ml.data_loader import load_monthly_payroll
+
         predictions = predict_payroll_next_months(n_months=n)
+
+        df = load_monthly_payroll()
+        df = df.sort_values("month_start_date").reset_index(drop=True)
+
+        historical = [
+            {
+                "date":           row["month_start_date"].strftime("%Y-%m"),
+                "actual_netpay":  round(float(row["total_netpay"]), 2),
+                "employee_count": int(row["employee_count"]),
+                "avg_netpay":     round(float(row["avg_netpay"]), 2),
+            }
+            for _, row in df.iterrows()
+        ]
+
+        results_path = MODELS_DIR / "payroll_forecast_results.json"
+        model_comparison: dict = {}
+        winner = "sarima"
+        train_months = 0
+        test_months  = 0
+        if results_path.exists():
+            res = _json.loads(results_path.read_text(encoding="utf-8"))
+            model_comparison = res.get("model_comparison", {})
+            winner       = res.get("winner", "sarima")
+            train_months = res.get("train_months", 0)
+            test_months  = res.get("test_months", 0)
+
+        winner_m  = model_comparison.get(winner, {})
+        avg_hist  = float(df["total_netpay"].mean())
+        avg_fore  = sum(p["predicted_netpay"] for p in predictions) / max(len(predictions), 1)
+        rmse      = winner_m.get("rmse", avg_hist * 0.05)
+
+        forecast_with_ci = [
+            {
+                **p,
+                "lower": round(max(p["predicted_netpay"] - 1.96 * rmse, 0), 2),
+                "upper": round(p["predicted_netpay"] + 1.96 * rmse, 2),
+            }
+            for p in predictions
+        ]
+
         return {
-            "model":       "payroll_forecast",
-            "n_months":    n,
-            "forecast":    predictions,
-            "currency":    "TND",
+            "model":            winner,
+            "n_months":         n,
+            "mape":             winner_m.get("mape"),
+            "mae":              winner_m.get("mae"),
+            "rmse":             winner_m.get("rmse"),
+            "r2":               winner_m.get("r2"),
+            "train_months":     train_months,
+            "test_months":      test_months,
+            "avg_historical":   round(avg_hist, 2),
+            "avg_forecast":     round(avg_fore, 2),
+            "model_comparison": model_comparison,
+            "forecast":         forecast_with_ci,
+            "historical":       historical,
+            "currency":         "TND",
         }
     except FileNotFoundError:
-        raise HTTPException(
-            status_code=503,
-            detail="Forecast model not found. Run 'python -m ml.run_all_models' first."
-        )
+        raise HTTPException(status_code=503,
+            detail="Forecast model not found. Run 'python -m ml.run_all_models' first.")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/forecast/dimensions", tags=["ML"])
+def get_forecast_dimensions():
+    """Return lists of ministries and grades available for filtering."""
+    try:
+        import psycopg2
+        from etl.core.config import DB_CONFIG
+        with psycopg2.connect(**DB_CONFIG) as conn:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    SELECT ministry_code, ministry_name
+                    FROM dw.mv_payroll_by_ministry
+                    WHERE ministry_code IS NOT NULL
+                    ORDER BY total_netpay DESC
+                """)
+                ministries = [{"code": r[0], "name": r[1] or r[0]} for r in cur.fetchall()]
+
+                cur.execute("""
+                    SELECT grade_code, grade_label_fr, category
+                    FROM dw.mv_grade_distribution
+                    WHERE grade_code IS NOT NULL
+                    ORDER BY total_netpay DESC
+                    LIMIT 50
+                """)
+                grades = [{"code": r[0], "label": r[1] or r[0], "category": r[2]} for r in cur.fetchall()]
+
+        return {"ministries": ministries, "grades": grades}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/forecast/historical", tags=["ML"])
+def get_forecast_historical(
+    ministry: Optional[str] = Query(None),
+    grade:    Optional[str] = Query(None),
+):
+    """
+    Historical monthly payroll filtered by ministry or grade.
+    Used by the forecast page to show filtered trend context.
+    """
+    try:
+        import psycopg2
+        from etl.core.config import DB_CONFIG
+
+        conditions = ["fp.employee_sk <> 0", "dt.year_num > 0", "fp.m_netpay IS NOT NULL"]
+        params: list = []
+
+        if ministry:
+            conditions.append("fp.codetab = %s")
+            params.append(ministry)
+        if grade:
+            conditions.append("dg.grade_code = %s")
+            params.append(grade)
+
+        join_grade = "JOIN dw.dim_grade dg ON dg.grade_sk = fp.grade_sk" if grade else ""
+
+        sql = f"""
+            SELECT
+                dt.year_num, dt.month_num, dt.month_start_date,
+                COUNT(*)             AS employee_count,
+                SUM(fp.m_netpay)     AS total_netpay,
+                AVG(fp.m_netpay)     AS avg_netpay
+            FROM dw.fact_paie fp
+            JOIN dw.dim_temps dt ON dt.time_sk = fp.time_sk
+            {join_grade}
+            WHERE {' AND '.join(conditions)}
+            GROUP BY dt.year_num, dt.month_num, dt.month_start_date
+            ORDER BY dt.year_num, dt.month_num
+        """
+
+        with psycopg2.connect(**DB_CONFIG) as conn:
+            with conn.cursor() as cur:
+                cur.execute(sql, params)
+                rows = cur.fetchall()
+                cols = [d[0] for d in cur.description]
+
+        import pandas as pd
+        df = pd.DataFrame(rows, columns=cols)
+        df["month_start_date"] = pd.to_datetime(df["month_start_date"])
+
+        return {
+            "ministry": ministry,
+            "grade":    grade,
+            "data": [
+                {
+                    "date":           row["month_start_date"].strftime("%Y-%m"),
+                    "actual_netpay":  round(float(row["total_netpay"]), 2),
+                    "employee_count": int(row["employee_count"]),
+                    "avg_netpay":     round(float(row["avg_netpay"]), 2),
+                }
+                for _, row in df.iterrows()
+            ],
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
