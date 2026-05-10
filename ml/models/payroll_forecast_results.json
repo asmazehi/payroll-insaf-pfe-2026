@@ -35,36 +35,36 @@
       "rmse": 28100845.96
     },
     "tft": {
-      "mape": 5.8751,
-      "r2": -14.1894,
-      "mae": 31273738.88,
-      "rmse": 33463643.53
+      "mape": 5.608,
+      "r2": -12.4793,
+      "mae": 29831650.88,
+      "rmse": 31523595.61
     }
   },
   "forecast_6m": [
     {
       "date": "2026-05",
-      "predicted_netpay": 539519505.03
+      "predicted_netpay": 507440553.35
     },
     {
       "date": "2026-06",
-      "predicted_netpay": 527711529.59
+      "predicted_netpay": 510555940.47
     },
     {
       "date": "2026-07",
-      "predicted_netpay": 526047676.53
+      "predicted_netpay": 498136434.92
     },
     {
       "date": "2026-08",
-      "predicted_netpay": 527162611.78
+      "predicted_netpay": 496071316.32
     },
     {
       "date": "2026-09",
-      "predicted_netpay": 527313589.14
+      "predicted_netpay": 496673621.36
     },
     {
       "date": "2026-10",
-      "predicted_netpay": 527555820.5
+      "predicted_netpay": 489939578.97
     }
   ]
 }

@@ -16,29 +16,24 @@ def _conn():
 
 def load_monthly_payroll() -> pd.DataFrame:
     """
-    Aggregate fact_paie by year+month.
+    Monthly payroll aggregates — reads from materialized view (sub-ms vs 70s on raw table).
     Used for: time series forecasting of total payroll.
     Returns one row per month.
     """
     sql = """
         SELECT
-            dt.year_num,
-            dt.month_num,
-            dt.month_start_date,
-            COUNT(*)                  AS employee_count,
-            SUM(fp.m_netpay)          AS total_netpay,
-            SUM(fp.m_salbrut)         AS total_salbrut,
-            AVG(fp.m_netpay)          AS avg_netpay,
-            SUM(fp.m_retrait)         AS total_deductions,
-            SUM(fp.m_cps)             AS total_cps,
-            SUM(fp.m_cpe)             AS total_cpe
-        FROM dw.fact_paie fp
-        JOIN dw.dim_temps dt ON dt.time_sk = fp.time_sk
-        WHERE fp.employee_sk <> 0
-          AND dt.year_num > 0
-          AND fp.m_netpay IS NOT NULL
-        GROUP BY dt.year_num, dt.month_num, dt.month_start_date
-        ORDER BY dt.year_num, dt.month_num
+            year_num,
+            month_num,
+            month_start_date,
+            employee_count,
+            total_netpay,
+            total_grosspay      AS total_salbrut,
+            avg_netpay,
+            total_deductions,
+            total_cps,
+            total_cpe
+        FROM dw.mv_payroll_by_month
+        ORDER BY year_num, month_num
     """
     with _conn() as conn:
         df = pd.read_sql(sql, conn, parse_dates=["month_start_date"])

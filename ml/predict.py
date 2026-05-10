@@ -53,32 +53,63 @@ def _load_anomaly():
 def predict_payroll_next_months(n_months: int = 6) -> list[dict]:
     """
     Forecast total payroll for next N months using the winning model.
-    Reads latest data from DW so forecasts are always current.
+    - SARIMA/Prophet: refit on latest full history for an up-to-date forecast.
+    - ML models (RF/XGBoost): use lag-feature rolling prediction.
     """
     from ml.data_loader import load_monthly_payroll
-    import numpy as np
 
-    m            = _load_forecast()
-    model        = m["model"]
-    feature_cols = m["features"]
+    m      = _load_forecast()
+    model  = m["model"]
+    winner = m["winner"]
 
     df        = load_monthly_payroll()
     df        = df.sort_values("month_start_date").reset_index(drop=True)
-    y         = df["total_netpay"].values
-    history   = list(y)
     last_date = pd.Timestamp(df["month_start_date"].iloc[-1])
 
-    preds = []
+    # ── SARIMA ──────────────────────────────────────────────────────────────
+    if winner == "sarima":
+        from statsmodels.tsa.statespace.sarimax import SARIMAX
+        y_full = df["total_netpay"].values
+        try:
+            res      = SARIMAX(y_full, order=(1, 1, 1), seasonal_order=(1, 1, 1, 12),
+                               enforce_stationarity=False, enforce_invertibility=False
+                               ).fit(disp=False)
+            forecast = res.forecast(steps=n_months)
+            return [
+                {"date": (last_date + pd.DateOffset(months=i + 1)).strftime("%Y-%m"),
+                 "predicted_netpay": round(float(v), 2)}
+                for i, v in enumerate(forecast)
+            ]
+        except Exception as e:
+            print(f"[predict] SARIMA refit failed: {e} — falling back to saved forecast")
+            results_path = MODELS_DIR / "payroll_forecast_results.json"
+            if results_path.exists():
+                import json
+                saved = json.loads(results_path.read_text(encoding="utf-8"))
+                return saved.get("forecast_6m", [])[:n_months]
+            return []
+
+    # ── Prophet ─────────────────────────────────────────────────────────────
+    if winner == "prophet":
+        future   = model.make_future_dataframe(periods=n_months, freq="MS")
+        forecast = model.predict(future)
+        return [
+            {"date": (last_date + pd.DateOffset(months=i + 1)).strftime("%Y-%m"),
+             "predicted_netpay": round(float(row.yhat), 2)}
+            for i, row in enumerate(forecast.tail(n_months).itertuples())
+        ]
+
+    # ── ML models (Ridge / RF / XGBoost) ────────────────────────────────────
+    feature_cols = m["features"]
+    y       = df["total_netpay"].values
+    history = list(y)
+    preds   = []
+
     for i in range(1, n_months + 1):
         future_date  = last_date + pd.DateOffset(months=i)
-        future_month = future_date.month
-        future_year  = future_date.year
-
         row = {}
         for lag in range(1, 13):
-            key = f"lag_{lag}"
-            if key in feature_cols:
-                row[key] = history[-lag] if lag <= len(history) else 0
+            row[f"lag_{lag}"] = history[-lag] if lag <= len(history) else 0
         row["rolling_mean_3"]  = np.mean(history[-3:])
         row["rolling_mean_6"]  = np.mean(history[-6:])
         row["rolling_mean_12"] = np.mean(history[-12:])
@@ -86,19 +117,16 @@ def predict_payroll_next_months(n_months: int = 6) -> list[dict]:
         row["yoy_growth"]      = (history[-1] - history[-13]) / abs(history[-13]) \
                                   if len(history) >= 13 else 0
         row["mom_delta"]  = history[-1] - history[-2] if len(history) >= 2 else 0
-        row["month_sin"]  = np.sin(2 * np.pi * future_month / 12)
-        row["month_cos"]  = np.cos(2 * np.pi * future_month / 12)
-        row["year_norm"]  = (future_year - int(df["year_num"].min())) / max(
+        row["month_sin"]  = np.sin(2 * np.pi * future_date.month / 12)
+        row["month_cos"]  = np.cos(2 * np.pi * future_date.month / 12)
+        row["year_norm"]  = (future_date.year - int(df["year_num"].min())) / max(
                              int(df["year_num"].max()) - int(df["year_num"].min()), 1)
-        row["month_num"]  = future_month
-        row["year_num"]   = future_year
+        row["month_num"]  = future_date.month
+        row["year_num"]   = future_date.year
 
         feat = np.array([[row.get(c, 0) for c in feature_cols]])
         pred = float(model.predict(feat)[0])
-        preds.append({
-            "date":             future_date.strftime("%Y-%m"),
-            "predicted_netpay": round(pred, 2),
-        })
+        preds.append({"date": future_date.strftime("%Y-%m"), "predicted_netpay": round(pred, 2)})
         history.append(pred)
 
     return preds

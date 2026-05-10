@@ -24,6 +24,7 @@ Run:
 from __future__ import annotations
 
 import json
+import pickle
 import warnings
 from pathlib import Path
 
@@ -339,6 +340,19 @@ def _forecast_6m(winner_name, winner_model, df, feature_cols) -> list[dict]:
     if winner_name == "tft":
         return _forecast_tft_6m(winner_model, df)
 
+    if winner_name == "sarima":
+        last_date = pd.Timestamp(df["month_start_date"].iloc[-1])
+        try:
+            forecast = winner_model.forecast(steps=6)
+            return [
+                {"date":             (last_date + pd.DateOffset(months=i + 1)).strftime("%Y-%m"),
+                 "predicted_netpay": round(float(v), 2)}
+                for i, v in enumerate(forecast)
+            ]
+        except Exception as e:
+            print(f"    SARIMA forecast failed: {e}")
+            return []
+
     if winner_name == "prophet":
         future   = winner_model.make_future_dataframe(periods=6, freq="MS")
         forecast = winner_model.predict(future)
@@ -438,7 +452,7 @@ def train_payroll_forecast() -> dict:
     ml_metrics, trained_ml = _run_ml_models(X_train, y_train, X_test, y_test)
 
     # SARIMA
-    sarima_metrics, _ = _run_sarima(y_train, y_test)
+    sarima_metrics, sarima_model = _run_sarima(y_train, y_test)
 
     # Prophet
     prophet_metrics, prophet_model = _run_prophet(df_train, df_test)
@@ -480,18 +494,37 @@ def train_payroll_forecast() -> dict:
     # Save winner
     if winner_name == "tft":
         winner_model = tft_bundle
-    elif winner_name in trained_ml:
-        winner_model = trained_ml[winner_name]
+    elif winner_name == "sarima":
+        winner_model = sarima_model
     elif winner_name == "prophet":
         winner_model = prophet_model
+    elif winner_name in trained_ml:
+        winner_model = trained_ml[winner_name]
     else:
         winner_model = trained_ml["rf"]  # fallback
 
     if winner_name == "tft":
-        # pytorch_forecasting TFT can't be pickled with joblib — use torch.save
+        # pytorch_forecasting TFT uses dynamic internal classes — try torch.save,
+        # fall back to next best model if pickling fails.
         import torch
-        torch.save(winner_model, MODELS_DIR / "payroll_forecast_tft.pt")
-        joblib.dump("tft_torch", MODELS_DIR / "payroll_forecast.pkl")  # sentinel
+        try:
+            torch.save(winner_model, MODELS_DIR / "payroll_forecast_tft.pt")
+            joblib.dump("tft_torch", MODELS_DIR / "payroll_forecast.pkl")  # sentinel
+        except (AttributeError, pickle.PicklingError, Exception) as e:
+            print(f"  [!] TFT save failed ({e}) — falling back to next best model")
+            fallback_candidates = {k: v for k, v in candidates.items() if k != "tft"}
+            if not fallback_candidates:
+                fallback_candidates = {"sarima": sarima_metrics} if sarima_model else {"rf": ml_metrics["rf"]}
+            winner_name  = min(fallback_candidates, key=lambda k: fallback_candidates[k]["mape"])
+            winner_mape  = fallback_candidates[winner_name]["mape"]
+            print(f"  Fallback winner: {winner_name.upper()} (MAPE={winner_mape:.2f}%)")
+            if winner_name == "sarima":
+                winner_model = sarima_model
+            elif winner_name == "prophet":
+                winner_model = prophet_model
+            else:
+                winner_model = trained_ml.get(winner_name, trained_ml["rf"])
+            joblib.dump(winner_model, MODELS_DIR / "payroll_forecast.pkl")
     else:
         joblib.dump(winner_model, MODELS_DIR / "payroll_forecast.pkl")
     joblib.dump(fc,           MODELS_DIR / "payroll_forecast_features.pkl")
@@ -500,8 +533,11 @@ def train_payroll_forecast() -> dict:
     # Save test comparison for plotting
     if winner_name in trained_ml:
         test_preds = trained_ml[winner_name].predict(X_test)
-    elif winner_name == "prophet":
-        test_preds = [prophet_metrics] * len(y_test)  # placeholder
+    elif winner_name == "sarima" and sarima_model is not None:
+        test_preds = sarima_model.forecast(steps=len(y_test))
+    elif winner_name == "prophet" and prophet_model is not None:
+        future = prophet_model.make_future_dataframe(periods=len(y_test), freq="MS")
+        test_preds = prophet_model.predict(future)["yhat"].iloc[-len(y_test):].values
     else:
         test_preds = trained_ml["rf"].predict(X_test)
 

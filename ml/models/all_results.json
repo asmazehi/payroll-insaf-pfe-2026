@@ -1,37 +1,37 @@
 {
   "model_1_forecast": {
-    "winner": "rf",
-    "test_mape": 6.3595,
+    "winner": "sarima",
+    "test_mape": 4.9576,
     "forecast_6m": [
       {
-        "date": "2026-03",
-        "predicted_netpay": 12294898.59
-      },
-      {
-        "date": "2026-04",
-        "predicted_netpay": 13928212.34
-      },
-      {
         "date": "2026-05",
-        "predicted_netpay": 14183351.93
+        "predicted_netpay": 539519505.03
       },
       {
         "date": "2026-06",
-        "predicted_netpay": 13474099.74
+        "predicted_netpay": 527711529.59
       },
       {
         "date": "2026-07",
-        "predicted_netpay": 13019138.8
+        "predicted_netpay": 526047676.53
       },
       {
         "date": "2026-08",
-        "predicted_netpay": 12942087.6
+        "predicted_netpay": 527162611.78
+      },
+      {
+        "date": "2026-09",
+        "predicted_netpay": 527313589.14
+      },
+      {
+        "date": "2026-10",
+        "predicted_netpay": 527555820.5
       }
     ]
   },
   "model_4_anomaly": {
-    "winner": "if",
-    "anomaly_rate": 4.7928,
-    "n_anomalies": 35203
+    "winner": "ocsvm",
+    "anomaly_rate": 2.9462,
+    "n_anomalies": 61840
   }
 }
