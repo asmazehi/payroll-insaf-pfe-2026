@@ -507,8 +507,12 @@ def get_forecast(
 
 
 @app.get("/forecast/dimensions", tags=["ML"])
-def get_forecast_dimensions():
-    """Return lists of ministries and grades available for filtering."""
+def get_forecast_dimensions(ministry: Optional[str] = Query(None)):
+    """
+    Return ministries and grades for filter dropdowns.
+    When ?ministry=X is provided, grades are scoped to that ministry only
+    (used for cascading filter: pick ministry → grade list updates).
+    """
     try:
         import psycopg2
         from etl.core.config import DB_CONFIG
@@ -522,13 +526,28 @@ def get_forecast_dimensions():
                 """)
                 ministries = [{"code": r[0], "name": r[1] or r[0]} for r in cur.fetchall()]
 
-                cur.execute("""
-                    SELECT grade_code, grade_label_fr, category
-                    FROM dw.mv_grade_distribution
-                    WHERE grade_code IS NOT NULL
-                    ORDER BY total_netpay DESC
-                    LIMIT 50
-                """)
+                if ministry:
+                    cur.execute("""
+                        SELECT DISTINCT dg.grade_code, dg.grade_label_fr, dg.category,
+                               COUNT(*) AS cnt
+                        FROM dw.fact_paie fp
+                        JOIN dw.dim_grade dg ON dg.grade_sk = fp.grade_sk
+                        WHERE fp.codetab = %s
+                          AND fp.employee_sk <> 0
+                          AND fp.grade_sk <> 0
+                          AND dg.grade_code IS NOT NULL
+                        GROUP BY dg.grade_code, dg.grade_label_fr, dg.category
+                        ORDER BY cnt DESC
+                        LIMIT 80
+                    """, (ministry,))
+                else:
+                    cur.execute("""
+                        SELECT grade_code, grade_label_fr, category
+                        FROM dw.mv_grade_distribution
+                        WHERE grade_code IS NOT NULL
+                        ORDER BY total_netpay DESC
+                        LIMIT 60
+                    """)
                 grades = [{"code": r[0], "label": r[1] or r[0], "category": r[2]} for r in cur.fetchall()]
 
         return {"ministries": ministries, "grades": grades}

@@ -31,28 +31,95 @@
 
 /* ── Filter bar ───────────────────────────────────────────────────────────── */
 .filter-bar {
-  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
-  padding: 14px 20px; margin-bottom: 20px;
+  display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+  padding: 16px 20px; margin-bottom: 20px;
   background: var(--surface); border: 1px solid var(--border);
   border-radius: 14px;
+}
 
-  .filter-icon { color: var(--text-muted); font-size: 20px; }
-  .filter-label { font-size: .82rem; font-weight: 600; color: var(--text-muted); white-space: nowrap; }
+.filter-bar__left {
+  display: flex; align-items: center; gap: 8px;
+  .filter-icon { color: var(--gold); font-size: 20px; }
+  .filter-label { font-size: .82rem; font-weight: 700; color: var(--text-primary); white-space: nowrap; }
+}
+
+.filter-cascade {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+}
+
+.cascade-step {
+  display: flex; align-items: center; gap: 8px;
+  transition: opacity .2s;
+
+  &--locked { opacity: .45; pointer-events: none; }
+  &--active .cascade-step__num {
+    background: var(--gold); color: #1a1a2e; border-color: var(--gold);
+  }
+}
+
+.cascade-step__num {
+  width: 22px; height: 22px; border-radius: 50%; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: .7rem; font-weight: 800;
+  background: rgba(255,255,255,.08); border: 1px solid var(--border);
+  color: var(--text-muted); transition: all .25s;
+}
+
+.cascade-arrow {
+  font-size: 18px; width: 18px; height: 18px;
+  color: var(--border); transition: color .25s;
+  &--active { color: var(--gold); }
 }
 
 .filter-field {
-  width: 220px;
+  width: 230px;
   ::ng-deep .mat-mdc-form-field-subscript-wrapper { display: none; }
   ::ng-deep .mdc-notched-outline__leading,
   ::ng-deep .mdc-notched-outline__notch,
   ::ng-deep .mdc-notched-outline__trailing { border-color: var(--border) !important; }
-  ::ng-deep .mat-mdc-select-value-text { font-size: .85rem; }
+  ::ng-deep .mat-mdc-select-value-text { font-size: .84rem; }
+  ::ng-deep .mat-mdc-form-field-label { font-size: .84rem; }
+}
+
+.grade-count {
+  font-size: .7rem; font-weight: 600;
+  color: var(--gold); opacity: .8;
+}
+
+.opt-code {
+  font-size: .72rem; font-weight: 700;
+  color: var(--gold); opacity: .8; margin-right: 4px;
+}
+
+/* Active filter chips */
+.filter-chips {
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+  margin-left: 4px;
+}
+
+.filter-chip {
+  display: flex; align-items: center; gap: 5px;
+  padding: 5px 12px; border-radius: 20px; font-size: .78rem; font-weight: 600;
+  mat-icon { font-size: 13px; width: 13px; height: 13px; }
+
+  &.ministry-chip {
+    background: rgba(30,48,72,.12); border: 1px solid rgba(30,48,72,.25);
+    color: var(--text-primary);
+  }
+  &.grade-chip {
+    background: rgba(139,92,246,.1); border: 1px solid rgba(139,92,246,.25);
+    color: #8B5CF6;
+  }
+}
+
+.chip-sep {
+  font-size: 16px; width: 16px; height: 16px; color: var(--text-muted);
 }
 
 .clear-btn {
-  display: flex; align-items: center; gap: 4px;
-  padding: 8px 14px; border-radius: 20px; border: 1px solid var(--border);
-  background: transparent; color: var(--text-muted); cursor: pointer; font-size: .8rem;
+  display: flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px; border-radius: 50%; border: 1px solid var(--border);
+  background: transparent; color: var(--text-muted); cursor: pointer;
   transition: all .2s;
   mat-icon { font-size: 15px; width: 15px; height: 15px; }
   &:hover { background: rgba(220,38,38,.08); border-color: #EF4444; color: #EF4444; }
@@ -95,6 +162,8 @@
 
 /* ── Filtered card ────────────────────────────────────────────────────────── */
 .filtered-card { border-left: 3px solid #8B5CF6; }
+
+.breadcrumb-sep { color: var(--text-muted); margin: 0 4px; font-weight: 400; }
 
 .filter-stats {
   display: flex; gap: 20px;

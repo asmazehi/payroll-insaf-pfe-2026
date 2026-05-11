@@ -36,34 +36,76 @@
 
     <!-- ── Filter bar ──────────────────────────────────────────────────── -->
     <div class="filter-bar">
-      <mat-icon class="filter-icon">filter_list</mat-icon>
-      <span class="filter-label">Filter by:</span>
+      <div class="filter-bar__left">
+        <mat-icon class="filter-icon">account_balance</mat-icon>
+        <span class="filter-label">Drill down:</span>
+      </div>
 
-      <mat-form-field appearance="outline" class="filter-field">
-        <mat-label>Ministry</mat-label>
-        <mat-select [(ngModel)]="selectedMinistry" (ngModelChange)="applyFilter()">
-          <mat-option value="">All ministries</mat-option>
-          <mat-option *ngFor="let m of dimensions?.ministries" [value]="m.code">
-            {{ m.code }} — {{ m.name || m.code }}
-          </mat-option>
-        </mat-select>
-      </mat-form-field>
+      <div class="filter-cascade">
+        <!-- Step 1: Ministry -->
+        <div class="cascade-step" [class.cascade-step--active]="selectedMinistry">
+          <div class="cascade-step__num">1</div>
+          <mat-form-field appearance="outline" class="filter-field">
+            <mat-label>Ministry</mat-label>
+            <mat-select [(ngModel)]="selectedMinistry" (ngModelChange)="onMinistryChange()">
+              <mat-option value="">All ministries</mat-option>
+              <mat-option *ngFor="let m of dimensions?.ministries" [value]="m.code">
+                <span class="opt-code">{{ m.code }}</span> {{ m.name || m.code }}
+              </mat-option>
+            </mat-select>
+          </mat-form-field>
+        </div>
 
-      <mat-form-field appearance="outline" class="filter-field">
-        <mat-label>Grade</mat-label>
-        <mat-select [(ngModel)]="selectedGrade" (ngModelChange)="applyFilter()">
-          <mat-option value="">All grades</mat-option>
-          <mat-option *ngFor="let g of dimensions?.grades" [value]="g.code">
-            {{ g.code }} — {{ g.label }}
-          </mat-option>
-        </mat-select>
-      </mat-form-field>
+        <!-- Arrow -->
+        <mat-icon class="cascade-arrow" [class.cascade-arrow--active]="selectedMinistry">
+          chevron_right
+        </mat-icon>
 
-      <button class="clear-btn" *ngIf="selectedMinistry || selectedGrade" (click)="clearFilters()">
-        <mat-icon>close</mat-icon> Clear
-      </button>
-      <div class="filter-loading" *ngIf="filterLoading">
-        <div class="spinner-sm"></div> Loading…
+        <!-- Step 2: Grade (scoped to ministry) -->
+        <div class="cascade-step" [class.cascade-step--active]="selectedGrade"
+             [class.cascade-step--locked]="!selectedMinistry">
+          <div class="cascade-step__num">2</div>
+          <mat-form-field appearance="outline" class="filter-field">
+            <mat-label>
+              <span *ngIf="!selectedMinistry">Grade (select ministry first)</span>
+              <span *ngIf="selectedMinistry && gradesLoading">Loading grades…</span>
+              <span *ngIf="selectedMinistry && !gradesLoading">
+                Grade
+                <span class="grade-count" *ngIf="availableGrades.length">
+                  ({{ availableGrades.length }} in this ministry)
+                </span>
+              </span>
+            </mat-label>
+            <mat-select [(ngModel)]="selectedGrade" (ngModelChange)="applyFilter()"
+                        [disabled]="!selectedMinistry || gradesLoading">
+              <mat-option value="">All grades in ministry</mat-option>
+              <mat-option *ngFor="let g of availableGrades" [value]="g.code">
+                <span class="opt-code">{{ g.code }}</span> {{ g.label }}
+              </mat-option>
+            </mat-select>
+          </mat-form-field>
+        </div>
+      </div>
+
+      <!-- Active filter chips -->
+      <div class="filter-chips" *ngIf="selectedMinistry || selectedGrade">
+        <div class="filter-chip ministry-chip" *ngIf="selectedMinistry">
+          <mat-icon>account_balance</mat-icon>
+          {{ ministryName(selectedMinistry) }}
+        </div>
+        <mat-icon class="chip-sep" *ngIf="selectedMinistry && selectedGrade">chevron_right</mat-icon>
+        <div class="filter-chip grade-chip" *ngIf="selectedGrade">
+          <mat-icon>badge</mat-icon>
+          {{ gradeLabel(selectedGrade) }}
+        </div>
+        <button class="clear-btn" (click)="clearFilters()">
+          <mat-icon>close</mat-icon>
+        </button>
+      </div>
+
+      <div class="filter-loading" *ngIf="filterLoading || gradesLoading">
+        <div class="spinner-sm"></div>
+        {{ gradesLoading ? 'Loading grades…' : 'Loading data…' }}
       </div>
     </div>
 
@@ -128,10 +170,14 @@
       <div class="section-header">
         <div>
           <h3>
-            {{ selectedMinistry ? ministryName(selectedMinistry) : gradeLabel(selectedGrade) }}
-            — Historical Trend
+            <span *ngIf="selectedMinistry">{{ ministryName(selectedMinistry) }}</span>
+            <span *ngIf="selectedMinistry && selectedGrade" class="breadcrumb-sep"> › </span>
+            <span *ngIf="selectedGrade">{{ gradeLabel(selectedGrade) }}</span>
+            <span> — Historical Trend</span>
           </h3>
-          <p class="section-sub">Filtered historical data (monthly net payroll)</p>
+          <p class="section-sub">
+            Filtered payroll (monthly net · {{ filteredData.length }} months of data)
+          </p>
         </div>
         <div class="filter-stats">
           <div class="fstat">

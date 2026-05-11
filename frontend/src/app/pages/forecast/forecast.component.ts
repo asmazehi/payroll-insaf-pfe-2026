@@ -56,21 +56,23 @@ const METRIC_INFO: Record<string, string> = {
   styleUrls: ['./forecast.component.scss'],
 })
 export class ForecastComponent implements OnInit {
-  loading       = true;
-  filterLoading = false;
-  error         = '';
+  loading        = true;
+  filterLoading  = false;
+  gradesLoading  = false;
+  error          = '';
 
-  result:      any    = null;
-  dimensions:  any    = null;
-  filteredData: any[] = [];
+  result:       any    = null;
+  dimensions:   any    = null;
+  filteredData: any[]  = [];
 
   // Filters
-  selectedMinistry = '';
-  selectedGrade    = '';
+  selectedMinistry  = '';
+  selectedGrade     = '';
+  availableGrades:  any[] = [];   // scoped to selected ministry
 
   // UI state
-  showMetricInfo   = false;
-  activeTab        = 'forecast';
+  showMetricInfo = false;
+  activeTab      = 'forecast';
 
   // Charts
   mainChartData:    ChartData<'line'> = { labels: [], datasets: [] };
@@ -197,9 +199,33 @@ export class ForecastComponent implements OnInit {
 
   // ── Filter actions ─────────────────────────────────────────────────────────
 
+  onMinistryChange(): void {
+    // Reset grade whenever ministry changes
+    this.selectedGrade   = '';
+    this.availableGrades = [];
+
+    if (!this.selectedMinistry) {
+      this.filteredData      = [];
+      this.filteredChartData = { labels: [], datasets: [] };
+      return;
+    }
+
+    // Load grades scoped to this ministry, then auto-apply ministry-only filter
+    this.gradesLoading = true;
+    this.ml.getForecastGrades(this.selectedMinistry).subscribe({
+      next: (res: any) => {
+        this.availableGrades = res.grades || [];
+        this.gradesLoading   = false;
+        this.applyFilter();   // show ministry-level chart right away
+      },
+      error: () => { this.gradesLoading = false; this.applyFilter(); },
+    });
+  }
+
   applyFilter(): void {
     if (!this.selectedMinistry && !this.selectedGrade) {
-      this.filteredData = [];
+      this.filteredData      = [];
+      this.filteredChartData = { labels: [], datasets: [] };
       return;
     }
     this.filterLoading = true;
@@ -217,9 +243,10 @@ export class ForecastComponent implements OnInit {
   }
 
   clearFilters(): void {
-    this.selectedMinistry = '';
-    this.selectedGrade    = '';
-    this.filteredData     = [];
+    this.selectedMinistry  = '';
+    this.selectedGrade     = '';
+    this.availableGrades   = [];
+    this.filteredData      = [];
     this.filteredChartData = { labels: [], datasets: [] };
   }
 

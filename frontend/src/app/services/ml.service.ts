@@ -11,6 +11,9 @@ export class MlService {
 
   getForecast(n = 6): Observable<any>         { return this.http.get(`${this.base}/forecast?n=${n}`); }
   getForecastDimensions(): Observable<any>    { return this.http.get(`${this.base}/forecast/dimensions`); }
+  getForecastGrades(ministry: string): Observable<any> {
+    return this.http.get(`${this.base}/forecast/dimensions?ministry=${encodeURIComponent(ministry)}`);
+  }
   getForecastHistorical(ministry?: string, grade?: string): Observable<any> {
     let params = '';
     if (ministry) params += `?ministry=${encodeURIComponent(ministry)}`;
