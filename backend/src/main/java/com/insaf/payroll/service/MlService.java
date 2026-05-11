@@ -41,8 +41,10 @@ public class MlService {
         return restTemplate.postForObject(url, Map.of("question", question), Object.class);
     }
 
-    public Object getForecastDimensions() {
-        return restTemplate.getForObject(mlApiUrl + "/forecast/dimensions", Object.class);
+    public Object getForecastDimensions(String ministry) {
+        UriComponentsBuilder b = UriComponentsBuilder.fromHttpUrl(mlApiUrl + "/forecast/dimensions");
+        if (ministry != null && !ministry.isBlank()) b.queryParam("ministry", ministry);
+        return restTemplate.getForObject(b.toUriString(), Object.class);
     }
 
     public Object getForecastHistorical(String ministry, String grade) {

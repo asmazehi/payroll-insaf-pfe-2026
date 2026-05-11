@@ -36,8 +36,9 @@ public class MlController {
     }
 
     @GetMapping("/forecast/dimensions")
-    public ResponseEntity<?> forecastDimensions() {
-        return ResponseEntity.ok(mlService.getForecastDimensions());
+    public ResponseEntity<?> forecastDimensions(
+            @RequestParam(required = false) String ministry) {
+        return ResponseEntity.ok(mlService.getForecastDimensions(ministry));
     }
 
     @GetMapping("/forecast/historical")
