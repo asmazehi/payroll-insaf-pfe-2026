@@ -428,3 +428,25 @@ body.rtl {
    ══════════════════════════════════════════════════════════ */
 .page-hero       { display: none !important; }
 .page-body       { padding: 24px 32px; }
+
+/* ══════════════════════════════════════════════════════════
+   ANGULAR MATERIAL TOOLTIP OVERRIDES
+   Must be global — CDK overlays render outside component DOM
+   ══════════════════════════════════════════════════════════ */
+.model-tooltip.mdc-tooltip .mdc-tooltip__surface,
+.model-tooltip .mat-mdc-tooltip-surface {
+  max-width: 360px !important;
+  font-size: 12px !important;
+  line-height: 1.55 !important;
+  white-space: normal !important;
+  padding: 10px 14px !important;
+  text-align: left !important;
+}
+
+.mat-mdc-tooltip .mdc-tooltip__surface {
+  font-size: 12px;
+  line-height: 1.5;
+  padding: 8px 12px;
+  max-width: 280px;
+  white-space: normal;
+}

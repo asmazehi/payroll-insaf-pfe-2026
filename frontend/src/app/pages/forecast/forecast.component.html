@@ -116,7 +116,7 @@
         <div class="kpi-body">
           <div class="kpi-label">Best MAPE
             <mat-icon class="info-icon"
-              [matTooltip]="metricInfo['MAPE']" matTooltipPosition="above">info_outline</mat-icon>
+              [matTooltip]="metricInfo['MAPE']" matTooltipPosition="above" matTooltipClass="model-tooltip">info_outline</mat-icon>
           </div>
           <div class="kpi-value">{{ fmtPct(result.mape) }}</div>
           <div class="kpi-sub">{{ winnerLabel }}</div>
@@ -236,19 +236,19 @@
               <th>Type</th>
               <th>
                 MAPE (%)
-                <mat-icon class="th-info" [matTooltip]="metricInfo['MAPE']" matTooltipPosition="above">info_outline</mat-icon>
+                <mat-icon class="th-info" [matTooltip]="metricInfo['MAPE']" matTooltipPosition="above" matTooltipClass="model-tooltip">info_outline</mat-icon>
               </th>
               <th>
                 MAE (TND)
-                <mat-icon class="th-info" [matTooltip]="metricInfo['MAE']" matTooltipPosition="above">info_outline</mat-icon>
+                <mat-icon class="th-info" [matTooltip]="metricInfo['MAE']" matTooltipPosition="above" matTooltipClass="model-tooltip">info_outline</mat-icon>
               </th>
               <th>
                 RMSE (TND)
-                <mat-icon class="th-info" [matTooltip]="metricInfo['RMSE']" matTooltipPosition="above">info_outline</mat-icon>
+                <mat-icon class="th-info" [matTooltip]="metricInfo['RMSE']" matTooltipPosition="above" matTooltipClass="model-tooltip">info_outline</mat-icon>
               </th>
               <th>
                 R&sup2;
-                <mat-icon class="th-info" [matTooltip]="metricInfo['R2']" matTooltipPosition="above">info_outline</mat-icon>
+                <mat-icon class="th-info" [matTooltip]="metricInfo['R2']" matTooltipPosition="above" matTooltipClass="model-tooltip">info_outline</mat-icon>
               </th>
               <th>Status</th>
             </tr>
@@ -264,13 +264,14 @@
               <td>
                 <div class="model-cell">
                   <span class="model-dot" [style.background]="metaOf(m.model).color"></span>
-                  <span class="model-name" [class.model-name--winner]="isWinner(m.model)"
-                        [matTooltip]="metaOf(m.model).description"
-                        matTooltipPosition="right"
-                        matTooltipClass="model-tooltip">
+                  <span class="model-name" [class.model-name--winner]="isWinner(m.model)">
                     {{ metaOf(m.model).label }}
                   </span>
-                  <mat-icon class="help-icon" [matTooltip]="metaOf(m.model).description" matTooltipPosition="right" matTooltipClass="model-tooltip">help_outline</mat-icon>
+                  <mat-icon class="help-icon"
+                    [matTooltip]="metaOf(m.model).description"
+                    matTooltipPosition="above" matTooltipClass="model-tooltip"
+                    matTooltipClass="model-tooltip"
+                    [matTooltipShowDelay]="100">info_outline</mat-icon>
                 </div>
               </td>
               <td><span class="type-chip">{{ metaOf(m.model).type }}</span></td>
