@@ -250,18 +250,18 @@
   display: flex; align-items: center; justify-content: center; gap: 8px;
   width: 100%; padding: 14px;
   border-radius: 12px; border: none; cursor: pointer;
-  background: linear-gradient(135deg, var(--navy) 0%, #1E3A5F 100%);
+  background: linear-gradient(135deg, #7c3aed 0%, #5b21b6 100%);
   color: #fff; font-size: .92rem; font-weight: 700;
   font-family: inherit; letter-spacing: .01em;
   transition: transform .2s, box-shadow .2s, opacity .2s;
-  box-shadow: 0 4px 16px rgba(13,27,42,.3);
+  box-shadow: 0 4px 16px rgba(124,58,237,.4);
   margin-top: 8px;
 
   mat-icon { font-size: 18px; width: 18px; height: 18px; }
 
   &:hover:not(:disabled) {
     transform: translateY(-2px);
-    box-shadow: 0 8px 24px rgba(13,27,42,.4);
+    box-shadow: 0 8px 24px rgba(124,58,237,.5);
   }
   &:active:not(:disabled) { transform: translateY(0); }
   &:disabled { opacity: .6; cursor: not-allowed; }
