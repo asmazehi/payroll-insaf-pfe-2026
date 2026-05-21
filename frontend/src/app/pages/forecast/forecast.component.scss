@@ -229,42 +229,43 @@
 
   &:hover .model-hover-card {
     opacity: 1;
-    transform: translateY(0);
+    transform: translateY(-50%) translateX(0);
     pointer-events: auto;
   }
 }
 
 .model-hover-card {
   position: absolute;
-  bottom: calc(100% + 8px);
-  left: 0;
+  top: 50%;
+  left: calc(100% + 12px);
+  transform: translateY(-50%) translateX(-4px);
   z-index: 9999;
-  width: 300px;
+  width: 280px;
   background: #1a2035;
-  border: 1px solid rgba(201,168,76,.3);
+  border: 1px solid rgba(201,168,76,.35);
   border-radius: 10px;
   padding: 12px 14px;
   opacity: 0;
-  transform: translateY(4px);
   transition: opacity .15s ease, transform .15s ease;
   pointer-events: none;
-  box-shadow: 0 8px 32px rgba(0,0,0,.55);
+  box-shadow: 0 8px 32px rgba(0,0,0,.7);
 
   p {
     margin: 0;
-    font-size: .9rem;
-    color: rgba(255,255,255,.7);
+    font-size: .82rem;
+    color: rgba(255,255,255,.65);
     line-height: 1.55;
   }
 
   &__header {
-    display: flex;
-    align-items: center;
-    gap: 7px;
-    margin-bottom: 8px;
-
-    strong { font-size: .97rem; color: #fff; }
+    display: flex; align-items: center; gap: 7px; margin-bottom: 7px;
+    strong { font-size: .9rem; color: #fff; }
   }
+}
+
+.model-hover-wrap:hover .model-hover-card {
+  opacity: 1;
+  transform: translateY(-50%) translateX(0);
 }
 
 .model-cell { display: flex; align-items: center; gap: 8px; }
