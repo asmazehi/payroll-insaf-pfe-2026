@@ -6,19 +6,24 @@
       <div class="page-hero__title">
         <div class="hero-icon"><mat-icon>trending_up</mat-icon></div>
         <div>
-          <h2>Payroll Forecast</h2>
-          <p>6 models evaluated — best performer selected automatically</p>
+          <h2>{{ 'forecast.title' | translate }}</h2>
+          <p>{{ 'forecast.subtitle' | translate }}</p>
         </div>
       </div>
       <div class="hero-badges" *ngIf="result">
         <div class="winner-chip">
           <mat-icon>emoji_events</mat-icon>
-          <span>Winner:&nbsp;<strong>{{ winnerLabel }}</strong></span>
+          <span>{{ 'forecast.winner' | translate }}:&nbsp;<strong>{{ winnerLabel }}</strong></span>
           <span class="winner-mape">MAPE {{ fmtPct(result.mape) }}</span>
         </div>
         <div class="train-chip">
           <mat-icon>history</mat-icon>
-          {{ result.train_months }} months trained · {{ result.test_months }} tested
+          {{ result.train_months }} {{ 'forecast.months_trained' | translate }} · {{ result.test_months }} {{ 'forecast.months_tested' | translate }}
+          <span class="split-badge">{{ splitLabel }} split</span>
+        </div>
+        <div class="freshness-chip" *ngIf="lastDataDate">
+          <mat-icon>calendar_today</mat-icon>
+          {{ 'forecast.data_through' | translate }}: <strong>{{ lastDataDate }}</strong>
         </div>
       </div>
     </div>
@@ -26,7 +31,7 @@
 
   <!-- ── Loading ────────────────────────────────────────────────────────── -->
   <div class="loading-overlay" *ngIf="loading">
-    <div class="spinner"></div><span>Loading forecast models…</span>
+    <div class="spinner"></div><span>{{ 'forecast.loading' | translate }}</span>
   </div>
   <div class="error-banner" *ngIf="error" style="margin:0 32px 20px">
     <mat-icon>warning_amber</mat-icon><span>{{ error }}</span>
@@ -36,87 +41,70 @@
 
     <!-- ── Filter bar ──────────────────────────────────────────────────── -->
     <div class="filter-bar">
-      <div class="filter-bar__left">
-        <mat-icon class="filter-icon">account_balance</mat-icon>
-        <span class="filter-label">Drill down:</span>
-      </div>
-
-      <div class="filter-cascade">
-        <!-- Step 1: Ministry -->
-        <div class="cascade-step" [class.cascade-step--active]="selectedMinistry">
-          <div class="cascade-step__num">1</div>
-          <mat-form-field appearance="outline" class="filter-field">
-            <mat-label>Ministry</mat-label>
-            <mat-select [(ngModel)]="selectedMinistry" (ngModelChange)="onMinistryChange()">
-              <mat-option value="">All ministries</mat-option>
-              <mat-option *ngFor="let m of dimensions?.ministries" [value]="m.code">
-                <span class="opt-code">{{ m.code }}</span> {{ m.name || m.code }}
-              </mat-option>
-            </mat-select>
-          </mat-form-field>
-        </div>
-
-        <!-- Arrow -->
-        <mat-icon class="cascade-arrow" [class.cascade-arrow--active]="selectedMinistry">
-          chevron_right
-        </mat-icon>
-
-        <!-- Step 2: Grade (scoped to ministry) -->
-        <div class="cascade-step" [class.cascade-step--active]="selectedGrade"
-             [class.cascade-step--locked]="!selectedMinistry">
-          <div class="cascade-step__num">2</div>
-          <mat-form-field appearance="outline" class="filter-field">
-            <mat-label>
-              <span *ngIf="!selectedMinistry">Grade (select ministry first)</span>
-              <span *ngIf="selectedMinistry && gradesLoading">Loading grades…</span>
-              <span *ngIf="selectedMinistry && !gradesLoading">
-                Grade
-                <span class="grade-count" *ngIf="availableGrades.length">
-                  ({{ availableGrades.length }} in this ministry)
-                </span>
-              </span>
-            </mat-label>
-            <mat-select [(ngModel)]="selectedGrade" (ngModelChange)="applyFilter()"
-                        [disabled]="!selectedMinistry || gradesLoading">
-              <mat-option value="">All grades in ministry</mat-option>
-              <mat-option *ngFor="let g of availableGrades" [value]="g.code">
-                <span class="opt-code">{{ g.code }}</span> {{ g.label }}
-              </mat-option>
-            </mat-select>
-          </mat-form-field>
+      <div class="filter-group">
+        <label class="filter-group__label">
+          <mat-icon>account_balance</mat-icon> {{ 'forecast.filter_ministry' | translate }}
+        </label>
+        <div class="select-wrap">
+          <select class="custom-select"
+                  [(ngModel)]="selectedMinistry"
+                  (ngModelChange)="onMinistryChange()">
+            <option value="">{{ 'forecast.all_ministries' | translate }}</option>
+            <option *ngFor="let m of dimensions?.ministries" [value]="m.code">
+              {{ m.code }} — {{ ministryName(m.code) }}
+            </option>
+          </select>
+          <mat-icon class="select-chevron">expand_more</mat-icon>
         </div>
       </div>
 
-      <!-- Active filter chips -->
-      <div class="filter-chips" *ngIf="selectedMinistry || selectedGrade">
-        <div class="filter-chip ministry-chip" *ngIf="selectedMinistry">
-          <mat-icon>account_balance</mat-icon>
-          {{ ministryName(selectedMinistry) }}
+      <mat-icon class="filter-sep" [class.filter-sep--active]="selectedMinistry">chevron_right</mat-icon>
+
+      <div class="filter-group" [class.filter-group--locked]="!selectedMinistry">
+        <label class="filter-group__label">
+          <mat-icon>badge</mat-icon> {{ 'forecast.filter_grade' | translate }}
+          <span class="grade-pill" *ngIf="availableGrades.length">{{ filteredAvailableGrades.length }}/{{ availableGrades.length }}</span>
+          <span class="grade-pill loading-pill" *ngIf="gradesLoading">…</span>
+        </label>
+        <input *ngIf="availableGrades.length > 8"
+               class="grade-search-input"
+               type="text"
+               [(ngModel)]="gradeSearch"
+               [placeholder]="'forecast.grade_search' | translate">
+        <div class="select-wrap">
+          <select class="custom-select"
+                  [(ngModel)]="selectedGrade"
+                  (ngModelChange)="applyFilter()"
+                  [disabled]="!selectedMinistry || gradesLoading">
+            <option value="">{{ (selectedMinistry ? 'forecast.all_grades' : 'forecast.select_min_first') | translate }}</option>
+            <option *ngFor="let g of filteredAvailableGrades" [value]="g.code">
+              {{ g.code }} — {{ gradeLabel(g.code) }}
+            </option>
+          </select>
+          <mat-icon class="select-chevron">expand_more</mat-icon>
         </div>
-        <mat-icon class="chip-sep" *ngIf="selectedMinistry && selectedGrade">chevron_right</mat-icon>
-        <div class="filter-chip grade-chip" *ngIf="selectedGrade">
-          <mat-icon>badge</mat-icon>
-          {{ gradeLabel(selectedGrade) }}
-        </div>
-        <button class="clear-btn" (click)="clearFilters()">
+      </div>
+
+      <div class="filter-actions">
+        <button class="clear-btn" *ngIf="selectedMinistry || selectedGrade" (click)="clearFilters()"
+                title="Clear filters">
           <mat-icon>close</mat-icon>
         </button>
-      </div>
-
-      <div class="filter-loading" *ngIf="filterLoading || gradesLoading">
-        <div class="spinner-sm"></div>
-        {{ gradesLoading ? 'Loading grades…' : 'Loading data…' }}
+        <div class="filter-loading" *ngIf="filterLoading">
+          <div class="spinner-sm"></div>
+        </div>
       </div>
     </div>
+
 
     <!-- ── KPI row ──────────────────────────────────────────────────────── -->
     <div class="kpi-row">
       <div class="kpi-card accent-green">
         <div class="kpi-icon green"><mat-icon>gpp_good</mat-icon></div>
         <div class="kpi-body">
-          <div class="kpi-label">Best MAPE
+          <div class="kpi-label">{{ 'forecast.kpi_best_mape' | translate }}
             <mat-icon class="info-icon"
-              [matTooltip]="metricInfo['MAPE']" matTooltipPosition="above" matTooltipClass="model-tooltip">info_outline</mat-icon>
+              [matTooltip]="'forecast.metrics.MAPE.desc' | translate" matTooltipPosition="above" matTooltipClass="model-tooltip">info_outline</mat-icon>
           </div>
           <div class="kpi-value">{{ fmtPct(result.mape) }}</div>
           <div class="kpi-sub">{{ winnerLabel }}</div>
@@ -125,25 +113,25 @@
       <div class="kpi-card accent-gold">
         <div class="kpi-icon gold"><mat-icon>payments</mat-icon></div>
         <div class="kpi-body">
-          <div class="kpi-label">Avg Forecast / month</div>
+          <div class="kpi-label">{{ 'forecast.kpi_avg_forecast' | translate }}</div>
           <div class="kpi-value">{{ fmt(result.avg_forecast) }}</div>
-          <div class="kpi-sub">Next {{ result.n_months }} months</div>
+          <div class="kpi-sub">{{ 'forecast.kpi_next_months' | translate: {n: result.n_months} }}</div>
         </div>
       </div>
       <div class="kpi-card accent-navy">
         <div class="kpi-icon navy"><mat-icon>model_training</mat-icon></div>
         <div class="kpi-body">
-          <div class="kpi-label">Historical avg</div>
+          <div class="kpi-label">{{ 'forecast.kpi_hist_avg' | translate }}</div>
           <div class="kpi-value">{{ fmt(result.avg_historical) }}</div>
-          <div class="kpi-sub">Across training period</div>
+          <div class="kpi-sub">{{ 'forecast.kpi_training_period' | translate }}</div>
         </div>
       </div>
       <div class="kpi-card accent-purple">
         <div class="kpi-icon purple"><mat-icon>science</mat-icon></div>
         <div class="kpi-body">
-          <div class="kpi-label">Models evaluated</div>
+          <div class="kpi-label">{{ 'forecast.kpi_models' | translate }}</div>
           <div class="kpi-value">{{ allMetrics.length }}</div>
-          <div class="kpi-sub">Auto-ranked by MAPE</div>
+          <div class="kpi-sub">{{ 'forecast.kpi_auto_ranked' | translate }}</div>
         </div>
       </div>
     </div>
@@ -152,12 +140,27 @@
     <div class="chart-card">
       <div class="section-header">
         <div>
-          <h3>Historical Payroll + 6-Month Forecast</h3>
-          <p class="section-sub">Monthly net payroll (TND) — last 48 months + forecast</p>
+          <h3>{{ 'forecast.chart_title' | translate }}</h3>
+          <p class="section-sub">{{ 'forecast.chart_sub' | translate }}</p>
         </div>
-        <div class="seasonal-note">
-          <mat-icon>info_outline</mat-icon>
-          <span>Seasonal pattern: May peaks (bonuses/raises) → summer stabilisation. This is expected behaviour, not a decline.</span>
+        <div class="chart-header-right">
+          <div class="horizon-tabs">
+            <button *ngFor="let n of [3, 6, 12]"
+                    class="horizon-btn"
+                    [class.horizon-btn--active]="nMonths === n"
+                    (click)="onHorizonChange(n)">{{ n }}M</button>
+          </div>
+          <button class="export-btn" [class.horizon-btn--active]="showAllHistory"
+                  (click)="toggleHistory()" title="Toggle full history">
+            <mat-icon>history</mat-icon>{{ showAllHistory ? 'Full' : '4Y' }}
+          </button>
+          <button class="export-btn" (click)="exportForecastCsv()" title="Export CSV">
+            <mat-icon>download</mat-icon>CSV
+          </button>
+          <div class="seasonal-note">
+            <mat-icon>info_outline</mat-icon>
+            <span>{{ 'forecast.seasonal_note' | translate }}</span>
+          </div>
         </div>
       </div>
       <div style="height:320px">
@@ -173,23 +176,23 @@
             <span *ngIf="selectedMinistry">{{ ministryName(selectedMinistry) }}</span>
             <span *ngIf="selectedMinistry && selectedGrade" class="breadcrumb-sep"> › </span>
             <span *ngIf="selectedGrade">{{ gradeLabel(selectedGrade) }}</span>
-            <span> — Historical Trend</span>
+            <span> — {{ 'forecast.filtered_trend' | translate }}</span>
           </h3>
           <p class="section-sub">
-            Filtered payroll (monthly net · {{ filteredData.length }} months of data)
+            {{ 'forecast.filtered_data_sub' | translate: {n: filteredData.length} }}
           </p>
         </div>
         <div class="filter-stats">
           <div class="fstat">
-            <span class="fstat-label">Avg / month</span>
+            <span class="fstat-label">{{ 'forecast.avg_per_month' | translate }}</span>
             <span class="fstat-val">{{ fmt(filteredAvg) }}</span>
           </div>
           <div class="fstat">
-            <span class="fstat-label">Share of total</span>
+            <span class="fstat-label">{{ 'forecast.share_of_total' | translate }}</span>
             <span class="fstat-val">{{ filteredShare.toFixed(1) }}%</span>
           </div>
           <div class="fstat">
-            <span class="fstat-label">Estimated forecast</span>
+            <span class="fstat-label">{{ 'forecast.estimated_forecast' | translate }}</span>
             <span class="fstat-val gold">{{ fmt(filteredForecastEstimate) }}/mo</span>
           </div>
         </div>
@@ -199,8 +202,7 @@
       </div>
       <p class="estimate-note">
         <mat-icon>info_outline</mat-icon>
-        Forecast estimate = this segment's historical share ({{ filteredShare.toFixed(1) }}%) × total forecast.
-        Per-segment models were not trained; this is a proportional projection.
+        {{ 'forecast.estimate_note' | translate }}
       </p>
     </div>
 
@@ -208,12 +210,12 @@
     <div class="chart-card">
       <div class="section-header">
         <div>
-          <h3>Model Comparison</h3>
-          <p class="section-sub">All 6 models evaluated on the same 12-month hold-out test set. Hover model names for explanations.</p>
+          <h3>{{ 'forecast.model_comparison' | translate }}</h3>
+          <p class="section-sub">{{ 'forecast.model_comparison_sub' | translate }}</p>
         </div>
         <button class="info-toggle" (click)="showMetricInfo = !showMetricInfo">
           <mat-icon>{{ showMetricInfo ? 'expand_less' : 'help_outline' }}</mat-icon>
-          {{ showMetricInfo ? 'Hide' : 'What do the metrics mean?' }}
+          {{ (showMetricInfo ? 'forecast.hide_metrics' : 'forecast.metric_legend') | translate }}
         </button>
       </div>
 
@@ -221,7 +223,7 @@
       <div class="metric-info-panel" *ngIf="showMetricInfo">
         <div class="metric-info-card" *ngFor="let key of metricKeys">
           <div class="metric-info-name">{{ key }}</div>
-          <div class="metric-info-desc">{{ metricInfo[key] }}</div>
+          <div class="metric-info-desc">{{ 'forecast.metrics.' + key + '.desc' | translate }}</div>
         </div>
       </div>
 
@@ -229,28 +231,16 @@
         <table class="data-table comparison-table">
           <thead>
             <tr>
-              <th>#</th>
-              <th>Model
-                <mat-icon class="th-info" matTooltip="Hover model names to learn how each works" matTooltipPosition="right">info_outline</mat-icon>
+              <th>{{ 'forecast.col_rank' | translate }}</th>
+              <th>{{ 'forecast.col_model' | translate }}
+                <mat-icon class="th-info" [matTooltip]="'forecast.model_hover_hint' | translate" matTooltipPosition="right">info_outline</mat-icon>
               </th>
-              <th>Type</th>
-              <th>
-                MAPE (%)
-                <mat-icon class="th-info" [matTooltip]="metricInfo['MAPE']" matTooltipPosition="above" matTooltipClass="model-tooltip">info_outline</mat-icon>
-              </th>
-              <th>
-                MAE (TND)
-                <mat-icon class="th-info" [matTooltip]="metricInfo['MAE']" matTooltipPosition="above" matTooltipClass="model-tooltip">info_outline</mat-icon>
-              </th>
-              <th>
-                RMSE (TND)
-                <mat-icon class="th-info" [matTooltip]="metricInfo['RMSE']" matTooltipPosition="above" matTooltipClass="model-tooltip">info_outline</mat-icon>
-              </th>
-              <th>
-                R&sup2;
-                <mat-icon class="th-info" [matTooltip]="metricInfo['R2']" matTooltipPosition="above" matTooltipClass="model-tooltip">info_outline</mat-icon>
-              </th>
-              <th>Status</th>
+              <th>{{ 'forecast.col_type' | translate }}</th>
+              <th>{{ 'forecast.col_mape' | translate }}</th>
+              <th>{{ 'forecast.col_smape' | translate }}</th>
+              <th>{{ 'forecast.col_mae' | translate }}</th>
+              <th>{{ 'forecast.col_rmse' | translate }}</th>
+              <th>{{ 'forecast.col_status' | translate }}</th>
             </tr>
           </thead>
           <tbody>
@@ -262,69 +252,194 @@
                 <span *ngIf="!isWinner(m.model)" class="rank-num">{{ i + 1 }}</span>
               </td>
               <td>
-                <div class="model-cell">
-                  <span class="model-dot" [style.background]="metaOf(m.model).color"></span>
-                  <span class="model-name" [class.model-name--winner]="isWinner(m.model)">
-                    {{ metaOf(m.model).label }}
-                  </span>
-                  <mat-icon class="help-icon"
-                    [matTooltip]="metaOf(m.model).description"
-                    matTooltipPosition="above" matTooltipClass="model-tooltip"
-                    matTooltipClass="model-tooltip"
-                    [matTooltipShowDelay]="100">info_outline</mat-icon>
+                <div class="model-hover-wrap">
+                  <div class="model-cell">
+                    <span class="model-dot" [style.background]="colorOf(m.model)"></span>
+                    <span class="model-name" [class.model-name--winner]="isWinner(m.model)">
+                      {{ 'forecast.models.' + m.model + '.label' | translate }}
+                    </span>
+                    <mat-icon class="help-icon">info_outline</mat-icon>
+                  </div>
+                  <div class="model-hover-card">
+                    <div class="model-hover-card__header">
+                      <span class="model-dot" [style.background]="colorOf(m.model)"></span>
+                      <strong>{{ 'forecast.models.' + m.model + '.label' | translate }}</strong>
+                      <span class="type-chip">{{ 'forecast.models.' + m.model + '.type' | translate }}</span>
+                    </div>
+                    <p>{{ 'forecast.models.' + m.model + '.desc' | translate }}</p>
+                  </div>
                 </div>
               </td>
-              <td><span class="type-chip">{{ metaOf(m.model).type }}</span></td>
+              <td><span class="type-chip">{{ 'forecast.models.' + m.model + '.type' | translate }}</span></td>
               <td>
                 <span class="mape-bar-wrap" *ngIf="!isRidge(m.model)">
                   <span class="mape-val" [class.mape-val--best]="isWinner(m.model)">
                     {{ m.mape?.toFixed(2) ?? '—' }}%
                   </span>
                   <span class="mape-bar" [style.width.%]="Math.min((m.mape ?? 0) * 8, 100)"
-                        [style.background]="metaOf(m.model).color"></span>
+                        [style.background]="colorOf(m.model)"></span>
                 </span>
-                <span class="excluded-note" *ngIf="isRidge(m.model)">Excluded (overfit)</span>
+                <span class="excluded-note" *ngIf="isRidge(m.model)">{{ 'forecast.excluded_label' | translate }}</span>
               </td>
+              <td>{{ isRidge(m.model) ? '—' : (m.smape?.toFixed(2) ?? '—') + '%' }}</td>
               <td>{{ isRidge(m.model) ? '—' : fmtNum(m.mae) }}</td>
               <td>{{ isRidge(m.model) ? '—' : fmtNum(m.rmse) }}</td>
-              <td>
-                <span class="r2-val" *ngIf="!isRidge(m.model)" [style.color]="r2Color(m.r2)">
-                  {{ m.r2?.toFixed(3) ?? '—' }}
-                </span>
-                <span *ngIf="isRidge(m.model)">—</span>
-              </td>
               <td>
                 <span class="badge" [class.success]="isWinner(m.model)"
                                     [class.warning]="isRidge(m.model)"
                                     [class.neutral]="!isWinner(m.model) && !isRidge(m.model)">
-                  {{ isWinner(m.model) ? '★ Selected' : isRidge(m.model) ? '⚠ Excluded' : 'Evaluated' }}
+                  {{ (isWinner(m.model) ? 'forecast.status_selected' : isRidge(m.model) ? 'forecast.status_excluded' : 'forecast.status_evaluated') | translate }}
                 </span>
               </td>
             </tr>
           </tbody>
         </table>
       </div>
-      <p class="table-note">
-        Ridge was excluded: a MAPE of 0% on the test set indicates data leakage — the model memorised the training data rather than learning true seasonal patterns.
-        Negative R² values are normal for time series when test-period variance is high; MAPE is a more reliable ranking metric here.
-      </p>
+      <p class="table-note">{{ 'forecast.table_note' | translate }}</p>
     </div>
+
+    <!-- ── Employee forecast search ─────────────────────────────────────── -->
+    <div class="chart-card emp-search-card">
+      <div class="section-header">
+        <div>
+          <h3>{{ 'forecast.employee_search' | translate }}</h3>
+          <p class="section-sub">{{ 'forecast.employee_search_sub' | translate }}</p>
+        </div>
+      </div>
+
+      <div class="emp-search-bar">
+        <div class="emp-input-wrap">
+          <mat-icon class="emp-input-icon">badge</mat-icon>
+          <input class="emp-input" type="text"
+                 [(ngModel)]="employeeIdInput"
+                 [placeholder]="'forecast.emp_id_placeholder' | translate"
+                 (keydown.enter)="searchEmployee()">
+        </div>
+        <button class="emp-search-btn" (click)="searchEmployee()"
+                [disabled]="!employeeIdInput.trim() || employeeLoading">
+          <div class="spinner-sm" *ngIf="employeeLoading"></div>
+          <mat-icon *ngIf="!employeeLoading">search</mat-icon>
+          {{ (employeeLoading ? 'common.loading' : 'forecast.emp_search_btn') | translate }}
+        </button>
+        <button class="clear-btn" *ngIf="employeeResult || employeeError" (click)="clearEmployee()">
+          <mat-icon>close</mat-icon>
+        </button>
+      </div>
+
+      <!-- Error -->
+      <div class="error-banner" *ngIf="employeeError" style="margin-top:12px">
+        <mat-icon>person_off</mat-icon>
+        <span>{{ employeeError }}</span>
+      </div>
+
+      <!-- Result -->
+      <ng-container *ngIf="employeeResult">
+        <!-- Profile strip -->
+        <div class="emp-profile">
+          <div class="emp-profile__avatar">
+            <mat-icon>{{ employeeResult.gender === 2 ? 'person' : 'person' }}</mat-icon>
+          </div>
+          <div class="emp-profile__info">
+            <span class="emp-profile__name">
+              {{ employeeResult.first_name || '—' }}&nbsp;{{ employeeResult.last_name || '' }}
+            </span>
+            <span class="emp-profile__id">
+              <mat-icon style="font-size:13px;width:13px;height:13px;vertical-align:middle">badge</mat-icon>
+              {{ employeeResult.employee_id }}
+            </span>
+            <span class="emp-profile__meta" *ngIf="employeeResult.birth_date">
+              <mat-icon style="font-size:13px;width:13px;height:13px;vertical-align:middle">cake</mat-icon>
+              {{ employeeResult.birth_date | date:'dd/MM/yyyy' }}
+              <span class="emp-age-pill" *ngIf="employeeResult.age">{{ employeeResult.age }} ans</span>
+            </span>
+            <span class="emp-profile__grade">{{ employeeResult.grade_label || employeeResult.grade_code || '—' }}</span>
+            <span class="emp-profile__ministry">{{ employeeResult.ministry || '—' }}</span>
+          </div>
+          <div class="emp-profile__stats">
+            <div class="fstat">
+              <span class="fstat-label">{{ 'forecast.avg_per_month' | translate }}</span>
+              <span class="fstat-val">{{ fmtNum(employeeResult.avg_netpay) }} TND</span>
+            </div>
+            <div class="fstat">
+              <span class="fstat-label">{{ 'forecast.emp_months' | translate }}</span>
+              <span class="fstat-val">{{ employeeResult.months_of_data }}</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Method note -->
+        <div class="emp-method-note">
+          <mat-icon>info_outline</mat-icon>
+          <span>
+            <strong>{{ 'forecast.emp_method_title' | translate }}</strong>
+            {{ 'forecast.emp_method_body' | translate: { rate: empYoyPct } }}
+          </span>
+        </div>
+
+        <!-- Chart -->
+        <div style="height:260px; margin-top:12px">
+          <canvas baseChart [data]="employeeChartData" [options]="empChartOptions" type="line"></canvas>
+        </div>
+
+        <!-- 6-month table -->
+        <div class="table-container" style="margin-top:16px">
+          <div class="table-header-actions">
+            <span class="section-sub">{{ 'forecast.emp_forecast_table' | translate }}</span>
+            <div style="display:flex; gap:6px">
+              <button class="export-btn" (click)="exportEmployeeCsv()">
+                <mat-icon>download</mat-icon>CSV
+              </button>
+              <button class="export-btn export-btn--pdf" (click)="exportEmployeePdf()">
+                <mat-icon>picture_as_pdf</mat-icon>PDF
+              </button>
+            </div>
+          </div>
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>{{ 'forecast.col_month' | translate }}</th>
+                <th>{{ 'forecast.col_predicted' | translate }}</th>
+                <th>{{ 'forecast.col_ci' | translate }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let r of employeeResult.forecast">
+                <td class="forecast-date">{{ r.date }}</td>
+                <td><strong>{{ fmtNum(r.netpay) }} TND</strong></td>
+                <td class="ci-cell">
+                  <span class="ci-range" *ngIf="r.lower != null">
+                    {{ fmtNum(r.lower) }} → {{ fmtNum(r.upper) }}
+                  </span>
+                  <span *ngIf="r.lower == null">—</span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </ng-container>
+    </div>
+
 
     <!-- ── 6-Month projection ──────────────────────────────────────────── -->
     <div class="chart-card">
       <div class="section-header">
-        <h3>6-Month Projection — {{ winnerLabel }}</h3>
-        <span class="badge info">{{ fmtPct(result.mape) }} MAPE · ±{{ fmt(result.rmse) }} RMSE</span>
+        <div>
+          <h3>{{ 'forecast.projection_title' | translate }} — {{ winnerLabel }}</h3>
+          <span class="badge info">{{ fmtPct(result.mape) }} MAPE · ±{{ fmt(result.rmse) }} RMSE</span>
+        </div>
+        <button class="export-btn" (click)="exportForecastCsv()">
+          <mat-icon>download</mat-icon>CSV
+        </button>
       </div>
       <div class="table-container">
         <table class="data-table">
           <thead>
             <tr>
-              <th>Month</th>
-              <th>Predicted Net Payroll</th>
-              <th>95% Confidence Interval</th>
-              <th>vs Historical Average</th>
-              <th>Trend</th>
+              <th>{{ 'forecast.col_month' | translate }}</th>
+              <th>{{ 'forecast.col_predicted' | translate }}</th>
+              <th>{{ 'forecast.col_ci' | translate }}</th>
+              <th>{{ 'forecast.col_vs_avg' | translate }}</th>
+              <th>{{ 'forecast.col_trend' | translate }}</th>
             </tr>
           </thead>
           <tbody>
@@ -348,9 +463,9 @@
                             [class.down]="r.predicted_netpay < result.forecast[i-1].predicted_netpay">
                     {{ r.predicted_netpay >= result.forecast[i-1].predicted_netpay ? 'trending_up' : 'trending_down' }}
                   </mat-icon>
-                  {{ ((r.predicted_netpay - result.forecast[i-1].predicted_netpay) / result.forecast[i-1].predicted_netpay * 100).toFixed(2) }}% vs prev
+                  {{ ((r.predicted_netpay - result.forecast[i-1].predicted_netpay) / result.forecast[i-1].predicted_netpay * 100).toFixed(2) }}% {{ 'forecast.vs_prev' | translate }}
                 </span>
-                <span *ngIf="i === 0" class="seq-arrow first">First month</span>
+                <span *ngIf="i === 0" class="seq-arrow first">{{ 'forecast.first_month' | translate }}</span>
               </td>
             </tr>
           </tbody>

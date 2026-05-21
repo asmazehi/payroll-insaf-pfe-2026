@@ -3,8 +3,8 @@
   <!-- Header -->
   <div class="dash-header">
     <div>
-      <div class="dash-header__eyebrow">Government Payroll Intelligence</div>
-      <h1 class="dash-header__title">Overview</h1>
+      <div class="dash-header__eyebrow">{{ 'dashboard.eyebrow' | translate }}</div>
+      <h1 class="dash-header__title">{{ 'dashboard.title' | translate }}</h1>
     </div>
     <div class="dash-header__live" *ngIf="!loading && summary">
       <span class="live-pulse"></span>
@@ -12,29 +12,29 @@
     </div>
   </div>
 
-  <!-- Metric strip (instead of 4 generic cards) -->
+  <!-- Metric strip -->
   <div class="metric-strip" *ngIf="!loading && summary">
     <div class="metric">
       <span class="metric__val">{{ summary.total_employees | number }}</span>
-      <span class="metric__label">Civil Servants</span>
+      <span class="metric__label">{{ 'dashboard.employees' | translate }}</span>
       <div class="metric__bar bar-violet"></div>
     </div>
     <div class="metric-divider"></div>
     <div class="metric">
       <span class="metric__val">{{ fmt(summary.total_netpay) }}</span>
-      <span class="metric__label">Total Net Payroll</span>
+      <span class="metric__label">{{ 'dashboard.netpay' | translate }}</span>
       <div class="metric__bar bar-cyan"></div>
     </div>
     <div class="metric-divider"></div>
     <div class="metric">
       <span class="metric__val">{{ fmtCompact(summary.total_records) }}</span>
-      <span class="metric__label">Records</span>
+      <span class="metric__label">{{ 'dashboard.records' | translate }}</span>
       <div class="metric__bar bar-green"></div>
     </div>
     <div class="metric-divider"></div>
     <div class="metric">
       <span class="metric__val">{{ summary.year_max - summary.year_min + 1 }}</span>
-      <span class="metric__label">Years of Data</span>
+      <span class="metric__label">{{ 'dashboard.dataspan' | translate }}</span>
       <div class="metric__bar bar-amber"></div>
     </div>
   </div>
@@ -46,14 +46,14 @@
 
   <div class="dash-body">
 
-    <!-- Main chart — full width, prominent -->
+    <!-- Main chart -->
     <div class="chart-card main-chart" *ngIf="!loading; else skeletonChart">
       <div class="chart-card__header">
         <div>
-          <div class="chart-card__title">Net Payroll Trend</div>
-          <div class="chart-card__sub">Annual total net pay — TND millions</div>
+          <div class="chart-card__title">{{ 'dashboard.trend' | translate }}</div>
+          <div class="chart-card__sub">{{ 'dashboard.trend_sub' | translate }}</div>
         </div>
-        <span class="badge info">All years</span>
+        <span class="badge info">{{ 'dashboard.all_years' | translate }}</span>
       </div>
       <div class="chart-canvas-wrap">
         <canvas baseChart [data]="barData" [options]="barOptions" type="bar"></canvas>
@@ -61,15 +61,15 @@
     </div>
     <ng-template #skeletonChart><div class="skeleton" style="height:280px;border-radius:14px"></div></ng-template>
 
-    <!-- Bottom row: ministry chart + grade table -->
+    <!-- Bottom row -->
     <div class="grid-6040 bottom-row" *ngIf="!loading">
 
       <!-- Ministry donut -->
       <div class="chart-card">
         <div class="chart-card__header">
           <div>
-            <div class="chart-card__title">By Ministry</div>
-            <div class="chart-card__sub">Distribution of net payroll</div>
+            <div class="chart-card__title">{{ 'dashboard.by_ministry' | translate }}</div>
+            <div class="chart-card__sub">{{ 'dashboard.min_dist' | translate }}</div>
           </div>
         </div>
         <div class="donut-wrap">
@@ -81,23 +81,25 @@
       <div class="chart-card">
         <div class="chart-card__header">
           <div>
-            <div class="chart-card__title">Top Grades</div>
-            <div class="chart-card__sub">By average salary</div>
+            <div class="chart-card__title">{{ 'dashboard.top_grades' | translate }}</div>
+            <div class="chart-card__sub">{{ 'dashboard.avg_salary' | translate }}</div>
           </div>
-          <span class="badge neutral">Top 8</span>
+          <span class="badge neutral">{{ 'dashboard.top8' | translate }}</span>
         </div>
         <div class="table-wrap">
           <table class="data-table">
             <thead>
               <tr>
-                <th>#</th><th>Grade</th><th>Avg Net</th>
+                <th>#</th>
+                <th>{{ 'dashboard.grade' | translate }}</th>
+                <th>{{ 'dashboard.avg_net' | translate }}</th>
               </tr>
             </thead>
             <tbody>
               <tr *ngFor="let r of byGrade; let i = index">
                 <td><span class="rank" [class.rank--top]="i<3">{{ i+1 }}</span></td>
                 <td class="cell-primary">{{ r.lib_grade || r.grade_code }}</td>
-                <td class="cell-mono">{{ r.avg_netpay | number:'1.0-0' }} <span class="cell-unit">TND</span></td>
+                <td class="cell-mono">{{ r.avg_netpay | number:'1.0-0' }} <span class="cell-unit">{{ 'common.tnd' | translate }}</span></td>
               </tr>
             </tbody>
           </table>
@@ -106,14 +108,14 @@
 
     </div>
 
-    <!-- Ministry table — full width -->
+    <!-- Ministry table -->
     <div class="chart-card ministry-table" *ngIf="!loading && byMinistry.length">
       <div class="chart-card__header">
         <div>
-          <div class="chart-card__title">Ministry Rankings</div>
-          <div class="chart-card__sub">By total net payroll</div>
+          <div class="chart-card__title">{{ 'dashboard.min_rank' | translate }}</div>
+          <div class="chart-card__sub">{{ 'dashboard.by_netpay' | translate }}</div>
         </div>
-        <span class="badge info">Top 8</span>
+        <span class="badge info">{{ 'dashboard.top8' | translate }}</span>
       </div>
       <div class="ministry-rows">
         <div class="ministry-row" *ngFor="let r of byMinistry; let i = index">
@@ -124,8 +126,8 @@
                  [style.width.%]="(r.total_netpay / byMinistry[0].total_netpay) * 100">
             </div>
           </div>
-          <span class="ministry-val">{{ fmtM(r.total_netpay) }} <span class="cell-unit">M TND</span></span>
-          <span class="ministry-emp">{{ r.employees | number }} emp.</span>
+          <span class="ministry-val">{{ fmtM(r.total_netpay) }} <span class="cell-unit">{{ 'common.m_tnd' | translate }}</span></span>
+          <span class="ministry-emp">{{ r.employees | number }} {{ 'dashboard.emp' | translate }}</span>
         </div>
       </div>
     </div>
