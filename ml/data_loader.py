@@ -130,8 +130,11 @@ def load_individual_payroll(sample_pct: float = 100.0) -> pd.DataFrame:
         with conn.cursor(name="individual_payroll_cur") as cur:
             cur.itersize = 50_000
             cur.execute(sql)
+            first = cur.fetchmany(50_000)
+            if not first:
+                return pd.DataFrame()
             cols = [d[0] for d in cur.description]
-            chunks = []
+            chunks = [pd.DataFrame(first, columns=cols)]
             while True:
                 rows = cur.fetchmany(50_000)
                 if not rows:
@@ -141,6 +144,11 @@ def load_individual_payroll(sample_pct: float = 100.0) -> pd.DataFrame:
     finally:
         conn.close()
     df["month_start_date"] = pd.to_datetime(df["month_start_date"], errors="coerce")
+    _money = ["m_netpay","m_salbrut","m_salimp","m_retrait","m_cps","m_cpe",
+              "m_capdeces","m_sub","m_avkm","m_avlog"]
+    for col in _money:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors="coerce").astype("float64")
     return df
 
 

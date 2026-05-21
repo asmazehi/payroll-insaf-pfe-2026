@@ -314,7 +314,7 @@ def train_anomaly_model() -> dict:
     print("MODEL 4 — Anomaly Detection (Method Comparison)")
     print("=" * 60)
 
-    df = load_individual_payroll()
+    df = load_individual_payroll(sample_pct=5.0)
     print(f"  Data: {len(df):,} records | {df['employee_sk'].nunique():,} employees")
 
     # Step 1: baseline
