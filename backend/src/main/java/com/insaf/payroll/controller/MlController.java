@@ -26,13 +26,31 @@ public class MlController {
         return ResponseEntity.ok(mlService.getAnomalies(limit, ministry, year));
     }
 
+    @GetMapping("/anomalies/by-ministry")
+    public ResponseEntity<?> anomaliesByMinistry() {
+        return ResponseEntity.ok(mlService.getAnomaliesByMinistry());
+    }
+
+    @GetMapping("/anomalies/by-grade")
+    public ResponseEntity<?> anomaliesByGrade() {
+        return ResponseEntity.ok(mlService.getAnomaliesByGrade());
+    }
+
+    @GetMapping("/anomalies/temporal-context")
+    public ResponseEntity<?> anomalyTemporalContext(
+            @RequestParam int employee_sk,
+            @RequestParam int year_num,
+            @RequestParam int month_num) {
+        return ResponseEntity.ok(mlService.getAnomalyTemporalContext(employee_sk, year_num, month_num));
+    }
+
     @PostMapping("/chat")
-    public ResponseEntity<?> chat(@RequestBody Map<String, String> body) {
-        String question = body.get("question");
+    public ResponseEntity<?> chat(@RequestBody Map<String, Object> body) {
+        String question = (String) body.get("question");
         if (question == null || question.isBlank()) {
             return ResponseEntity.badRequest().body(Map.of("error", "question is required"));
         }
-        return ResponseEntity.ok(mlService.chat(question));
+        return ResponseEntity.ok(mlService.chat(body));
     }
 
     @GetMapping("/forecast/dimensions")
@@ -46,6 +64,12 @@ public class MlController {
             @RequestParam(required = false) String ministry,
             @RequestParam(required = false) String grade) {
         return ResponseEntity.ok(mlService.getForecastHistorical(ministry, grade));
+    }
+
+    @GetMapping("/forecast/employee")
+    public ResponseEntity<?> forecastEmployee(
+            @RequestParam String employee_id) {
+        return ResponseEntity.ok(mlService.getEmployeeForecast(employee_id));
     }
 
     @GetMapping("/status")

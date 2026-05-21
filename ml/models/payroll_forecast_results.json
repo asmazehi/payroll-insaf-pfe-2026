@@ -6,39 +6,51 @@
   "model_comparison": {
     "ridge": {
       "mape": 0.0,
-      "r2": 1.0,
+      "smape": 0.0,
+      "mase": 0.0,
+      "da": 100.0,
       "mae": 0.0,
       "rmse": 0.0
     },
     "rf": {
       "mape": 4.9977,
-      "r2": -9.0883,
+      "smape": 5.1324,
+      "mase": 1.3089,
+      "da": 54.5,
       "mae": 26564396.71,
       "rmse": 27271587.44
     },
     "xgb": {
       "mape": 6.275,
-      "r2": -14.6691,
+      "smape": 6.4866,
+      "mase": 1.6414,
+      "da": 81.8,
       "mae": 33313922.88,
       "rmse": 33987936.67
     },
     "sarima": {
       "mape": 4.9576,
-      "r2": -9.1653,
+      "smape": 5.0948,
+      "mase": 1.2953,
+      "da": 54.5,
       "mae": 26287683.26,
       "rmse": 27375584.38
     },
     "prophet": {
       "mape": 5.0783,
-      "r2": -9.7111,
+      "smape": 5.2227,
+      "mase": 1.3273,
+      "da": 54.5,
       "mae": 26937859.53,
       "rmse": 28100845.96
     },
     "tft": {
-      "mape": 5.608,
-      "r2": -12.4793,
-      "mae": 29831650.88,
-      "rmse": 31523595.61
+      "mape": 7.4075,
+      "smape": 7.7055,
+      "mase": 1.9396,
+      "da": 54.5,
+      "mae": 39365922.88,
+      "rmse": 40264540.53
     }
   },
   "forecast_6m": [
@@ -65,6 +77,158 @@
     {
       "date": "2026-10",
       "predicted_netpay": 489939578.97
+    }
+  ],
+  "feature_importances": [
+    {
+      "feature": "rolling_mean_12",
+      "importance": 0.207286,
+      "model": "rf"
+    },
+    {
+      "feature": "lag_8",
+      "importance": 0.180183,
+      "model": "rf"
+    },
+    {
+      "feature": "year_norm",
+      "importance": 0.157023,
+      "model": "rf"
+    },
+    {
+      "feature": "year_num",
+      "importance": 0.132734,
+      "model": "rf"
+    },
+    {
+      "feature": "rolling_mean_6",
+      "importance": 0.063236,
+      "model": "rf"
+    },
+    {
+      "feature": "lag_1",
+      "importance": 0.058033,
+      "model": "rf"
+    },
+    {
+      "feature": "lag_12",
+      "importance": 0.033168,
+      "model": "rf"
+    },
+    {
+      "feature": "rolling_mean_3",
+      "importance": 0.032942,
+      "model": "rf"
+    },
+    {
+      "feature": "lag_9",
+      "importance": 0.03003,
+      "model": "rf"
+    },
+    {
+      "feature": "lag_10",
+      "importance": 0.027098,
+      "model": "rf"
+    },
+    {
+      "feature": "lag_11",
+      "importance": 0.020079,
+      "model": "rf"
+    },
+    {
+      "feature": "lag_2",
+      "importance": 0.013343,
+      "model": "rf"
+    },
+    {
+      "feature": "lag_7",
+      "importance": 0.010869,
+      "model": "rf"
+    },
+    {
+      "feature": "lag_4",
+      "importance": 0.007192,
+      "model": "rf"
+    },
+    {
+      "feature": "yoy_growth",
+      "importance": 0.006959,
+      "model": "rf"
+    },
+    {
+      "feature": "rolling_mean_12",
+      "importance": 0.549694,
+      "model": "xgb"
+    },
+    {
+      "feature": "rolling_mean_3",
+      "importance": 0.166965,
+      "model": "xgb"
+    },
+    {
+      "feature": "lag_8",
+      "importance": 0.134571,
+      "model": "xgb"
+    },
+    {
+      "feature": "year_norm",
+      "importance": 0.059925,
+      "model": "xgb"
+    },
+    {
+      "feature": "year_num",
+      "importance": 0.050629,
+      "model": "xgb"
+    },
+    {
+      "feature": "lag_1",
+      "importance": 0.010499,
+      "model": "xgb"
+    },
+    {
+      "feature": "lag_12",
+      "importance": 0.005586,
+      "model": "xgb"
+    },
+    {
+      "feature": "lag_9",
+      "importance": 0.004127,
+      "model": "xgb"
+    },
+    {
+      "feature": "lag_7",
+      "importance": 0.003833,
+      "model": "xgb"
+    },
+    {
+      "feature": "lag_11",
+      "importance": 0.003507,
+      "model": "xgb"
+    },
+    {
+      "feature": "rolling_mean_6",
+      "importance": 0.002449,
+      "model": "xgb"
+    },
+    {
+      "feature": "mom_delta",
+      "importance": 0.001409,
+      "model": "xgb"
+    },
+    {
+      "feature": "month_num",
+      "importance": 0.00136,
+      "model": "xgb"
+    },
+    {
+      "feature": "lag_10",
+      "importance": 0.001107,
+      "model": "xgb"
+    },
+    {
+      "feature": "month_sin",
+      "importance": 0.000756,
+      "model": "xgb"
     }
   ]
 }

@@ -72,6 +72,18 @@ def _compute_employee_baseline(df: pd.DataFrame) -> pd.DataFrame:
         np.abs(df["m_netpay"] - df["emp_median"]) / df["emp_median"] * 100,
         0.0,
     )
+
+    # Rolling z-score: 12-month trailing window (shift=1 avoids data leakage)
+    rolling_mean = grp.transform(lambda x: x.rolling(12, min_periods=3).mean().shift(1))
+    rolling_std  = grp.transform(lambda x: x.rolling(12, min_periods=3).std().shift(1)).fillna(0)
+    df["rolling_mean"] = rolling_mean
+    df["rolling_std"]  = rolling_std
+    df["rolling_z"] = np.where(
+        df["rolling_std"] > 0,
+        (df["m_netpay"] - df["rolling_mean"]) / df["rolling_std"],
+        df["z_score"],
+    )
+
     df["zscore_flag"] = df["z_score"].abs() > ZSCORE_THRESHOLD
     return df
 
@@ -266,6 +278,34 @@ def _run_lstm_autoencoder(df: pd.DataFrame) -> tuple[np.ndarray, np.ndarray, obj
 
 
 # ═══════════════════════════════════════════════════════════════
+# Temporal context
+# ═══════════════════════════════════════════════════════════════
+
+def _add_temporal_context(anomalies_df: pd.DataFrame, full_df: pd.DataFrame) -> pd.DataFrame:
+    """Attach pay values for 2 months prior and 3 months after each anomalous record."""
+    pay_lookup = full_df.set_index(["employee_sk", "year_num", "month_num"])["m_netpay"]
+
+    for delta, col in [(-2, "pay_prev_2m"), (-1, "pay_prev_1m"),
+                        (1,  "pay_next_1m"),  (2, "pay_next_2m"), (3, "pay_next_3m")]:
+        total   = anomalies_df["year_num"].astype(int) * 12 + anomalies_df["month_num"].astype(int) - 1 + delta
+        t_year  = total // 12
+        t_month = total % 12 + 1
+        idx = pd.MultiIndex.from_arrays([
+            anomalies_df["employee_sk"].values,
+            t_year.values,
+            t_month.values,
+        ])
+        anomalies_df[col] = pay_lookup.reindex(idx).values
+
+    anomalies_df["pct_change_vs_prev"] = np.where(
+        (anomalies_df["pay_prev_1m"].notna()) & (anomalies_df["pay_prev_1m"] > 0),
+        (anomalies_df["m_netpay"] - anomalies_df["pay_prev_1m"]) / anomalies_df["pay_prev_1m"] * 100,
+        np.nan,
+    )
+    return anomalies_df
+
+
+# ═══════════════════════════════════════════════════════════════
 # Main
 # ═══════════════════════════════════════════════════════════════
 
@@ -349,6 +389,15 @@ def train_anomaly_model() -> dict:
                        "autoencoder": "ae_flag"}[winner_name]
 
     # ── Final combined flag: Z-score OR winner ────────────────────────────────
+    method_labels = {"if": "Isolation Forest", "lof": "LOF",
+                     "ocsvm": "OCSVM", "autoencoder": "LSTM"}
+    winner_label = method_labels.get(winner_name, winner_name.upper())
+
+    df["detection_method"] = ""
+    df.loc[ df["zscore_flag"] & ~df[winner_flag_col], "detection_method"] = "Z-score"
+    df.loc[~df["zscore_flag"] &  df[winner_flag_col], "detection_method"] = winner_label
+    df.loc[ df["zscore_flag"] &  df[winner_flag_col], "detection_method"] = f"Z-score + {winner_label}"
+
     df["anomaly_flag"] = df["zscore_flag"] | df[winner_flag_col]
     n_combined = int(df["anomaly_flag"].sum())
     print(f"\n  Final flag (Z-score OR {winner_name}): "
@@ -359,10 +408,14 @@ def train_anomaly_model() -> dict:
         df[df["anomaly_flag"]]
         .sort_values("z_score", key=abs, ascending=False)
         [["employee_sk", "year_num", "month_num", "m_netpay",
-          "emp_mean", "emp_median", "z_score", "pct_deviation",
+          "emp_mean", "emp_median", "z_score", "rolling_z", "pct_deviation",
           "grade_code", "nature_code", "ministry_code",
-          "zscore_flag", "if_flag", "lof_flag", "ocsvm_flag", "ae_flag"]]
-    )
+          "zscore_flag", "if_flag", "lof_flag", "ocsvm_flag", "ae_flag",
+          "detection_method"]]
+    ).copy()
+
+    print("\n  Adding temporal context (±2 months)...")
+    anomalies_df = _add_temporal_context(anomalies_df, df)
 
     print("\n  Top 10 anomalies:")
     print(f"  {'emp_sk':>8s} {'year':>5s} {'month':>5s} {'netpay':>12s} "

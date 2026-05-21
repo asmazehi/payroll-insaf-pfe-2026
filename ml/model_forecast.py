@@ -33,7 +33,7 @@ import numpy as np
 import pandas as pd
 from sklearn.linear_model import Ridge
 from sklearn.ensemble import RandomForestRegressor
-from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
+from sklearn.metrics import mean_absolute_error, mean_squared_error
 from xgboost import XGBRegressor
 
 warnings.filterwarnings("ignore")
@@ -81,18 +81,37 @@ LAG_FEATURE_COLS = (
 # Metrics
 # ============================================================
 
-def _metrics(y_true, y_pred, label: str) -> dict:
+def _metrics(y_true, y_pred, label: str, y_train=None) -> dict:
     y_true = np.array(y_true, dtype=float)
     y_pred = np.array(y_pred, dtype=float)
     mae    = float(mean_absolute_error(y_true, y_pred))
     rmse   = float(np.sqrt(mean_squared_error(y_true, y_pred)))
-    r2     = float(r2_score(y_true, y_pred))
     mape   = float(np.mean(np.abs((y_true - y_pred) /
                                    np.clip(np.abs(y_true), 1e-8, None))) * 100)
+    # sMAPE: symmetric, treats over/under-prediction equally (range 0-200%)
+    smape  = float(np.mean(2 * np.abs(y_true - y_pred) /
+                            (np.abs(y_true) + np.abs(y_pred) + 1e-8)) * 100)
+    # MASE: MAE relative to seasonal naïve (lag-12) on training data
+    # MASE < 1 means we beat "just predict last year's same month"
+    if y_train is not None and len(y_train) >= 13:
+        y_tr = np.array(y_train, dtype=float)
+        naive_mae = float(np.mean(np.abs(y_tr[12:] - y_tr[:-12])))
+        mase = round(mae / naive_mae, 4) if naive_mae > 0 else None
+    else:
+        mase = None
+    # DA: % of months the direction (up/down) was correctly predicted
+    if len(y_true) > 1:
+        da = round(float(np.mean(
+            np.sign(np.diff(y_true)) == np.sign(np.diff(y_pred))) * 100), 1)
+    else:
+        da = None
     print(f"    {label:<12s}  MAE={mae:>12,.0f}  RMSE={rmse:>12,.0f}"
-          f"  R2={r2:.4f}  MAPE={mape:.2f}%")
-    return {"mae": round(mae, 2), "rmse": round(rmse, 2),
-            "r2": round(r2, 4),  "mape": round(mape, 4)}
+          f"  MAPE={mape:.2f}%  sMAPE={smape:.2f}%"
+          + (f"  MASE={mase:.3f}" if mase else "")
+          + (f"  DA={da:.0f}%" if da else ""))
+    return {"mape": round(mape, 4), "smape": round(smape, 4),
+            "mase": mase, "da": da,
+            "mae": round(mae, 2), "rmse": round(rmse, 2)}
 
 
 # ============================================================
@@ -113,7 +132,7 @@ def _run_ml_models(X_train, y_train, X_test, y_test):
     trained  = {}
     for name, mdl in models.items():
         mdl.fit(X_train, y_train)
-        m = _metrics(y_test, mdl.predict(X_test), name)
+        m = _metrics(y_test, mdl.predict(X_test), name, y_train=y_train)
         results[name] = m
         trained[name] = mdl
     return results, trained
@@ -123,7 +142,7 @@ def _run_ml_models(X_train, y_train, X_test, y_test):
 # SARIMA
 # ============================================================
 
-def _run_sarima(y_train, y_test) -> dict:
+def _run_sarima(y_train, y_test, **_) -> dict:
     from statsmodels.tsa.statespace.sarimax import SARIMAX
     try:
         mdl = SARIMAX(y_train, order=(1, 1, 1),
@@ -132,7 +151,7 @@ def _run_sarima(y_train, y_test) -> dict:
                       enforce_invertibility=False)
         res    = mdl.fit(disp=False)
         y_pred = res.forecast(steps=len(y_test))
-        m = _metrics(y_test, y_pred, "sarima")
+        m = _metrics(y_test, y_pred, "sarima", y_train=y_train)
         return m, res
     except Exception as e:
         print(f"    sarima        FAILED: {e}")
@@ -155,8 +174,8 @@ def _run_prophet(df_train, df_test) -> dict:
             periods=len(df_test), freq="MS")
         forecast = mdl.predict(future)
         y_pred   = forecast["yhat"].iloc[-len(df_test):].values
-        y_test   = df_test[TARGET].values
-        m = _metrics(y_test, y_pred, "prophet")
+        y_test_v = df_test[TARGET].values
+        m = _metrics(y_test_v, y_pred, "prophet", y_train=df_train[TARGET].values)
         return m, mdl
     except Exception as e:
         print(f"    prophet       FAILED: {e}")
@@ -267,7 +286,8 @@ def _run_tft(df_full: pd.DataFrame, test_len: int) -> tuple[dict, object | None]
         y_pred = y_pred[:test_len]
         y_true = df_tft[df_tft["time_idx"] > training_cutoff][TARGET].values[:test_len]
 
-        m = _metrics(y_true, y_pred, "tft")
+        y_train_tft = df_tft[df_tft["time_idx"] <= training_cutoff][TARGET].values
+        m = _metrics(y_true, y_pred, "tft", y_train=y_train_tft)
         return m, (tft, tft_train, df_tft)
 
     except Exception as e:
@@ -486,7 +506,8 @@ def train_payroll_forecast() -> dict:
     for name, m in sorted(all_metrics.items(), key=lambda x: x[1]["mape"]):
         marker = " <-- WINNER" if name == winner_name else ""
         skip   = " [excluded/failed]" if m["mape"] >= 999 else ""
-        print(f"    {name:<12s}  MAPE={m['mape']:.2f}%  R2={m['r2']:.4f}{marker}{skip}")
+        mase_s = f"  MASE={m['mase']:.3f}" if m.get("mase") else ""
+        print(f"    {name:<12s}  MAPE={m['mape']:.2f}%  sMAPE={m.get('smape', 0):.2f}%{mase_s}{marker}{skip}")
 
     winner_mape = candidates[winner_name]["mape"]
     print(f"\n  Winner: {winner_name.upper()} (MAPE={winner_mape:.2f}%)")
@@ -553,17 +574,32 @@ def train_payroll_forecast() -> dict:
     for p in forecast_6m:
         print(f"    {p['date']}: {p['predicted_netpay']:>15,.2f} TND")
 
+    # Feature importances for RF and XGBoost (tree-based models only)
+    feature_importances: list[dict] = []
+    for model_name in ("rf", "xgb"):
+        if model_name in trained_ml and hasattr(trained_ml[model_name], "feature_importances_"):
+            raw   = trained_ml[model_name].feature_importances_
+            total = float(raw.sum()) or 1.0
+            items = sorted(
+                [{"feature": f, "importance": round(float(v / total), 6), "model": model_name}
+                 for f, v in zip(fc, raw)],
+                key=lambda x: x["importance"], reverse=True,
+            )
+            feature_importances.extend(items[:15])   # top 15 per model
+
     result = {
-        "model":            "payroll_forecast",
-        "winner":           winner_name,
-        "train_months":     int(len(X_train)),
-        "test_months":      int(len(X_test)),
+        "model":               "payroll_forecast",
+        "winner":              winner_name,
+        "train_months":        int(len(X_train)),
+        "test_months":         int(len(X_test)),
         "model_comparison": {
-            name: {"mape": m["mape"], "r2": m["r2"],
+            name: {"mape": m["mape"], "smape": m["smape"],
+                   "mase": m["mase"], "da": m["da"],
                    "mae": m["mae"], "rmse": m["rmse"]}
             for name, m in all_metrics.items()
         },
-        "forecast_6m": forecast_6m,
+        "forecast_6m":         forecast_6m,
+        "feature_importances": feature_importances,
     }
 
     (MODELS_DIR / "payroll_forecast_results.json").write_text(

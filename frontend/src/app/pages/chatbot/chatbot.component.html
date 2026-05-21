@@ -5,13 +5,17 @@
     <div class="chat-header__left">
       <div class="bot-avatar"><mat-icon>smart_toy</mat-icon></div>
       <div>
-        <div class="chat-header__name">INSAF AI Assistant</div>
-        <div class="chat-header__sub">LLaMA 3.2 + RAG · Payroll Intelligence · Ask anything</div>
+        <div class="chat-header__name">{{ 'chatbot.name' | translate }}</div>
+        <div class="chat-header__sub">{{ 'chatbot.subtitle' | translate }}</div>
       </div>
     </div>
-    <button class="clear-btn" *ngIf="hasMessages" (click)="clearHistory()">
-      <mat-icon>delete_outline</mat-icon>Clear chat
-    </button>
+    <div class="chat-header__right">
+      <div class="status-dot"></div>
+      <span class="status-label">{{ 'chatbot.status_live' | translate }}</span>
+      <button class="clear-btn" *ngIf="hasMessages" (click)="clearHistory()">
+        <mat-icon>delete_outline</mat-icon>{{ 'chatbot.clear' | translate }}
+      </button>
+    </div>
   </div>
 
   <!-- Messages -->
@@ -20,8 +24,8 @@
     <!-- Empty state -->
     <div class="empty-state" *ngIf="!hasMessages">
       <div class="empty-icon"><mat-icon>auto_awesome</mat-icon></div>
-      <h3>How can I help you today?</h3>
-      <p>Ask me anything about the INSAF payroll dataset — employees, salaries, anomalies, ministry breakdowns, and trends across years.</p>
+      <h3>{{ 'chatbot.greeting' | translate }}</h3>
+      <p>{{ 'chatbot.intro' | translate }}</p>
       <div class="hints-grid">
         <button class="hint-btn" *ngFor="let h of hints" (click)="send(h)">
           <mat-icon>arrow_forward</mat-icon>{{ h }}
@@ -32,6 +36,7 @@
     <!-- Messages list -->
     <ng-container *ngFor="let m of messages">
 
+      <!-- User message -->
       <div class="msg-row msg-row--user" *ngIf="m.role === 'user'">
         <div class="msg-bubble msg-bubble--user">
           <div class="msg-text">{{ m.text }}</div>
@@ -40,31 +45,53 @@
         <div class="user-avatar"><mat-icon>person</mat-icon></div>
       </div>
 
+      <!-- Bot message -->
       <div class="msg-row msg-row--bot" *ngIf="m.role === 'bot'">
         <div class="bot-avatar bot-avatar--sm"><mat-icon>smart_toy</mat-icon></div>
+
+        <!-- Typing indicator -->
         <div class="msg-bubble msg-bubble--bot typing" *ngIf="m.isTyping">
           <span class="dot"></span><span class="dot"></span><span class="dot"></span>
         </div>
+
+        <!-- Bot answer -->
         <div class="msg-bubble msg-bubble--bot" *ngIf="!m.isTyping">
-          <div class="msg-text">{{ m.text }}</div>
-          <div class="msg-time">{{ fmtTime(m.timestamp) }}</div>
+          <div class="msg-markdown" [innerHTML]="m.html || m.text"></div>
+
+          <!-- Footer -->
+          <div class="msg-footer">
+            <span class="msg-time">{{ fmtTime(m.timestamp) }}</span>
+            <span class="elapsed" *ngIf="m.elapsed">{{ m.elapsed }}s</span>
+            <span class="source-chip source-chip--llm" *ngIf="m.llm_used">
+              <mat-icon>smart_toy</mat-icon> AI
+            </span>
+            <span class="source-chip source-chip--raw" *ngIf="m.llm_used === false">
+              <mat-icon>storage</mat-icon> Raw data
+            </span>
+            <span class="entity-chip" *ngIf="hasEntities(m)" [title]="formatEntities(m.entities)">
+              <mat-icon>filter_alt</mat-icon>{{ formatEntities(m.entities) }}
+            </span>
+            <button class="copy-btn" (click)="copyText(m.text)" title="Copy">
+              <mat-icon>content_copy</mat-icon>
+            </button>
+          </div>
         </div>
       </div>
 
     </ng-container>
   </div>
 
-  <!-- Input -->
+  <!-- Input bar -->
   <div class="chat-input-bar">
     <div class="input-wrap">
-      <textarea [(ngModel)]="input" (keydown)="onKey($event)" [disabled]="loading"
-        placeholder="Ask about payroll data… (Enter to send · Shift+Enter for newline)"
+      <textarea #inputRef [(ngModel)]="input" (keydown)="onKey($event)" [disabled]="loading"
+        [placeholder]="'chatbot.placeholder' | translate"
         rows="1" class="chat-textarea"></textarea>
       <button class="send-btn" (click)="send()" [disabled]="!input.trim() || loading">
-        <mat-icon>send</mat-icon>
+        <mat-icon>{{ loading ? 'hourglass_top' : 'send' }}</mat-icon>
       </button>
     </div>
-    <div class="input-hint">INSAF AI may make mistakes. Verify important figures against source data.</div>
+    <div class="input-hint">{{ 'chatbot.disclaimer' | translate }}</div>
   </div>
 
 </div>

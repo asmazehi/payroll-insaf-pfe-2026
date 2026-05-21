@@ -6,12 +6,12 @@
       <div class="page-hero__title">
         <div class="hero-icon"><mat-icon>cloud_upload</mat-icon></div>
         <div>
-          <h2>Data Ingestion</h2>
-          <p>Upload payroll files &rarr; ETL pipeline &rarr; Data Warehouse &rarr; ML &amp; Power BI refresh</p>
+          <h2>{{ 'ingest.title' | translate }}</h2>
+          <p>{{ 'ingest.subtitle' | translate }}</p>
         </div>
       </div>
       <div class="pipeline-badge">
-        <span class="pipeline-step"><mat-icon>upload_file</mat-icon>Upload</span>
+        <span class="pipeline-step"><mat-icon>upload_file</mat-icon>{{ 'ingest.upload_file' | translate }}</span>
         <mat-icon class="pipeline-arrow">arrow_forward</mat-icon>
         <span class="pipeline-step"><mat-icon>account_tree</mat-icon>ETL</span>
         <mat-icon class="pipeline-arrow">arrow_forward</mat-icon>
@@ -24,12 +24,12 @@
 
   <div class="page-body">
 
-    <!-- ── Keep-open warning ─────────────────────────────────────────── -->
+    <!-- Keep-open warning -->
     <div class="keep-open-banner" *ngIf="uploading">
       <div class="keep-open-icon"><mat-icon>warning_amber</mat-icon></div>
       <div class="keep-open-text">
-        <strong>Keep this tab open</strong>
-        <span>The ETL pipeline is running on the server. Closing this tab won't stop the process, but you'll lose live progress tracking.</span>
+        <strong>{{ 'ingest.keep_open' | translate }}</strong>
+        <span>{{ 'ingest.keep_open_hint' | translate }}</span>
       </div>
       <div class="keep-open-timer">
         <mat-icon>timer</mat-icon>
@@ -39,32 +39,32 @@
 
     <div class="ingest-layout">
 
-      <!-- ── Upload card ──────────────────────────────────────────── -->
+      <!-- Upload card -->
       <div class="upload-card chart-card">
 
         <div class="section-header">
-          <h3>Run Pipeline</h3>
-          <span class="section-sub">Choose how to provide the file</span>
+          <h3>{{ 'ingest.run_pipeline' | translate }}</h3>
+          <span class="section-sub">{{ 'ingest.choose_file' | translate }}</span>
         </div>
 
         <!-- Mode switcher -->
         <div class="mode-switcher">
           <button class="mode-btn" [class.mode-btn--active]="mode==='path'" (click)="mode='path'">
             <mat-icon>folder_open</mat-icon>
-            Server File Path
+            {{ 'ingest.server_path' | translate }}
           </button>
           <button class="mode-btn" [class.mode-btn--active]="mode==='upload'" (click)="mode='upload'">
             <mat-icon>upload_file</mat-icon>
-            Upload File
+            {{ 'ingest.upload_file' | translate }}
             <span class="mode-hint">(&lt;2 GB)</span>
           </button>
         </div>
 
-        <!-- ── PATH mode ─────────────────────────────────────── -->
+        <!-- PATH mode -->
         <div *ngIf="mode==='path'" class="path-mode">
           <label class="path-label">
             <mat-icon>insert_drive_file</mat-icon>
-            Full path to the data file on this machine
+            {{ 'ingest.path_label' | translate }}
           </label>
           <div class="path-input-wrap">
             <input
@@ -77,11 +77,11 @@
           </div>
           <p class="path-hint">
             <mat-icon>info</mat-icon>
-            Use this for large files (&gt;1 GB). The API reads the file directly from disk — no HTTP transfer needed.
+            {{ 'ingest.path_hint' | translate }}
           </p>
         </div>
 
-        <!-- ── UPLOAD mode ─────────────────────────────────── -->
+        <!-- UPLOAD mode -->
         <ng-container *ngIf="mode==='upload'">
           <div class="dropzone"
                [class.dropzone--active]="dragging"
@@ -95,8 +95,8 @@
 
             <ng-container *ngIf="!selectedFile">
               <div class="dz-icon"><mat-icon>upload_file</mat-icon></div>
-              <p class="dz-title">Drop your file here</p>
-              <p class="dz-sub">or <span class="dz-link">click to browse</span> · JSON / JSONL / CSV / Excel</p>
+              <p class="dz-title">{{ 'ingest.drop' | translate }}</p>
+              <p class="dz-sub">{{ 'ingest.or_browse' | translate }} · {{ 'ingest.formats' | translate }}</p>
             </ng-container>
 
             <ng-container *ngIf="selectedFile">
@@ -117,32 +117,32 @@
         <!-- Options -->
         <div class="options-row">
           <div class="option-group">
-            <label class="opt-label">File Type</label>
+            <label class="opt-label">{{ 'ingest.file_type' | translate }}</label>
             <div class="seg-ctrl">
               <button class="seg-btn" [class.seg-btn--active]="fileType==='auto'" (click)="fileType='auto'">
                 <mat-icon>auto_awesome</mat-icon>Auto
               </button>
               <button class="seg-btn" [class.seg-btn--active]="fileType==='paie'" (click)="fileType='paie'">
-                <mat-icon>payments</mat-icon>Paie
+                <mat-icon>payments</mat-icon>{{ 'ingest.type_paie' | translate }}
               </button>
               <button class="seg-btn" [class.seg-btn--active]="fileType==='indem'" (click)="fileType='indem'">
-                <mat-icon>receipt_long</mat-icon>Indemnité
+                <mat-icon>receipt_long</mat-icon>{{ 'ingest.type_indem' | translate }}
               </button>
             </div>
           </div>
 
           <div class="option-group">
-            <label class="opt-label">After Upload</label>
+            <label class="opt-label">{{ 'ingest.after_upload' | translate }}</label>
             <label class="toggle-wrap">
               <div class="toggle" [class.toggle--on]="retrain" (click)="retrain=!retrain">
                 <div class="toggle-thumb"></div>
               </div>
               <span class="toggle-label">
                 <mat-icon>model_training</mat-icon>
-                Retrain ML models
+                {{ 'ingest.retrain' | translate }}
               </span>
             </label>
-            <p class="toggle-hint" *ngIf="retrain">All forecast &amp; anomaly models will retrain (~2–5 min)</p>
+            <p class="toggle-hint" *ngIf="retrain">{{ 'ingest.retrain_hint' | translate }}</p>
           </div>
         </div>
 
@@ -154,7 +154,7 @@
             </div>
             <span class="toggle-label">
               <mat-icon>science</mat-icon>
-              Test mode — limit rows
+              {{ 'ingest.test_mode' | translate }}
             </span>
           </label>
           <div class="limit-input-wrap" *ngIf="testMode">
@@ -170,7 +170,7 @@
           </div>
         </div>
         <p class="test-mode-hint" *ngIf="testMode">
-          Pipeline will stop after the first {{ testLimit | number }} matching rows — useful for validating the full stack before running on the complete file.
+          {{ 'ingest.test_hint_pre' | translate }} {{ testLimit | number }} {{ 'ingest.test_hint_post' | translate }}
         </p>
 
         <!-- Error -->
@@ -181,13 +181,12 @@
         <!-- Run button -->
         <button class="upload-btn" [disabled]="!canRun" (click)="run()">
           <mat-icon>{{ uploading ? 'hourglass_top' : 'rocket_launch' }}</mat-icon>
-          {{ uploading ? 'Running…' : 'Run Pipeline' }}
+          {{ (uploading ? 'ingest.running' : 'ingest.run_btn') | translate }}
         </button>
 
-        <!-- ── Progress tracker ─────────────────────────────── -->
+        <!-- Progress tracker -->
         <div class="progress-area" *ngIf="uploading || (progress && currentApiStage !== 'idle')">
 
-          <!-- Stage nodes -->
           <div class="stage-tracker">
             <ng-container *ngFor="let stage of displayStages; let last = last">
               <div class="stage-node"
@@ -205,83 +204,77 @@
             </ng-container>
           </div>
 
-          <!-- Progress bar -->
           <div class="prog-track">
             <div class="prog-bar" [style.width.%]="currentPct"
                  [class.prog-bar--error]="currentApiStage === 'error'"></div>
           </div>
 
-          <!-- Live message + pct -->
           <div class="prog-meta">
-            <span class="prog-msg">{{ progress?.msg || (uploadPct < 100 ? 'Transferring file…' : 'Starting pipeline…') }}</span>
+            <span class="prog-msg">{{ progress?.msg || (uploadPct < 100 ? ('ingest.transferring' | translate) : ('ingest.starting' | translate)) }}</span>
             <span class="prog-pct">{{ currentPct }}%</span>
           </div>
 
-          <!-- Row counter -->
           <div class="row-counter" *ngIf="progress?.rows">
             <mat-icon>table_rows</mat-icon>
-            <span>{{ fmt(progress?.rows) }} rows processed</span>
+            <span>{{ fmt(progress?.rows) }} {{ 'ingest.rows_processed' | translate }}</span>
           </div>
 
-          <!-- Upload file progress (only during transfer) -->
           <div class="upload-progress" *ngIf="mode === 'upload' && uploadPct < 100">
             <mat-icon>upload</mat-icon>
-            <span>Uploading file… {{ uploadPct }}%</span>
+            <span>{{ 'ingest.transferring' | translate }} {{ uploadPct }}%</span>
           </div>
 
         </div>
 
       </div>
 
-      <!-- ── Result card ───────────────────────────────────────────── -->
+      <!-- Result card -->
       <div class="result-card chart-card" *ngIf="result">
 
         <div class="section-header">
-          <h3>Pipeline Result</h3>
+          <h3>{{ 'ingest.pipeline_result' | translate }}</h3>
           <span class="badge" [ngClass]="statusClass(result.status)">{{ result.status | uppercase }}</span>
         </div>
 
         <div class="result-meta">
           <div class="rm-item">
-            <span>Run ID</span>
+            <span>{{ 'ingest.run_id' | translate }}</span>
             <code>{{ result.run_id }}</code>
           </div>
           <div class="rm-item">
-            <span>File</span>
+            <span>{{ 'ingest.file' | translate }}</span>
             <strong>{{ result.file }}</strong>
           </div>
           <div class="rm-item">
-            <span>Type</span>
+            <span>{{ 'ingest.type' | translate }}</span>
             <strong>{{ result.file_type | uppercase }}</strong>
           </div>
         </div>
 
-        <!-- ETL Stats -->
         <div class="etl-stats">
           <div class="etl-stat etl-stat--green">
             <mat-icon>check_circle</mat-icon>
             <div>
-              <span>Records Loaded</span>
-              <strong>{{ fmt(result.etl_stats?.records_loaded ?? result.etl_stats?.records_processed) }}</strong>
+              <span>{{ 'ingest.records_loaded' | translate }}</span>
+              <strong>{{ fmt(result.etl_stats?.records_loaded ?? result.etl_stats?.records_processed ?? result.etl_stats?.written) }}</strong>
             </div>
           </div>
           <div class="etl-stat etl-stat--red" *ngIf="result.etl_stats?.errors">
             <mat-icon>cancel</mat-icon>
             <div>
-              <span>DQ Issues</span>
+              <span>{{ 'ingest.dq_issues' | translate }}</span>
               <strong>{{ fmt(result.etl_stats.errors) }}</strong>
             </div>
           </div>
           <div class="etl-stat etl-stat--blue">
             <mat-icon>timer</mat-icon>
             <div>
-              <span>Duration</span>
+              <span>{{ 'ingest.duration' | translate }}</span>
               <strong>{{ result.etl_stats.duration_s }}s</strong>
             </div>
           </div>
         </div>
 
-        <!-- Extra stats -->
         <div class="extra-stats" *ngIf="result.etl_stats">
           <div class="xs-item" *ngFor="let key of getEtlKeys(result.etl_stats)">
             <span>{{ key }}</span>
@@ -289,37 +282,41 @@
           </div>
         </div>
 
-        <!-- ML status -->
         <div class="ml-status" *ngIf="result.ml_status && result.ml_status !== 'not_requested'">
           <div class="ml-status__header">
             <div class="ml-icon"><mat-icon>model_training</mat-icon></div>
-            <span>ML Retrain Status</span>
+            <span>{{ 'ingest.ml_status' | translate }}</span>
           </div>
           <p>{{ result.ml_status }}</p>
         </div>
 
-        <!-- DW reminder -->
         <div class="reminder-box">
           <mat-icon>info</mat-icon>
-          <p>Data Warehouse updated. Power BI will reflect changes on next scheduled refresh or manual refresh in the Reports page.</p>
+          <p>{{ 'ingest.dw_reminder' | translate }}</p>
         </div>
 
       </div>
 
     </div>
 
-    <!-- ── Run History ──────────────────────────────────────────────── -->
+    <!-- Run History -->
     <div class="chart-card" *ngIf="history.length">
       <div class="section-header">
-        <h3>Session Run History</h3>
-        <span class="section-sub">{{ history.length }} run{{ history.length !== 1 ? 's' : '' }} this session</span>
+        <h3>{{ 'ingest.history' | translate }}</h3>
+        <span class="section-sub">{{ history.length }} run{{ history.length !== 1 ? 's' : '' }}</span>
       </div>
       <div class="table-container">
         <table class="data-table">
           <thead>
             <tr>
-              <th>Time</th><th>Run ID</th><th>File</th><th>Type</th>
-              <th>Loaded</th><th>Duration</th><th>ML</th><th>Status</th>
+              <th>{{ 'ingest.col_time' | translate }}</th>
+              <th>{{ 'ingest.col_run_id' | translate }}</th>
+              <th>{{ 'ingest.col_file' | translate }}</th>
+              <th>{{ 'ingest.col_type' | translate }}</th>
+              <th>{{ 'ingest.col_loaded' | translate }}</th>
+              <th>{{ 'ingest.col_duration' | translate }}</th>
+              <th>{{ 'ingest.col_ml' | translate }}</th>
+              <th>{{ 'ingest.col_status' | translate }}</th>
             </tr>
           </thead>
           <tbody>
@@ -328,11 +325,11 @@
               <td><code class="emp-id">{{ r.run_id }}</code></td>
               <td>{{ r.file }}</td>
               <td><span class="badge neutral">{{ r.file_type | uppercase }}</span></td>
-              <td><strong>{{ fmt(r.etl_stats?.records_loaded ?? r.etl_stats?.records_processed) }}</strong></td>
+              <td><strong>{{ fmt(r.etl_stats?.records_loaded ?? r.etl_stats?.records_processed ?? r.etl_stats?.written) }}</strong></td>
               <td>{{ r.etl_stats?.duration_s }}s</td>
               <td>
                 <span class="badge" [ngClass]="r.ml_status && r.ml_status !== 'not_requested' ? 'badge-success' : 'neutral'">
-                  {{ r.ml_status && r.ml_status !== 'not_requested' ? 'Done' : 'Skipped' }}
+                  {{ (r.ml_status && r.ml_status !== 'not_requested' ? 'ingest.ml_done' : 'ingest.ml_skipped') | translate }}
                 </span>
               </td>
               <td>

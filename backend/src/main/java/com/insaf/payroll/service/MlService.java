@@ -36,9 +36,27 @@ public class MlService {
         return restTemplate.getForObject(builder.toUriString(), Object.class);
     }
 
-    public Object chat(String question) {
+    public Object getAnomaliesByMinistry() {
+        return restTemplate.getForObject(mlApiUrl + "/anomalies/by-ministry", Object.class);
+    }
+
+    public Object getAnomaliesByGrade() {
+        return restTemplate.getForObject(mlApiUrl + "/anomalies/by-grade", Object.class);
+    }
+
+    public Object getAnomalyTemporalContext(int employeeSk, int yearNum, int monthNum) {
+        String url = UriComponentsBuilder
+                .fromHttpUrl(mlApiUrl + "/anomalies/temporal-context")
+                .queryParam("employee_sk", employeeSk)
+                .queryParam("year_num",    yearNum)
+                .queryParam("month_num",   monthNum)
+                .toUriString();
+        return restTemplate.getForObject(url, Object.class);
+    }
+
+    public Object chat(Map<String, Object> body) {
         String url = mlApiUrl + "/chat";
-        return restTemplate.postForObject(url, Map.of("question", question), Object.class);
+        return restTemplate.postForObject(url, body, Object.class);
     }
 
     public Object getForecastDimensions(String ministry) {
@@ -52,6 +70,14 @@ public class MlService {
         if (ministry != null && !ministry.isBlank()) b.queryParam("ministry", ministry);
         if (grade    != null && !grade.isBlank())    b.queryParam("grade",    grade);
         return restTemplate.getForObject(b.toUriString(), Object.class);
+    }
+
+    public Object getEmployeeForecast(String employeeId) {
+        String url = UriComponentsBuilder
+                .fromHttpUrl(mlApiUrl + "/forecast/employee")
+                .queryParam("employee_id", employeeId)
+                .toUriString();
+        return restTemplate.getForObject(url, Object.class);
     }
 
     public Object getMlStatus() {

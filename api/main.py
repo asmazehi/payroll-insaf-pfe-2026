@@ -27,6 +27,7 @@ import uuid
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
 from pathlib import Path
+import time
 from typing import Callable, Optional
 
 from fastapi import BackgroundTasks, FastAPI, File, HTTPException, Query, UploadFile
@@ -47,6 +48,108 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Simple in-memory cache for expensive DB queries
+_cache: dict[str, tuple[float, object]] = {}
+_CACHE_TTL = 3600  # 1 hour
+
+def _cache_get(key: str):
+    entry = _cache.get(key)
+    if entry and time.time() - entry[0] < _CACHE_TTL:
+        return entry[1]
+    return None
+
+def _cache_set(key: str, value: object):
+    _cache[key] = (time.time(), value)
+
+def _load_anomaly_report():
+    """Load anomaly_report.csv with 1-hour in-memory cache."""
+    cached = _cache_get("anomaly_report")
+    if cached is not None:
+        return cached
+    import pandas as pd
+    report_path = Path(__file__).resolve().parent.parent / "ml" / "models" / "anomaly_report.csv"
+    if not report_path.exists():
+        return None
+    df = pd.read_csv(report_path)
+    _cache_set("anomaly_report", df)
+    return df
+
+
+def _classify_anomaly(row: dict) -> dict:
+    """Rule-based anomaly diagnosis — type, plain-language explanation, recommended action."""
+    z       = float(row.get("z_score") or 0)
+    pct_dev = float(row.get("pct_deviation") or 0)
+    pct_chg = row.get("pct_change_vs_prev")   # None when temporal context unavailable
+    next1   = row.get("pay_next_1m")
+    next2   = row.get("pay_next_2m")
+    mean    = float(row.get("emp_mean") or 0)
+    netpay  = float(row.get("m_netpay") or 0)
+
+    abs_z    = abs(z)
+    is_spike = z > 0
+    is_drop  = z < 0
+    abs_pct  = abs(pct_dev)
+
+    # Does the deviation persist into the next two months?
+    persistent = False
+    if mean > 0 and next1 is not None and next2 is not None:
+        n1, n2 = float(next1), float(next2)
+        if is_spike:
+            persistent = n1 > mean * 1.15 and n2 > mean * 1.15
+        elif is_drop:
+            persistent = n1 < mean * 0.85 and n2 < mean * 0.85
+
+    chg_str = f" ({pct_chg:+.1f}% vs previous month)" if pct_chg is not None else ""
+
+    if abs_z >= 3.5 and is_spike:
+        atype  = "extreme_spike"
+        expl   = (f"Net pay of {netpay:,.0f} TND is {abs_pct:.1f}% above the employee's "
+                  f"historical average ({mean:,.0f} TND) - a statistically extreme spike (z={z:.2f}).")
+        action = ("Verify for unauthorized bonus, payroll error, or duplicate payment. "
+                  "Cross-check with HR approval chain and supporting documents.")
+    elif abs_z >= 3.5 and is_drop:
+        atype  = "extreme_drop"
+        expl   = (f"Net pay of {netpay:,.0f} TND is {abs_pct:.1f}% below the historical "
+                  f"average ({mean:,.0f} TND) - a statistically extreme reduction (z={z:.2f}).")
+        action = ("Investigate potential unprocessed salary elements, illegal deductions, "
+                  "or incorrect payroll computation for this period.")
+    elif is_spike and persistent:
+        atype  = "persistent_raise"
+        expl   = (f"Net pay has been elevated for multiple consecutive months "
+                  f"({abs_pct:.1f}% above mean), suggesting a structural, ongoing change.")
+        action = ("Confirm whether a grade promotion or salary adjustment was officially "
+                  "approved and properly documented in the HR system.")
+    elif is_drop and persistent:
+        atype  = "persistent_drop"
+        expl   = (f"Net pay has been significantly below average for multiple consecutive months "
+                  f"({abs_pct:.1f}% below mean), indicating a sustained reduction.")
+        action = ("Verify if a demotion, disciplinary action, or benefit removal was applied "
+                  "and correctly authorized through the proper channels.")
+    elif is_spike:
+        atype  = "one_time_spike"
+        expl   = (f"A one-time net pay spike of {abs_pct:.1f}% above the employee's mean "
+                  f"was detected{chg_str}. Pay appears normal in adjacent months.")
+        action = ("Check for retroactive payments, one-time indemnities, overtime pay, "
+                  "or data entry errors specific to this pay period.")
+    elif is_drop:
+        atype  = "one_time_drop"
+        expl   = (f"A one-time net pay drop of {abs_pct:.1f}% below the employee's mean "
+                  f"was observed{chg_str}. Pay appears normal in adjacent months.")
+        action = ("Check for missed allowances, erroneous deductions, "
+                  "or partial-month payment in this period.")
+    else:
+        atype  = "pattern_anomaly"
+        expl   = (f"The payment pattern is atypical for this employee based on ML analysis "
+                  f"(z={z:.2f}), though the absolute deviation may be modest.")
+        action = ("Review the employee's pay history for this period "
+                  "and verify the computation against applicable payroll rules.")
+
+    return {
+        "anomaly_type":       atype,
+        "explanation":        expl,
+        "recommended_action": action,
+    }
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 PLOTS_DIR    = PROJECT_ROOT / "ml" / "plots"
@@ -107,6 +210,7 @@ def _detect_file_type(path: Path) -> str | None:
 class ChatRequest(BaseModel):
     question: str
     model:    str = "llama3.2"
+    history:  list[dict] = []
 
 
 class AnomalyExplainRequest(BaseModel):
@@ -437,6 +541,11 @@ def get_forecast(
     Full forecast payload: winner model, all model metrics, historical series,
     6-month forecast with confidence band.
     """
+    cache_key = f"forecast_{n}"
+    cached = _cache_get(cache_key)
+    if cached is not None:
+        return cached
+
     try:
         import json as _json
         from ml.predict import predict_payroll_next_months
@@ -483,15 +592,22 @@ def get_forecast(
             for p in predictions
         ]
 
-        return {
+        total_months = train_months + test_months
+        last_data_date = historical[-1]["date"] if historical else None
+
+        result = {
             "model":            winner,
             "n_months":         n,
             "mape":             winner_m.get("mape"),
+            "smape":            winner_m.get("smape"),
+            "mase":             winner_m.get("mase"),
+            "da":               winner_m.get("da"),
             "mae":              winner_m.get("mae"),
             "rmse":             winner_m.get("rmse"),
-            "r2":               winner_m.get("r2"),
             "train_months":     train_months,
             "test_months":      test_months,
+            "total_months":     total_months,
+            "last_data_date":   last_data_date,
             "avg_historical":   round(avg_hist, 2),
             "avg_forecast":     round(avg_fore, 2),
             "model_comparison": model_comparison,
@@ -499,6 +615,8 @@ def get_forecast(
             "historical":       historical,
             "currency":         "TND",
         }
+        _cache_set(cache_key, result)
+        return result
     except FileNotFoundError:
         raise HTTPException(status_code=503,
             detail="Forecast model not found. Run 'python -m ml.run_all_models' first.")
@@ -510,47 +628,72 @@ def get_forecast(
 def get_forecast_dimensions(ministry: Optional[str] = Query(None)):
     """
     Return ministries and grades for filter dropdowns.
-    When ?ministry=X is provided, grades are scoped to that ministry only
-    (used for cascading filter: pick ministry → grade list updates).
+    When ?ministry=X is provided, grades are scoped to that ministry only.
+    Both fr and ar labels are always returned; the client picks based on lang.
+    Results are cached for 5 minutes to avoid slow JOIN queries.
     """
+    cache_key = f"dims:{ministry or ''}"
+    cached = _cache_get(cache_key)
+    if cached is not None:
+        return cached
+
     try:
         import psycopg2
         from etl.core.config import DB_CONFIG
         with psycopg2.connect(**DB_CONFIG) as conn:
             with conn.cursor() as cur:
-                cur.execute("""
-                    SELECT ministry_code, ministry_name
-                    FROM dw.mv_payroll_by_ministry
-                    WHERE ministry_code IS NOT NULL
-                    ORDER BY total_netpay DESC
-                """)
-                ministries = [{"code": r[0], "name": r[1] or r[0]} for r in cur.fetchall()]
+                # Ministries: join with dim_etablissement for Arabic names
+                min_cached = _cache_get("dims:ministries")
+                if min_cached is not None:
+                    ministries = min_cached
+                else:
+                    cur.execute("""
+                        SELECT m.ministry_code,
+                               m.ministry_name                       AS name_fr,
+                               COALESCE(de.libletaba, de.libcetaba)  AS name_ar
+                        FROM dw.mv_payroll_by_ministry m
+                        LEFT JOIN dw.dim_etablissement de
+                               ON de.codetab = m.ministry_code
+                        WHERE m.ministry_code IS NOT NULL
+                        ORDER BY m.total_netpay DESC
+                    """)
+                    ministries = [
+                        {"code": r[0], "name_fr": r[1] or r[0], "name_ar": r[2] or r[1] or r[0]}
+                        for r in cur.fetchall()
+                    ]
+                    _cache_set("dims:ministries", ministries)
 
                 if ministry:
                     cur.execute("""
-                        SELECT DISTINCT dg.grade_code, dg.grade_label_fr, dg.category,
-                               COUNT(*) AS cnt
-                        FROM dw.fact_paie fp
-                        JOIN dw.dim_grade dg ON dg.grade_sk = fp.grade_sk
-                        WHERE fp.codetab = %s
-                          AND fp.employee_sk <> 0
-                          AND fp.grade_sk <> 0
-                          AND dg.grade_code IS NOT NULL
-                        GROUP BY dg.grade_code, dg.grade_label_fr, dg.category
+                        SELECT grade_code, grade_label_fr, grade_label_ar, category, cnt
+                        FROM dw.mv_grades_by_ministry
+                        WHERE ministry_code = %s
                         ORDER BY cnt DESC
                         LIMIT 80
                     """, (ministry,))
                 else:
                     cur.execute("""
-                        SELECT grade_code, grade_label_fr, category
-                        FROM dw.mv_grade_distribution
-                        WHERE grade_code IS NOT NULL
-                        ORDER BY total_netpay DESC
+                        SELECT dg.grade_code, dg.grade_label_fr, dg.grade_label_ar,
+                               dg.category
+                        FROM dw.mv_grade_distribution mgd
+                        JOIN dw.dim_grade dg ON dg.grade_code = mgd.grade_code
+                        WHERE mgd.grade_code IS NOT NULL
+                        ORDER BY mgd.total_netpay DESC
                         LIMIT 60
                     """)
-                grades = [{"code": r[0], "label": r[1] or r[0], "category": r[2]} for r in cur.fetchall()]
+                grades = [
+                    {
+                        "code":     r[0],
+                        "label_fr": r[1] or r[0],
+                        "label_ar": r[2] or r[1] or r[0],
+                        "category": r[3],
+                    }
+                    for r in cur.fetchall()
+                ]
 
-        return {"ministries": ministries, "grades": grades}
+        result = {"ministries": ministries, "grades": grades}
+        _cache_set(cache_key, result)
+        return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -621,39 +764,413 @@ def get_forecast_historical(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/forecast/employee", tags=["ML"])
+def get_employee_forecast(employee_id: str = Query(..., description="Employee national ID (CIN)")):
+    """
+    Return historical monthly net pay for a single employee + a 6-month
+    seasonal-naive projection based on their own pay history.
+    Looks up the employee by national ID (employee_id) via dim_employee.
+    """
+    try:
+        import psycopg2
+        import pandas as pd
+        from etl.core.config import DB_CONFIG
+
+        employee_id = employee_id.strip()
+
+        with psycopg2.connect(**DB_CONFIG) as conn:
+            with conn.cursor() as cur:
+                # Try CIN lookup first; if input is purely numeric also try as employee_sk
+                cur.execute("""
+                    SELECT de.employee_sk, de.last_name, de.first_name,
+                           de.birth_date, de.hire_date, de.gender
+                    FROM dw.dim_employee de
+                    WHERE de.employee_id = %s AND de.is_unknown = FALSE
+                    LIMIT 1
+                """, (employee_id,))
+                emp_row = cur.fetchone()
+
+                # Fallback: treat numeric input as employee_sk directly
+                if not emp_row and employee_id.isdigit():
+                    sk = int(employee_id)
+                    cur.execute("""
+                        SELECT de.employee_sk, de.last_name, de.first_name,
+                               de.birth_date, de.hire_date, de.gender
+                        FROM dw.dim_employee de
+                        WHERE de.employee_sk = %s AND de.is_unknown = FALSE
+                        LIMIT 1
+                    """, (sk,))
+                    emp_row = cur.fetchone()
+
+                    # If still not in dim_employee, synthesise a minimal row from fact_paie
+                    if not emp_row:
+                        cur.execute(
+                            "SELECT %s, NULL, NULL, NULL, NULL, NULL "
+                            "FROM dw.fact_paie WHERE employee_sk = %s LIMIT 1",
+                            (sk, sk)
+                        )
+                        emp_row = cur.fetchone()
+
+        if not emp_row:
+            raise HTTPException(status_code=404, detail=f"Employee '{employee_id}' not found")
+
+        employee_sk, last_name, first_name, birth_date, hire_date, gender = emp_row
+
+        # Compute age from birth_date
+        age = None
+        if birth_date:
+            today = datetime.today().date()
+            age = today.year - birth_date.year - (
+                (today.month, today.day) < (birth_date.month, birth_date.day)
+            )
+
+        with psycopg2.connect(**DB_CONFIG) as conn:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    SELECT dt.year_num, dt.month_num, dt.month_start_date,
+                           fp.m_netpay,
+                           dg.grade_code, dg.grade_label_fr,
+                           fp.codetab
+                    FROM dw.fact_paie fp
+                    JOIN dw.dim_temps dt ON dt.time_sk = fp.time_sk
+                    LEFT JOIN dw.dim_grade dg ON dg.grade_sk = fp.grade_sk
+                    WHERE fp.employee_sk = %s
+                      AND fp.m_netpay IS NOT NULL
+                      AND dt.year_num > 0
+                    ORDER BY dt.year_num, dt.month_num
+                """, (employee_sk,))
+                rows = cur.fetchall()
+
+        if not rows:
+            raise HTTPException(status_code=404, detail=f"No payroll data found for employee '{employee_id}'")
+
+        cols = ["year_num", "month_num", "month_start_date", "m_netpay",
+                "grade_code", "grade_label_fr", "codetab"]
+        df = pd.DataFrame(rows, columns=cols)
+        df["month_start_date"] = pd.to_datetime(df["month_start_date"])
+        df = df.sort_values("month_start_date").reset_index(drop=True)
+        df["m_netpay"] = df["m_netpay"].astype(float)
+
+        # Remove extreme outliers (values > 10× median) caused by ETL artefacts
+        # where aggregated ministry totals were accidentally assigned to one employee
+        median_pay = float(df["m_netpay"].median())
+        if median_pay > 0:
+            df = df[df["m_netpay"] <= median_pay * 10].reset_index(drop=True)
+
+        historical = [
+            {
+                "date":   row["month_start_date"].strftime("%Y-%m"),
+                "netpay": round(float(row["m_netpay"]), 2),
+            }
+            for _, row in df.iterrows()
+        ]
+
+        last_date = df["month_start_date"].max()
+
+        # Year-over-year approach:
+        # 1. Compute annual growth rate: avg of last 12 months vs previous 12 months
+        last_12 = df.tail(12)["m_netpay"].astype(float)
+        if len(df) >= 24:
+            prev_12 = df.iloc[-24:-12]["m_netpay"].astype(float)
+        else:
+            prev_12 = df.head(max(1, len(df) - 12))["m_netpay"].astype(float)
+
+        prev_mean = float(prev_12.mean()) if len(prev_12) > 0 else float(last_12.mean())
+        yoy_rate  = float(last_12.mean()) / prev_mean if prev_mean > 0 else 1.0
+        yoy_rate  = min(max(yoy_rate, 1.0), 1.20)   # floor at 0%, cap at 20% annual
+
+        # 2. Build lookup: most recent actual value seen for each calendar month
+        month_base: dict[int, float] = {}
+        for _, row in df.iterrows():
+            month_base[int(row["month_num"])] = float(row["m_netpay"])
+
+        # CI width: use std of last 24 non-null pay values; fall back to 8% of mean
+        recent_vals = df["m_netpay"].dropna().tail(24)
+        recent_std  = float(recent_vals.std()) if len(recent_vals) >= 2 else 0.0
+        if pd.isna(recent_std) or recent_std < 1:
+            recent_std = float(last_12.mean()) * 0.08
+
+        # 3. Forecast = last year's same month × YoY growth rate
+        forecast = []
+        for i in range(1, 7):
+            next_date = last_date + pd.DateOffset(months=i)
+            base = month_base.get(next_date.month, float(last_12.mean()))
+            pred = round(base * yoy_rate, 2)
+            forecast.append({
+                "date":   next_date.strftime("%Y-%m"),
+                "netpay": pred,
+                "lower":  round(max(pred - 1.645 * recent_std, 0), 2),
+                "upper":  round(pred + 1.645 * recent_std, 2),
+            })
+
+        grade_code  = df["grade_code"].dropna().iloc[-1]  if not df["grade_code"].dropna().empty  else None
+        grade_label = df["grade_label_fr"].dropna().iloc[-1] if not df["grade_label_fr"].dropna().empty else None
+        ministry    = df["codetab"].dropna().iloc[-1]     if not df["codetab"].dropna().empty     else None
+
+        return {
+            "employee_id":    employee_id,
+            "employee_sk":    employee_sk,
+            "last_name":      last_name,
+            "first_name":     first_name,
+            "birth_date":     birth_date.isoformat() if birth_date else None,
+            "age":            age,
+            "hire_date":      hire_date.isoformat() if hire_date else None,
+            "gender":         gender,
+            "grade_code":     grade_code,
+            "grade_label":    grade_label,
+            "ministry":       ministry,
+            "months_of_data": len(historical),
+            "avg_netpay":     round(float(df["m_netpay"].mean()), 2),
+            "yoy_rate":       round(yoy_rate, 4),
+            "historical":     historical,
+            "forecast":       forecast,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/forecast/feature-importance", tags=["ML"])
+def get_feature_importance():
+    """
+    Returns feature importances for the winning ML model.
+    Works only if winner is RF or XGBoost (tree-based).
+    SARIMA/Prophet return an empty list with an explanatory note.
+    """
+    try:
+        import json as _json
+        import joblib
+
+        # Prefer pre-saved importances from results JSON (populated after retrain)
+        results_path = MODELS_DIR / "payroll_forecast_results.json"
+        if results_path.exists():
+            res = _json.loads(results_path.read_text(encoding="utf-8"))
+            if res.get("feature_importances"):
+                return {
+                    "importances": res["feature_importances"],
+                    "model":       res.get("winner", ""),
+                    "source":      "pretrained",
+                }
+
+        # Fallback: load winner pkl and extract importances dynamically
+        winner_name = joblib.load(MODELS_DIR / "payroll_forecast_winner.pkl")
+        model       = joblib.load(MODELS_DIR / "payroll_forecast.pkl")
+        features    = joblib.load(MODELS_DIR / "payroll_forecast_features.pkl")
+
+        if hasattr(model, "feature_importances_"):
+            raw = model.feature_importances_
+            total = float(raw.sum()) or 1.0
+            items = sorted(
+                [{"feature": f, "importance": round(float(v / total), 6)}
+                 for f, v in zip(features, raw)],
+                key=lambda x: x["importance"], reverse=True,
+            )
+            return {"importances": items, "model": winner_name, "source": "pkl"}
+
+        return {
+            "importances": [],
+            "model":       winner_name,
+            "source":      "none",
+            "note":        f"{winner_name} is a statistical model — feature importances are not applicable.",
+        }
+    except Exception as e:
+        return {"importances": [], "model": "", "source": "error", "note": str(e)}
+
+
 @app.get("/anomalies", tags=["ML"])
 def get_anomalies(
-    limit: int = Query(50, ge=1, le=500),
+    limit: int = Query(100, ge=1, le=500),
     ministry:  Optional[str] = Query(None, description="Filter by ministry code"),
     year:      Optional[int] = Query(None, description="Filter by year"),
 ):
     """
-    Returns top anomalies detected in payroll data.
-    Reads from the pre-computed anomaly_report.csv saved during training.
+    Returns a balanced sample of anomalies (top N per severity tier) so all three
+    severity levels are represented in the table.  KPI counts come from the FULL
+    dataset via severity_summary — not from the returned subset.
     """
-    report_path = MODELS_DIR / "anomaly_report.csv"
-    if not report_path.exists():
+    import numpy as np
+    import pandas as pd
+    full_df = _load_anomaly_report()
+    if full_df is None:
         raise HTTPException(
             status_code=503,
             detail="Anomaly report not found. Run 'python -m ml.run_all_models' first."
         )
 
-    import pandas as pd
-    df = pd.read_csv(report_path)
+    total    = int(len(full_df))
+    z_all    = full_df["z_score"].abs()
+    severity_summary = {
+        "high":   int((z_all >= 3.5).sum()),
+        "medium": int(((z_all >= 2.5) & (z_all < 3.5)).sum()),
+        "low":    int((z_all < 2.5).sum()),
+    }
 
+    # Read correct rate from the model's own results JSON (avoids dividing flagged/flagged)
+    try:
+        _results_path = MODELS_DIR / "anomaly_results.json"
+        _meta = json.loads(_results_path.read_text(encoding="utf-8"))
+        anomaly_rate_pct = round(_meta["final_flag"]["anomaly_rate"], 2)
+        total_sampled_records   = int(_meta.get("total_records",   total))
+        total_sampled_employees = int(_meta.get("total_employees", 0))
+    except Exception:
+        anomaly_rate_pct        = 0.0
+        total_sampled_records   = total
+        total_sampled_employees = int(full_df["employee_sk"].nunique())
+
+    # Apply optional filters
+    df = full_df.copy()
     if ministry:
         df = df[df["ministry_code"] == ministry]
     if year:
         df = df[df["year_num"] == year]
 
-    df = df.sort_values("z_score", key=abs, ascending=False).head(limit)
+    # Balanced fetch: top N records from each severity tier
+    per_tier   = max(limit // 3, 1)
+    z_abs      = df["z_score"].abs()
+    high_rows  = df[z_abs >= 3.5].sort_values("z_score", key=abs, ascending=False).head(per_tier)
+    med_rows   = df[(z_abs >= 2.5) & (z_abs < 3.5)].sort_values("z_score", key=abs, ascending=False).head(per_tier)
+    low_rows   = df[z_abs < 2.5].sort_values("z_score", key=abs, ascending=False).head(per_tier)
+
+    result_df  = (
+        pd.concat([high_rows, med_rows, low_rows])
+        .sort_values("z_score", key=abs, ascending=False)
+    )
+
+    # Detect whether the CSV has the new columns (post-retrain)
+    has_new_cols = "detection_method" in df.columns and df["detection_method"].notna().any()
+
+    # Enrich each record with rule-based anomaly diagnosis
+    records = json.loads(result_df.to_json(orient="records"))
+    for rec in records:
+        rec.update(_classify_anomaly(rec))
 
     return {
-        "total_anomalies_in_report": int(len(pd.read_csv(report_path))),
-        "returned":  int(len(df)),
-        "filters":   {"ministry": ministry, "year": year},
-        "anomalies": df.to_dict(orient="records"),
+        "total_anomalies_in_report": total,
+        "total_sampled_records":     total_sampled_records,
+        "total_sampled_employees":   total_sampled_employees,
+        "severity_summary":          severity_summary,
+        "anomaly_rate_pct":          anomaly_rate_pct,
+        "has_new_cols":              bool(has_new_cols),
+        "returned":                  int(len(result_df)),
+        "filters":                   {"ministry": ministry, "year": year},
+        "anomalies":                 records,
     }
+
+
+@app.get("/anomalies/by-ministry", tags=["ML"])
+def get_anomalies_by_ministry():
+    """Aggregated anomaly counts grouped by ministry."""
+    import numpy as np
+    df = _load_anomaly_report()
+    if df is None:
+        raise HTTPException(503, "Anomaly report not found.")
+
+    rows = []
+    for ministry, g in df.groupby("ministry_code"):
+        z_abs = g["z_score"].abs()
+        rows.append({
+            "ministry_code":   str(ministry),
+            "ministry_name":   str(g["ministry_name_fr"].iloc[0]) if "ministry_name_fr" in g.columns else str(ministry),
+            "total_anomalies": int(len(g)),
+            "high":            int((z_abs >= 3.5).sum()),
+            "medium":          int(((z_abs >= 2.5) & (z_abs < 3.5)).sum()),
+            "low":             int((z_abs < 2.5).sum()),
+            "avg_z_score":     round(float(z_abs.mean()), 3),
+            "max_z_score":     round(float(z_abs.max()), 3),
+        })
+    rows.sort(key=lambda r: -r["total_anomalies"])
+    return rows
+
+
+@app.get("/anomalies/by-grade", tags=["ML"])
+def get_anomalies_by_grade():
+    """Aggregated anomaly counts grouped by grade."""
+    import numpy as np
+    df = _load_anomaly_report()
+    if df is None:
+        raise HTTPException(503, "Anomaly report not found.")
+
+    rows = []
+    for grade, g in df.groupby("grade_code"):
+        z_abs = g["z_score"].abs()
+        rows.append({
+            "grade_code":      str(grade),
+            "total_anomalies": int(len(g)),
+            "high":            int((z_abs >= 3.5).sum()),
+            "medium":          int(((z_abs >= 2.5) & (z_abs < 3.5)).sum()),
+            "low":             int((z_abs < 2.5).sum()),
+            "avg_z_score":     round(float(z_abs.mean()), 3),
+            "max_z_score":     round(float(z_abs.max()), 3),
+        })
+    rows.sort(key=lambda r: -r["total_anomalies"])
+    return rows[:60]
+
+
+@app.get("/anomalies/temporal-context", tags=["ML"])
+def get_anomaly_temporal_context(
+    employee_sk: int = Query(...),
+    year_num:    int = Query(...),
+    month_num:   int = Query(...),
+):
+    """
+    Fetch the 5 months surrounding an anomaly directly from the DW.
+    Returns pay_prev_2m, pay_prev_1m, current, pay_next_1m, pay_next_2m, pay_next_3m.
+    """
+    try:
+        import psycopg2
+        from etl.core.config import DB_CONFIG
+
+        with psycopg2.connect(**DB_CONFIG) as conn:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    SELECT dt.year_num, dt.month_num, fp.m_netpay
+                    FROM dw.fact_paie fp
+                    JOIN dw.dim_temps dt ON dt.time_sk = fp.time_sk
+                    WHERE fp.employee_sk = %s
+                      AND fp.m_netpay IS NOT NULL
+                      AND dt.year_num > 0
+                      AND (
+                        (dt.year_num * 12 + dt.month_num)
+                        BETWEEN (%s * 12 + %s - 2) AND (%s * 12 + %s + 3)
+                      )
+                    ORDER BY dt.year_num, dt.month_num
+                """, (employee_sk, year_num, month_num, year_num, month_num))
+                rows = cur.fetchall()
+
+        pay_map = {(r[0], r[1]): float(r[2]) for r in rows}
+
+        def _offset(base_y: int, base_m: int, delta: int):
+            total = base_y * 12 + base_m + delta
+            return (total // 12, total % 12 or 12)
+
+        def _pay(delta: int):
+            k = _offset(year_num, month_num, delta)
+            v = pay_map.get(k)
+            return v
+
+        current = _pay(0)
+        if current is None:
+            raise HTTPException(404, "No data for this employee/period")
+
+        prev_chg = None
+        p1 = _pay(-1)
+        if p1 and p1 > 0:
+            prev_chg = round((current - p1) / p1 * 100, 2)
+
+        return {
+            "pay_prev_2m":        _pay(-2),
+            "pay_prev_1m":        p1,
+            "pay_current":        current,
+            "pay_next_1m":        _pay(1),
+            "pay_next_2m":        _pay(2),
+            "pay_next_3m":        _pay(3),
+            "pct_change_vs_prev": prev_chg,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/anomalies/explain", tags=["ML"])
@@ -694,7 +1211,7 @@ def chat_endpoint(req: ChatRequest):
     """
     try:
         from api.chatbot import chat
-        result = chat(question=req.question, model=req.model)
+        result = chat(question=req.question, model=req.model, history=req.history)
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

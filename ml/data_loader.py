@@ -10,8 +10,9 @@ import psycopg2
 from etl.core.config import DB_CONFIG
 
 
-def _conn():
-    return psycopg2.connect(**DB_CONFIG)
+def _conn(timeout: bool = False):
+    opts = "-c statement_timeout=0 -c work_mem=256MB"
+    return psycopg2.connect(**DB_CONFIG, options=opts)
 
 
 def load_monthly_payroll() -> pd.DataFrame:
@@ -74,7 +75,7 @@ def load_monthly_payroll_by_ministry() -> pd.DataFrame:
     return df
 
 
-def load_individual_payroll(sample_pct: float = 5.0) -> pd.DataFrame:
+def load_individual_payroll(sample_pct: float = 100.0) -> pd.DataFrame:
     """
     Individual-level payroll records for anomaly detection.
 
@@ -82,9 +83,9 @@ def load_individual_payroll(sample_pct: float = 5.0) -> pd.DataFrame:
     so all ministries and etablissements are covered — not just the 3 that
     matched the old organisme.json lookup.
 
-    sample_pct: TABLESAMPLE percentage (1–100). Default 5% ≈ 2M rows,
-    enough for statistically valid anomaly detection without memory issues.
+    sample_pct: 1–100. When 100 (default), no TABLESAMPLE — full dataset.
     """
+    tablesample = f"TABLESAMPLE SYSTEM({sample_pct})" if sample_pct < 100.0 else ""
     sql = f"""
         SELECT
             fp.employee_sk,
@@ -111,7 +112,7 @@ def load_individual_payroll(sample_pct: float = 5.0) -> pd.DataFrame:
             fp.m_sub,
             fp.m_avkm,
             fp.m_avlog
-        FROM dw.fact_paie fp TABLESAMPLE SYSTEM({sample_pct})
+        FROM dw.fact_paie fp {tablesample}
         JOIN dw.dim_temps          dt ON dt.time_sk   = fp.time_sk
         JOIN dw.dim_grade          dg ON dg.grade_sk  = fp.grade_sk
         JOIN dw.dim_nature         dn ON dn.nature_sk = fp.nature_sk
@@ -124,8 +125,22 @@ def load_individual_payroll(sample_pct: float = 5.0) -> pd.DataFrame:
           AND fp.m_netpay   IS NOT NULL
           AND fp.m_salbrut  IS NOT NULL
     """
-    with _conn() as conn:
-        df = pd.read_sql(sql, conn, parse_dates=["month_start_date"])
+    conn = _conn()
+    try:
+        with conn.cursor(name="individual_payroll_cur") as cur:
+            cur.itersize = 50_000
+            cur.execute(sql)
+            cols = [d[0] for d in cur.description]
+            chunks = []
+            while True:
+                rows = cur.fetchmany(50_000)
+                if not rows:
+                    break
+                chunks.append(pd.DataFrame(rows, columns=cols))
+        df = pd.concat(chunks, ignore_index=True)
+    finally:
+        conn.close()
+    df["month_start_date"] = pd.to_datetime(df["month_start_date"], errors="coerce")
     return df
 
 

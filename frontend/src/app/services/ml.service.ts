@@ -9,7 +9,8 @@ export class MlService {
 
   constructor(private http: HttpClient) {}
 
-  getForecast(n = 6): Observable<any>         { return this.http.get(`${this.base}/forecast?n=${n}`); }
+  getForecast(n = 6): Observable<any>          { return this.http.get(`${this.base}/forecast?n=${n}`); }
+  getFeatureImportance(): Observable<any>      { return this.http.get(`${this.base}/forecast/feature-importance`); }
   getForecastDimensions(): Observable<any>    { return this.http.get(`${this.base}/forecast/dimensions`); }
   getForecastGrades(ministry: string): Observable<any> {
     return this.http.get(`${this.base}/forecast/dimensions?ministry=${encodeURIComponent(ministry)}`);
@@ -20,7 +21,17 @@ export class MlService {
     if (grade)    params += `${params ? '&' : '?'}grade=${encodeURIComponent(grade)}`;
     return this.http.get(`${this.base}/forecast/historical${params}`);
   }
-  getAnomalies(limit = 50): Observable<any>   { return this.http.get(`${this.base}/anomalies?limit=${limit}`); }
-  chat(question: string): Observable<any>     { return this.http.post(`${this.base}/chat`, { question }); }
+  getEmployeeForecast(employeeId: string): Observable<any> {
+    return this.http.get(`${this.base}/forecast/employee?employee_id=${encodeURIComponent(employeeId)}`);
+  }
+  getAnomalies(limit = 50): Observable<any>            { return this.http.get(`${this.base}/anomalies?limit=${limit}`); }
+  getAnomaliesByMinistry(): Observable<any>            { return this.http.get(`${this.base}/anomalies/by-ministry`); }
+  getAnomaliesByGrade(): Observable<any>               { return this.http.get(`${this.base}/anomalies/by-grade`); }
+  getAnomalyTemporalContext(empSk: number, year: number, month: number): Observable<any> {
+    return this.http.get(`${this.base}/anomalies/temporal-context?employee_sk=${empSk}&year_num=${year}&month_num=${month}`);
+  }
+  chat(question: string, history: {role: string, text: string}[] = []): Observable<any> {
+    return this.http.post(`${this.base}/chat`, { question, history });
+  }
   getStatus(): Observable<any>                { return this.http.get(`${this.base}/status`); }
 }

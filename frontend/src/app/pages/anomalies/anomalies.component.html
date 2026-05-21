@@ -6,21 +6,25 @@
       <div class="page-hero__title">
         <div class="hero-icon"><mat-icon>radar</mat-icon></div>
         <div>
-          <h2>Anomaly Detection</h2>
-          <p>AI-identified payroll irregularities using Isolation Forest &amp; statistical methods</p>
+          <h2>{{ 'anomalies.title' | translate }}</h2>
+          <p>{{ 'anomalies.subtitle' | translate }}</p>
         </div>
       </div>
       <div class="page-hero__right" *ngIf="result">
         <div class="anomaly-stat">
-          <span class="anomaly-stat__val">{{ result.total_anomalies_in_report | number }}</span>
-          <span class="anomaly-stat__label">Total Flagged</span>
+          <span class="anomaly-stat__val">{{ totalAnomalies | number }}</span>
+          <span class="anomaly-stat__label">{{ 'anomalies.total_flagged' | translate }}</span>
+        </div>
+        <div class="anomaly-stat anomaly-stat--rate">
+          <span class="anomaly-stat__val">{{ anomalyRate }}</span>
+          <span class="anomaly-stat__label">{{ 'anomalies.anomaly_rate' | translate }}</span>
         </div>
       </div>
     </div>
   </div>
 
   <div class="loading-overlay" *ngIf="loading">
-    <div class="spinner"></div><span>Analyzing payroll data…</span>
+    <div class="spinner"></div><span>{{ 'anomalies.loading' | translate }}</span>
   </div>
 
   <div class="error-banner" *ngIf="error" style="margin:0 32px 20px">
@@ -29,107 +33,253 @@
 
   <div class="page-body" *ngIf="!loading && result">
 
-    <!-- KPI row -->
+    <!-- Stale-data notice -->
+    <div class="retrain-notice" *ngIf="!hasNewCols">
+      <mat-icon>info</mat-icon>
+      <span>{{ 'anomalies.retrain_notice' | translate }}</span>
+    </div>
+
+    <!-- KPI row — counts from FULL dataset via severity_summary -->
     <div class="kpi-grid" style="grid-template-columns:repeat(4,1fr)">
       <div class="kpi-card accent-navy">
         <div class="kpi-icon navy"><mat-icon>warning_amber</mat-icon></div>
         <div class="kpi-body">
-          <div class="kpi-label">Total Anomalies</div>
-          <div class="kpi-value">{{ result.total_anomalies_in_report | number }}</div>
-          <div class="kpi-sub">Flagged records</div>
+          <div class="kpi-label">{{ 'anomalies.kpi_total' | translate }}</div>
+          <div class="kpi-value">{{ totalAnomalies | number }}</div>
+          <div class="kpi-sub">{{ 'anomalies.flagged_records' | translate }}</div>
         </div>
       </div>
-      <div class="kpi-card accent-red" style="cursor:pointer" (click)="filter='high'">
+      <div class="kpi-card accent-red" style="cursor:pointer" (click)="activeTab=0;filter='high'">
         <div class="kpi-icon red"><mat-icon>error</mat-icon></div>
         <div class="kpi-body">
-          <div class="kpi-label">High Severity</div>
-          <div class="kpi-value">{{ count('high') }}</div>
-          <div class="kpi-sub">Z-score ≥ 3.5</div>
+          <div class="kpi-label">{{ 'anomalies.kpi_high' | translate }}</div>
+          <div class="kpi-value">{{ countHigh | number }}</div>
+          <div class="kpi-sub">{{ 'anomalies.zscore_high' | translate }}</div>
         </div>
       </div>
-      <div class="kpi-card accent-gold" style="cursor:pointer" (click)="filter='medium'">
+      <div class="kpi-card accent-gold" style="cursor:pointer" (click)="activeTab=0;filter='medium'">
         <div class="kpi-icon gold"><mat-icon>report_problem</mat-icon></div>
         <div class="kpi-body">
-          <div class="kpi-label">Medium Severity</div>
-          <div class="kpi-value">{{ count('medium') }}</div>
-          <div class="kpi-sub">Z-score 2.5 – 3.5</div>
+          <div class="kpi-label">{{ 'anomalies.kpi_medium' | translate }}</div>
+          <div class="kpi-value">{{ countMedium | number }}</div>
+          <div class="kpi-sub">{{ 'anomalies.zscore_med' | translate }}</div>
         </div>
       </div>
-      <div class="kpi-card accent-blue" style="cursor:pointer" (click)="filter='low'">
+      <div class="kpi-card accent-blue" style="cursor:pointer" (click)="activeTab=0;filter='low'">
         <div class="kpi-icon blue"><mat-icon>info</mat-icon></div>
         <div class="kpi-body">
-          <div class="kpi-label">Low Severity</div>
-          <div class="kpi-value">{{ count('low') }}</div>
-          <div class="kpi-sub">Z-score &lt; 2.5</div>
+          <div class="kpi-label">{{ 'anomalies.kpi_low' | translate }}</div>
+          <div class="kpi-value">{{ countLow | number }}</div>
+          <div class="kpi-sub">{{ 'anomalies.zscore_low' | translate }}</div>
         </div>
       </div>
     </div>
 
-    <!-- Filter bar -->
-    <div class="chart-card" style="padding:16px 24px;margin-bottom:18px">
-      <div class="filter-row">
-        <span class="filter-label">Filter by severity</span>
-        <div class="filter-pills">
-          <button class="fpill" [class.active]="filter==='all'" (click)="filter='all'">
-            <span class="fpill__dot"></span>All <em>{{ result.returned }}</em>
-          </button>
-          <button class="fpill fpill--danger" [class.active]="filter==='high'" (click)="filter='high'">
-            <span class="fpill__dot"></span>High <em>{{ count('high') }}</em>
-          </button>
-          <button class="fpill fpill--warning" [class.active]="filter==='medium'" (click)="filter='medium'">
-            <span class="fpill__dot"></span>Medium <em>{{ count('medium') }}</em>
-          </button>
-          <button class="fpill fpill--info" [class.active]="filter==='low'" (click)="filter='low'">
-            <span class="fpill__dot"></span>Low <em>{{ count('low') }}</em>
-          </button>
-        </div>
-        <span class="filter-count">{{ filtered.length }} records shown</span>
-      </div>
+    <!-- Tab strip -->
+    <div class="tab-strip">
+      <button class="tab-btn" [class.active]="activeTab===0" (click)="activeTab=0">
+        <mat-icon>list_alt</mat-icon>{{ 'anomalies.tab_records' | translate }}
+      </button>
+      <button class="tab-btn" [class.active]="activeTab===1" (click)="activeTab=1">
+        <mat-icon>account_balance</mat-icon>{{ 'anomalies.tab_ministry' | translate }}
+      </button>
+      <button class="tab-btn" [class.active]="activeTab===2" (click)="activeTab=2">
+        <mat-icon>badge</mat-icon>{{ 'anomalies.tab_grade' | translate }}
+      </button>
     </div>
 
-    <!-- Table -->
-    <div class="chart-card">
-      <div class="section-header">
-        <h3>Anomalous Payroll Records</h3>
-        <span class="section-sub">Click any row for details</span>
+    <!-- ══ TAB 0: Records ══════════════════════════════════════════ -->
+    <ng-container *ngIf="activeTab===0">
+
+      <!-- Filter bar -->
+      <div class="chart-card" style="padding:14px 24px;margin-bottom:18px">
+        <div class="filter-row">
+          <span class="filter-label">{{ 'anomalies.filter_severity' | translate }}</span>
+          <div class="filter-pills">
+            <button class="fpill" [class.active]="filter==='all'" (click)="filter='all'">
+              <span class="fpill__dot"></span>{{ 'anomalies.all' | translate }}
+              <em>{{ result.returned }}</em>
+            </button>
+            <button class="fpill fpill--danger" [class.active]="filter==='high'" (click)="filter='high'">
+              <span class="fpill__dot"></span>{{ 'anomalies.high' | translate }}
+              <em>{{ countInView('high') }}</em>
+            </button>
+            <button class="fpill fpill--warning" [class.active]="filter==='medium'" (click)="filter='medium'">
+              <span class="fpill__dot"></span>{{ 'anomalies.medium' | translate }}
+              <em>{{ countInView('medium') }}</em>
+            </button>
+            <button class="fpill fpill--info" [class.active]="filter==='low'" (click)="filter='low'"
+              *ngIf="hasLow">
+              <span class="fpill__dot"></span>{{ 'anomalies.low' | translate }}
+              <em>{{ countInView('low') }}</em>
+            </button>
+          </div>
+          <span class="filter-count">{{ filtered.length }} {{ 'anomalies.records_shown' | translate }}</span>
+          <span class="sample-note">{{ 'anomalies.sample_note' | translate : { total: totalAnomalies, records: totalSampledRecords, employees: totalSampledEmployees } }}</span>
+        </div>
       </div>
-      <div class="table-container">
-        <table class="data-table">
-          <thead>
-            <tr>
-              <th>Severity</th><th>Employee ID</th><th>Grade</th>
-              <th>Ministry</th><th>Period</th><th>Net Pay</th>
-              <th>Z-Score</th><th>Method</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr *ngFor="let r of filtered" (click)="openDetail(r)" class="clickable-row">
-              <td>
-                <span class="sev-badge"
-                  [class.sev-badge--high]="severity(r)==='high'"
-                  [class.sev-badge--medium]="severity(r)==='medium'"
-                  [class.sev-badge--low]="severity(r)==='low'">
-                  <span class="sev-dot"></span>{{ severityLabel(r) | titlecase }}
-                </span>
-              </td>
-              <td><code class="emp-id">{{ r.employee_sk }}</code></td>
-              <td>{{ r.grade_code || '—' }}</td>
-              <td class="ministry-cell">{{ r.ministry_code || r.organisme_code || '—' }}</td>
-              <td>{{ r.year_num }}/{{ r.month_num }}</td>
-              <td><strong>{{ fmt(r.m_netpay) }}</strong></td>
-              <td>
-                <span class="z-score-val"
-                  [class.z-high]="abs(r.z_score)>=3.5"
-                  [class.z-med]="abs(r.z_score)>=2.5 && abs(r.z_score)<3.5">
-                  {{ (r.z_score ?? r.anomaly_score) | number:'1.2-2' }}
-                </span>
-              </td>
-              <td><span class="badge neutral">{{ r.detection_method || 'IF' }}</span></td>
-            </tr>
-          </tbody>
-        </table>
+
+      <!-- Records table -->
+      <div class="chart-card">
+        <div class="section-header">
+          <h3>{{ 'anomalies.table_title' | translate }}</h3>
+          <span class="section-sub">{{ 'anomalies.click_detail' | translate }}</span>
+        </div>
+        <div class="table-container">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>{{ 'anomalies.col_severity' | translate }}</th>
+                <th>{{ 'anomalies.col_employee' | translate }}</th>
+                <th>{{ 'anomalies.col_grade' | translate }}</th>
+                <th>{{ 'anomalies.col_ministry' | translate }}</th>
+                <th>{{ 'anomalies.col_period' | translate }}</th>
+                <th>{{ 'anomalies.col_netpay' | translate }}</th>
+                <th>{{ 'anomalies.col_emp_mean' | translate }}</th>
+                <th>{{ 'anomalies.col_zscore' | translate }}</th>
+                <th *ngIf="hasNewCols">{{ 'anomalies.col_rolling_z' | translate }}</th>
+                <th *ngIf="hasNewCols">{{ 'anomalies.col_pct_change' | translate }}</th>
+                <th>{{ 'anomalies.col_method' | translate }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let r of filtered" (click)="openDetail(r)" class="clickable-row">
+                <td>
+                  <span class="sev-badge"
+                    [class.sev-badge--high]="severity(r)==='high'"
+                    [class.sev-badge--medium]="severity(r)==='medium'"
+                    [class.sev-badge--low]="severity(r)==='low'">
+                    <span class="sev-dot"></span>{{ severityLabel(r) | titlecase }}
+                  </span>
+                </td>
+                <td><code class="emp-id">{{ r.employee_sk }}</code></td>
+                <td>{{ r.grade_code || '—' }}</td>
+                <td class="ministry-cell">{{ r.ministry_code || '—' }}</td>
+                <td>{{ r.year_num }}/{{ r.month_num | number:'2.0-0' }}</td>
+                <td><strong>{{ fmt(r.m_netpay) }}</strong></td>
+                <td class="text-muted">{{ fmt(r.emp_mean) }}</td>
+                <td>
+                  <span class="z-score-val"
+                    [class.z-high]="abs(r.z_score)>=3.5"
+                    [class.z-med]="abs(r.z_score)>=2.5 && abs(r.z_score)<3.5">
+                    {{ (r.z_score ?? r.anomaly_score) | number:'1.2-2' }}
+                  </span>
+                </td>
+                <td *ngIf="hasNewCols">
+                  <span class="z-score-val"
+                    [class.z-high]="r.rolling_z != null && abs(r.rolling_z)>=3.5"
+                    [class.z-med]="r.rolling_z != null && abs(r.rolling_z)>=2.5 && abs(r.rolling_z)<3.5">
+                    {{ r.rolling_z != null ? (r.rolling_z | number:'1.2-2') : '—' }}
+                  </span>
+                </td>
+                <td *ngIf="hasNewCols">
+                  <span [class.pct-up]="r.pct_change_vs_prev > 0"
+                        [class.pct-down]="r.pct_change_vs_prev < 0">
+                    {{ fmtPct(r.pct_change_vs_prev) }}
+                  </span>
+                </td>
+                <td>
+                  <span class="method-badge"
+                    [class.method-zscore]="r.detection_method === 'Z-score'"
+                    [class.method-both]="r.detection_method?.includes('+')">
+                    {{ r.detection_method || 'Z-score' }}
+                  </span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
-    </div>
+    </ng-container>
+
+    <!-- ══ TAB 1: By Ministry ══════════════════════════════════════ -->
+    <ng-container *ngIf="activeTab===1">
+      <div class="chart-card">
+        <div class="section-header">
+          <h3>{{ 'anomalies.tab_ministry' | translate }}</h3>
+          <span class="section-sub">{{ 'anomalies.breakdown_sub' | translate }}</span>
+        </div>
+        <div class="loading-inline" *ngIf="loadingBreakdown">
+          <div class="spinner-sm"></div><span>{{ 'common.loading' | translate }}</span>
+        </div>
+        <div class="table-container" *ngIf="!loadingBreakdown">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>{{ 'anomalies.col_ministry' | translate }}</th>
+                <th>{{ 'anomalies.col_total_anomalies' | translate }}</th>
+                <th>{{ 'anomalies.high' | translate }}</th>
+                <th>{{ 'anomalies.medium' | translate }}</th>
+                <th>{{ 'anomalies.low' | translate }}</th>
+                <th>{{ 'anomalies.col_avg_zscore' | translate }}</th>
+                <th>{{ 'anomalies.col_max_zscore' | translate }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let r of ministryData">
+                <td>
+                  <strong>{{ r.ministry_code }}</strong>
+                  <div class="cell-sub" *ngIf="r.ministry_name && r.ministry_name !== r.ministry_code">{{ r.ministry_name }}</div>
+                </td>
+                <td><strong>{{ r.total_anomalies | number }}</strong></td>
+                <td><span class="count-pill count-high">{{ r.high | number }}</span></td>
+                <td><span class="count-pill count-med">{{ r.medium | number }}</span></td>
+                <td><span class="count-pill count-low">{{ r.low | number }}</span></td>
+                <td>
+                  <span class="z-score-val" [class.z-high]="r.avg_z_score>=3.5" [class.z-med]="r.avg_z_score>=2.5 && r.avg_z_score<3.5">
+                    {{ r.avg_z_score | number:'1.2-2' }}
+                  </span>
+                </td>
+                <td><span class="z-score-val z-high">{{ r.max_z_score | number:'1.2-2' }}</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </ng-container>
+
+    <!-- ══ TAB 2: By Grade ═════════════════════════════════════════ -->
+    <ng-container *ngIf="activeTab===2">
+      <div class="chart-card">
+        <div class="section-header">
+          <h3>{{ 'anomalies.tab_grade' | translate }}</h3>
+          <span class="section-sub">{{ 'anomalies.breakdown_sub' | translate }}</span>
+        </div>
+        <div class="loading-inline" *ngIf="loadingBreakdown">
+          <div class="spinner-sm"></div><span>{{ 'common.loading' | translate }}</span>
+        </div>
+        <div class="table-container" *ngIf="!loadingBreakdown">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>{{ 'anomalies.col_grade' | translate }}</th>
+                <th>{{ 'anomalies.col_total_anomalies' | translate }}</th>
+                <th>{{ 'anomalies.high' | translate }}</th>
+                <th>{{ 'anomalies.medium' | translate }}</th>
+                <th>{{ 'anomalies.low' | translate }}</th>
+                <th>{{ 'anomalies.col_avg_zscore' | translate }}</th>
+                <th>{{ 'anomalies.col_max_zscore' | translate }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let r of gradeData">
+                <td><code class="emp-id">{{ r.grade_code }}</code></td>
+                <td><strong>{{ r.total_anomalies | number }}</strong></td>
+                <td><span class="count-pill count-high">{{ r.high | number }}</span></td>
+                <td><span class="count-pill count-med">{{ r.medium | number }}</span></td>
+                <td><span class="count-pill count-low">{{ r.low | number }}</span></td>
+                <td>
+                  <span class="z-score-val" [class.z-high]="r.avg_z_score>=3.5" [class.z-med]="r.avg_z_score>=2.5 && r.avg_z_score<3.5">
+                    {{ r.avg_z_score | number:'1.2-2' }}
+                  </span>
+                </td>
+                <td><span class="z-score-val z-high">{{ r.max_z_score | number:'1.2-2' }}</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </ng-container>
 
   </div>
 </div>
@@ -145,26 +295,134 @@
           [class.sev-badge--low]="severity(selected)==='low'">
           <span class="sev-dot"></span>{{ severityLabel(selected) | titlecase }}
         </span>
-        <h3>Anomaly Detail</h3>
+        <h3>{{ 'anomalies.modal_title' | translate }}</h3>
       </div>
-      <button class="modal__close" (click)="closeDetail()"><mat-icon>close</mat-icon></button>
+      <div class="modal__header-actions">
+        <a class="btn-forecast-link"
+           [routerLink]="['/forecast']"
+           [queryParams]="{ empId: selected.employee_sk }"
+           (click)="closeDetail()">
+          <mat-icon>trending_up</mat-icon>
+          {{ 'anomalies.view_in_forecast' | translate }}
+        </a>
+        <button class="modal__close" (click)="closeDetail()"><mat-icon>close</mat-icon></button>
+      </div>
     </div>
     <div class="modal__body">
+
+      <!-- Core details -->
       <div class="detail-grid">
-        <div class="detail-item"><span>Employee ID</span><strong>{{ selected.employee_sk }}</strong></div>
-        <div class="detail-item"><span>Period</span><strong>{{ selected.year_num }}/{{ selected.month_num }}</strong></div>
-        <div class="detail-item"><span>Net Pay</span><strong>{{ fmt(selected.m_netpay) }}</strong></div>
-        <div class="detail-item"><span>Grade</span><strong>{{ selected.grade_code || '—' }}</strong></div>
-        <div class="detail-item"><span>Ministry</span><strong>{{ selected.ministry_code || '—' }}</strong></div>
-        <div class="detail-item"><span>Z-Score</span><strong>{{ (selected.z_score ?? selected.anomaly_score) | number:'1.3-3' }}</strong></div>
-        <div class="detail-item"><span>Detection Method</span><strong>{{ selected.detection_method || 'Isolation Forest' }}</strong></div>
-      </div>
-      <div class="llm-box" *ngIf="selected.explanation">
-        <div class="llm-box__header">
-          <div class="llm-icon"><mat-icon>smart_toy</mat-icon></div>
-          <span>AI Explanation</span>
+        <div class="detail-item">
+          <span>{{ 'anomalies.detail_employee' | translate }}</span>
+          <strong>{{ selected.employee_sk }}</strong>
         </div>
-        <p>{{ selected.explanation }}</p>
+        <div class="detail-item">
+          <span>{{ 'anomalies.detail_period' | translate }}</span>
+          <strong>{{ selected.year_num }}/{{ selected.month_num }}</strong>
+        </div>
+        <div class="detail-item">
+          <span>{{ 'anomalies.detail_netpay' | translate }}</span>
+          <strong class="val-anomaly">{{ fmt(selected.m_netpay) }}</strong>
+        </div>
+        <div class="detail-item">
+          <span>{{ 'anomalies.detail_emp_mean' | translate }}</span>
+          <strong>{{ fmt(selected.emp_mean) }}</strong>
+        </div>
+        <div class="detail-item">
+          <span>{{ 'anomalies.detail_grade' | translate }}</span>
+          <strong>{{ selected.grade_code || '—' }}</strong>
+        </div>
+        <div class="detail-item">
+          <span>{{ 'anomalies.detail_ministry' | translate }}</span>
+          <strong>{{ selected.ministry_code || '—' }}</strong>
+        </div>
+        <div class="detail-item">
+          <span>{{ 'anomalies.detail_zscore' | translate }}</span>
+          <strong [class.z-high-txt]="abs(selected.z_score)>=3.5"
+                  [class.z-med-txt]="abs(selected.z_score)>=2.5 && abs(selected.z_score)<3.5">
+            {{ (selected.z_score ?? selected.anomaly_score) | number:'1.3-3' }}
+          </strong>
+        </div>
+        <div class="detail-item" *ngIf="hasNewCols">
+          <span>{{ 'anomalies.detail_rolling_z' | translate }}</span>
+          <strong>{{ selected.rolling_z != null ? (selected.rolling_z | number:'1.3-3') : '—' }}</strong>
+        </div>
+        <div class="detail-item" *ngIf="hasNewCols">
+          <span>{{ 'anomalies.detail_pct_change' | translate }}</span>
+          <strong [class.pct-up]="selected.pct_change_vs_prev > 0"
+                  [class.pct-down]="selected.pct_change_vs_prev < 0">
+            {{ fmtPct(selected.pct_change_vs_prev) }}
+          </strong>
+        </div>
+        <div class="detail-item" style="grid-column:1/-1">
+          <span>{{ 'anomalies.detail_method' | translate }}</span>
+          <strong>{{ selected.detection_method || 'Z-score' }}</strong>
+        </div>
+      </div>
+
+      <!-- Temporal context — always shown, fetched live from DW -->
+      <div class="temporal-section">
+        <div class="temporal-title">
+          <mat-icon>timeline</mat-icon>
+          <span>{{ 'anomalies.temporal_context' | translate }}</span>
+          <span class="temporal-loading" *ngIf="temporalLoading">
+            <span class="spinner-sm"></span>
+          </span>
+        </div>
+        <div class="temporal-months">
+          <div class="tmonth">
+            <span class="tmonth__label">{{ monthLabel(selected.year_num, selected.month_num, -2) }}</span>
+            <span class="tmonth__val">{{ fmt(selected.pay_prev_2m) }}</span>
+          </div>
+          <div class="tmonth">
+            <span class="tmonth__label">{{ monthLabel(selected.year_num, selected.month_num, -1) }}</span>
+            <span class="tmonth__val">{{ fmt(selected.pay_prev_1m) }}</span>
+          </div>
+          <div class="tmonth tmonth--current">
+            <span class="tmonth__label">{{ monthLabel(selected.year_num, selected.month_num, 0) }}</span>
+            <span class="tmonth__val">{{ fmt(selected.m_netpay) }}</span>
+            <span class="tmonth__flag">⚠</span>
+          </div>
+          <div class="tmonth">
+            <span class="tmonth__label">{{ monthLabel(selected.year_num, selected.month_num, 1) }}</span>
+            <span class="tmonth__val">{{ fmt(selected.pay_next_1m) }}</span>
+          </div>
+          <div class="tmonth">
+            <span class="tmonth__label">{{ monthLabel(selected.year_num, selected.month_num, 2) }}</span>
+            <span class="tmonth__val">{{ fmt(selected.pay_next_2m) }}</span>
+          </div>
+          <div class="tmonth">
+            <span class="tmonth__label">{{ monthLabel(selected.year_num, selected.month_num, 3) }}</span>
+            <span class="tmonth__val">{{ fmt(selected.pay_next_3m) }}</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Anomaly Diagnosis -->
+      <div class="diagnosis-card" *ngIf="selected.anomaly_type">
+        <div class="diagnosis-header">
+          <mat-icon>search</mat-icon>
+          <span>{{ 'anomalies.diagnosis_title' | translate }}</span>
+          <span class="diag-type-badge" [ngClass]="'diag-type--' + selected.anomaly_type">
+            {{ 'anomalies.type_' + selected.anomaly_type | translate }}
+          </span>
+        </div>
+        <div class="diagnosis-body">
+          <div class="diagnosis-row">
+            <mat-icon class="diag-row-icon diag-row-icon--info">info_outline</mat-icon>
+            <div>
+              <div class="diag-row-label">{{ 'anomalies.diagnosis_explanation' | translate }}</div>
+              <p class="diag-row-text">{{ selected.explanation }}</p>
+            </div>
+          </div>
+          <div class="diagnosis-row diagnosis-row--action">
+            <mat-icon class="diag-row-icon diag-row-icon--action">task_alt</mat-icon>
+            <div>
+              <div class="diag-row-label">{{ 'anomalies.diagnosis_action' | translate }}</div>
+              <p class="diag-row-text">{{ selected.recommended_action }}</p>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   </div>

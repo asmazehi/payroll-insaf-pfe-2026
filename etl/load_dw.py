@@ -537,12 +537,14 @@ def load_fact_paie(cur, path: Path, maps: tuple, batch_size: int = 5000) -> int:
     return total
 
 
-def load_fact_indem(cur, path: Path, maps: tuple, batch_size: int = 5000) -> int:
+def load_fact_indem(cur, path: Path, maps: tuple, batch_size: int = 5000,
+                    progress_cb=None) -> int:
     emp, time, grade, nature, org, region, indem = maps
     log.info("Loading fact_indem from %s ...", path.name)
     batch, total = [], 0
     matched_emp, unmatched_emp = 0, 0
     matched_indem, unmatched_indem = 0, 0
+    _cb = progress_cb or (lambda pct, msg, **kw: None)
 
     for r in load_jsonl(path):
         row = _build_indem_row(r, emp, time, grade, nature, org, region, indem)
@@ -562,6 +564,7 @@ def load_fact_indem(cur, path: Path, maps: tuple, batch_size: int = 5000) -> int
             batch = []
             if total % 20_000 == 0:
                 log.info("  fact_indem: %d rows loaded...", total)
+                _cb(93, f"Loading fact_indem… {total:,} rows written", rows=total)
 
     if batch:
         cur.executemany(INDEM_INSERT, batch)
@@ -648,7 +651,7 @@ def run(reset: bool = False, clean_dir: Path | None = None, progress_cb=None) ->
             _cb(88, "Loading fact_paie into DW (large table — may take a few minutes)…")
             n_paie  = load_fact_paie(cur,  _fact_paie,  maps);  conn.commit()
             _cb(93, f"fact_paie loaded — {n_paie:,} rows. Loading fact_indem…")
-            n_indem = load_fact_indem(cur, _fact_indem, maps);  conn.commit()
+            n_indem = load_fact_indem(cur, _fact_indem, maps, progress_cb=_cb);  conn.commit()
             _cb(96, f"DW load complete — {n_paie + n_indem:,} total rows written")
 
         # ── Final row counts ──────────────────────────────────────────────────
