@@ -6,29 +6,43 @@ public class UserDto {
     private String email;
     private String role;
     private String ministryCode;
+    private String phone;
+    private String profession;
+    private String profilePhoto;
     private boolean enabled;
 
     public UserDto() {}
 
-    public UserDto(Long id, String username, String email, String role, String ministryCode, boolean enabled) {
+    public UserDto(Long id, String username, String email, String role,
+                   String ministryCode, String phone, String profession,
+                   String profilePhoto, boolean enabled) {
         this.id = id;
         this.username = username;
         this.email = email;
         this.role = role;
         this.ministryCode = ministryCode;
+        this.phone = phone;
+        this.profession = profession;
+        this.profilePhoto = profilePhoto;
         this.enabled = enabled;
     }
 
-    public Long getId()              { return id; }
-    public void setId(Long id)       { this.id = id; }
-    public String getUsername()      { return username; }
-    public void setUsername(String u){ this.username = u; }
-    public String getEmail()         { return email; }
-    public void setEmail(String e)   { this.email = e; }
-    public String getRole()          { return role; }
-    public void setRole(String r)    { this.role = r; }
-    public String getMinistryCode()  { return ministryCode; }
-    public void setMinistryCode(String m) { this.ministryCode = m; }
-    public boolean isEnabled()       { return enabled; }
-    public void setEnabled(boolean e){ this.enabled = e; }
+    public Long getId()                    { return id; }
+    public void setId(Long id)             { this.id = id; }
+    public String getUsername()            { return username; }
+    public void setUsername(String u)      { this.username = u; }
+    public String getEmail()               { return email; }
+    public void setEmail(String e)         { this.email = e; }
+    public String getRole()                { return role; }
+    public void setRole(String r)          { this.role = r; }
+    public String getMinistryCode()        { return ministryCode; }
+    public void setMinistryCode(String m)  { this.ministryCode = m; }
+    public String getPhone()               { return phone; }
+    public void setPhone(String p)         { this.phone = p; }
+    public String getProfession()          { return profession; }
+    public void setProfession(String p)    { this.profession = p; }
+    public String getProfilePhoto()        { return profilePhoto; }
+    public void setProfilePhoto(String p)  { this.profilePhoto = p; }
+    public boolean isEnabled()             { return enabled; }
+    public void setEnabled(boolean e)      { this.enabled = e; }
 }

@@ -25,6 +25,15 @@ public class User {
     @Column(name = "ministry_code", length = 10)
     private String ministryCode;
 
+    @Column(length = 30)
+    private String phone;
+
+    @Column(length = 100)
+    private String profession;
+
+    @Column(name = "profile_photo", columnDefinition = "TEXT")
+    private String profilePhoto;
+
     @Column(nullable = false)
     private boolean enabled = true;
 
@@ -40,6 +49,12 @@ public class User {
     public void setRole(String r)              { this.role = r; }
     public String getMinistryCode()            { return ministryCode; }
     public void setMinistryCode(String m)      { this.ministryCode = m; }
+    public String getPhone()                   { return phone; }
+    public void setPhone(String p)             { this.phone = p; }
+    public String getProfession()              { return profession; }
+    public void setProfession(String p)        { this.profession = p; }
+    public String getProfilePhoto()            { return profilePhoto; }
+    public void setProfilePhoto(String p)      { this.profilePhoto = p; }
     public boolean isEnabled()                 { return enabled; }
     public void setEnabled(boolean e)          { this.enabled = e; }
 }

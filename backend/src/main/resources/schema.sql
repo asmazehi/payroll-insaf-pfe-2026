@@ -9,7 +9,10 @@ CREATE TABLE IF NOT EXISTS public.users (
     enabled        BOOLEAN      NOT NULL DEFAULT TRUE
 );
 
-ALTER TABLE public.users ADD COLUMN IF NOT EXISTS ministry_code VARCHAR(10) DEFAULT NULL;
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS ministry_code  VARCHAR(10)  DEFAULT NULL;
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS phone         VARCHAR(30)  DEFAULT NULL;
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS profession    VARCHAR(100) DEFAULT NULL;
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS profile_photo TEXT         DEFAULT NULL;
 
 -- ETL job tracking
 CREATE TABLE IF NOT EXISTS public.etl_jobs (

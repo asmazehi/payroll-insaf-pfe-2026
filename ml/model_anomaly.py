@@ -314,7 +314,7 @@ def train_anomaly_model() -> dict:
     print("MODEL 4 — Anomaly Detection (Method Comparison)")
     print("=" * 60)
 
-    df = load_individual_payroll(sample_pct=5.0)
+    df = load_individual_payroll()
     print(f"  Data: {len(df):,} records | {df['employee_sk'].nunique():,} employees")
 
     # Step 1: baseline
@@ -331,19 +331,28 @@ def train_anomaly_model() -> dict:
 
     # ── Method 2: Isolation Forest ────────────────────────────────────────────
     print("\n  [2/4] Isolation Forest...")
+    # IsoForest uses only 256 samples/tree by default — training on 1M vs 42M
+    # gives identical model quality but avoids per-worker 161 MB splitter arrays.
+    _iso_n = min(1_000_000, len(X_scaled))
+    _iso_idx = np.random.RandomState(42).choice(len(X_scaled), _iso_n, replace=False)
     iso = IsolationForest(n_estimators=200, contamination=IF_CONTAMINATION,
                           random_state=42, n_jobs=-1)
-    iso.fit(X_scaled)
+    iso.fit(X_scaled[_iso_idx])
     df["if_score"] = iso.score_samples(X_scaled)
     df["if_flag"]  = iso.predict(X_scaled) == -1
     if_metrics = _evaluate_method("Isolation Forest", df["if_flag"].values, df, zscore_flags)
 
-    # ── Method 3: LOF ─────────────────────────────────────────────────────────
-    print("\n  [3/4] Local Outlier Factor...")
+    # ── Method 3: LOF (sample 500k — LOF is O(n²) and can't scale to 42M rows) ──
+    print("\n  [3/4] Local Outlier Factor (sample 500k)...")
+    lof_sample_idx = np.random.RandomState(42).choice(
+        len(X_scaled), min(500_000, len(X_scaled)), replace=False)
+    X_lof = X_scaled[lof_sample_idx]
     lof = LocalOutlierFactor(n_neighbors=20, contamination=LOF_CONTAMINATION, n_jobs=-1)
-    lof_preds = lof.fit_predict(X_scaled)
-    df["lof_flag"]  = lof_preds == -1
-    df["lof_score"] = lof.negative_outlier_factor_
+    lof_preds = lof.fit_predict(X_lof)
+    df["lof_flag"]  = False
+    df["lof_score"] = 0.0
+    df.loc[df.index[lof_sample_idx], "lof_flag"]  = lof_preds == -1
+    df.loc[df.index[lof_sample_idx], "lof_score"] = lof.negative_outlier_factor_
     lof_metrics = _evaluate_method("LOF", df["lof_flag"].values, df, zscore_flags)
 
     # ── Method 4: One-Class SVM (on sample — OCSVM is slow on 700k rows) ──────

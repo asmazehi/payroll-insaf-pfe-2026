@@ -36,12 +36,16 @@ public class MlService {
         return restTemplate.getForObject(builder.toUriString(), Object.class);
     }
 
-    public Object getAnomaliesByMinistry() {
-        return restTemplate.getForObject(mlApiUrl + "/anomalies/by-ministry", Object.class);
+    public Object getAnomaliesByMinistry(String ministry) {
+        UriComponentsBuilder b = UriComponentsBuilder.fromHttpUrl(mlApiUrl + "/anomalies/by-ministry");
+        if (ministry != null && !ministry.isBlank()) b.queryParam("ministry", ministry);
+        return restTemplate.getForObject(b.toUriString(), Object.class);
     }
 
-    public Object getAnomaliesByGrade() {
-        return restTemplate.getForObject(mlApiUrl + "/anomalies/by-grade", Object.class);
+    public Object getAnomaliesByGrade(String ministry) {
+        UriComponentsBuilder b = UriComponentsBuilder.fromHttpUrl(mlApiUrl + "/anomalies/by-grade");
+        if (ministry != null && !ministry.isBlank()) b.queryParam("ministry", ministry);
+        return restTemplate.getForObject(b.toUriString(), Object.class);
     }
 
     public Object getAnomalyTemporalContext(int employeeSk, int yearNum, int monthNum) {

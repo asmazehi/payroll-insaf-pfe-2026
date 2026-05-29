@@ -1059,12 +1059,14 @@ def get_anomalies(
 
 
 @app.get("/anomalies/by-ministry", tags=["ML"])
-def get_anomalies_by_ministry():
+def get_anomalies_by_ministry(ministry: Optional[str] = None):
     """Aggregated anomaly counts grouped by ministry."""
     import numpy as np
     df = _load_anomaly_report()
     if df is None:
         raise HTTPException(503, "Anomaly report not found.")
+    if ministry:
+        df = df[df["ministry_code"] == ministry]
 
     rows = []
     for ministry, g in df.groupby("ministry_code"):
@@ -1084,12 +1086,14 @@ def get_anomalies_by_ministry():
 
 
 @app.get("/anomalies/by-grade", tags=["ML"])
-def get_anomalies_by_grade():
+def get_anomalies_by_grade(ministry: Optional[str] = None):
     """Aggregated anomaly counts grouped by grade."""
     import numpy as np
     df = _load_anomaly_report()
     if df is None:
         raise HTTPException(503, "Anomaly report not found.")
+    if ministry:
+        df = df[df["ministry_code"] == ministry]
 
     rows = []
     for grade, g in df.groupby("grade_code"):

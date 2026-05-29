@@ -9,7 +9,15 @@ export interface UserDto {
   email: string;
   role: string;
   ministryCode: string | null;
+  phone: string | null;
+  profession: string | null;
+  profilePhoto: string | null;
   enabled: boolean;
+}
+
+export interface MinistryOption {
+  code: string;
+  name: string;
 }
 
 export interface EtlJob {
@@ -34,6 +42,10 @@ export class AdminService {
 
   getUsers(): Observable<UserDto[]> {
     return this.http.get<UserDto[]>(`${this.base}/admin/users`);
+  }
+
+  getMinistries(): Observable<MinistryOption[]> {
+    return this.http.get<MinistryOption[]>(`${this.base}/admin/users/ministries`);
   }
 
   createUser(payload: Partial<UserDto> & { password: string }): Observable<UserDto> {

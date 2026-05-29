@@ -1,5 +1,5 @@
 import { Component, OnInit } from '@angular/core';
-import { AdminService, UserDto } from '../../services/admin.service';
+import { AdminService, UserDto, MinistryOption } from '../../services/admin.service';
 
 @Component({
   selector: 'app-users',
@@ -8,6 +8,7 @@ import { AdminService, UserDto } from '../../services/admin.service';
 })
 export class UsersComponent implements OnInit {
   users: UserDto[] = [];
+  ministries: MinistryOption[] = [];
   loading = true;
   error = '';
 
@@ -19,7 +20,10 @@ export class UsersComponent implements OnInit {
     email: '',
     password: '',
     role: 'ROLE_USER',
-    ministryCode: ''
+    ministryCode: '',
+    phone: '',
+    profession: '',
+    profilePhoto: ''
   };
 
   saving = false;
@@ -29,6 +33,10 @@ export class UsersComponent implements OnInit {
 
   ngOnInit(): void {
     this.load();
+    this.adminService.getMinistries().subscribe({
+      next: (m) => this.ministries = m,
+      error: () => {}
+    });
   }
 
   load(): void {
@@ -41,7 +49,8 @@ export class UsersComponent implements OnInit {
 
   openCreate(): void {
     this.editingUser = null;
-    this.form = { username: '', email: '', password: '', role: 'ROLE_USER', ministryCode: '' };
+    this.form = { username: '', email: '', password: '', role: 'ROLE_USER',
+                  ministryCode: '', phone: '', profession: '', profilePhoto: '' };
     this.saveError = '';
     this.showForm = true;
   }
@@ -49,25 +58,39 @@ export class UsersComponent implements OnInit {
   openEdit(user: UserDto): void {
     this.editingUser = user;
     this.form = {
-      username: user.username,
-      email: user.email,
-      password: '',
-      role: user.role,
-      ministryCode: user.ministryCode ?? ''
+      username:     user.username,
+      email:        user.email,
+      password:     '',
+      role:         user.role,
+      ministryCode: user.ministryCode ?? '',
+      phone:        user.phone ?? '',
+      profession:   user.profession ?? '',
+      profilePhoto: user.profilePhoto ?? ''
     };
     this.saveError = '';
     this.showForm = true;
+  }
+
+  onPhotoChange(event: Event): void {
+    const file = (event.target as HTMLInputElement).files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => { this.form.profilePhoto = reader.result as string; };
+    reader.readAsDataURL(file);
   }
 
   save(): void {
     this.saving = true;
     this.saveError = '';
     const payload: any = {
-      username: this.form.username,
-      email: this.form.email,
-      role: this.form.role,
-      ministryCode: this.form.ministryCode || null
+      email:        this.form.email,
+      role:         this.form.role,
+      ministryCode: this.form.ministryCode || null,
+      phone:        this.form.phone || null,
+      profession:   this.form.profession || null,
+      profilePhoto: this.form.profilePhoto || null
     };
+    if (!this.editingUser) payload.username = this.form.username;
     if (this.form.password) payload.password = this.form.password;
 
     const req = this.editingUser
@@ -95,11 +118,21 @@ export class UsersComponent implements OnInit {
     });
   }
 
+  ministryName(code: string | null): string {
+    if (!code) return '—';
+    const m = this.ministries.find(x => x.code === code);
+    return m ? `${code} – ${m.name}` : code;
+  }
+
   roleBadge(role: string): string {
     return role === 'ROLE_ADMIN' ? 'badge-admin' : 'badge-user';
   }
 
   roleLabel(role: string): string {
     return role === 'ROLE_ADMIN' ? 'Admin' : 'User';
+  }
+
+  initials(username: string): string {
+    return username.slice(0, 2).toUpperCase();
   }
 }

@@ -7,7 +7,18 @@ All queries filter out unknown members (sk=0) and year=0.
 from __future__ import annotations
 import pandas as pd
 import psycopg2
+import psycopg2.extensions as _pext
 from etl.core.config import DB_CONFIG
+
+# Convert PostgreSQL NUMERIC/DECIMAL → Python float instead of decimal.Decimal.
+# This prevents pandas from creating large object-dtype blocks during DataFrame
+# construction, which causes fragmentation-OOM on named cursors with big chunks.
+_DEC2FLOAT = _pext.new_type(
+    _pext.DECIMAL.values,
+    "DEC2FLOAT",
+    lambda val, cur: float(val) if val is not None else None,
+)
+_pext.register_type(_DEC2FLOAT)
 
 
 def _conn(timeout: bool = False):
@@ -125,30 +136,50 @@ def load_individual_payroll(sample_pct: float = 100.0) -> pd.DataFrame:
           AND fp.m_netpay   IS NOT NULL
           AND fp.m_salbrut  IS NOT NULL
     """
+    _money = ["m_netpay","m_salbrut","m_salimp","m_retrait","m_cps","m_cpe",
+              "m_capdeces","m_sub","m_avkm","m_avlog"]
+    _cat   = ["grade_code","grade_label_fr","category","nature_code",
+              "nature_label_fr","ministry_code","ministry_name_fr"]
+
+    _money_set = set(_money)
+    _cat_set   = set(_cat)
+
+    def _rows_to_df(rows: list, col_names: list) -> pd.DataFrame:
+        # Build column-by-column (avoids pandas block-consolidation OOM).
+        col_data = list(zip(*rows))
+        data = {}
+        for i, col in enumerate(col_names):
+            if col in _money_set:
+                import numpy as np
+                data[col] = np.array(col_data[i], dtype="float32")
+            elif col in _cat_set:
+                data[col] = pd.Categorical(col_data[i])
+            else:
+                data[col] = list(col_data[i])
+        return pd.DataFrame(data)
+
     conn = _conn()
     try:
         with conn.cursor(name="individual_payroll_cur") as cur:
-            cur.itersize = 50_000
+            cur.itersize = 500_000
             cur.execute(sql)
-            first = cur.fetchmany(50_000)
+            first = cur.fetchmany(500_000)
             if not first:
                 return pd.DataFrame()
             cols = [d[0] for d in cur.description]
-            chunks = [pd.DataFrame(first, columns=cols)]
+            chunks = [_rows_to_df(first, cols)]
+            del first
             while True:
-                rows = cur.fetchmany(50_000)
+                rows = cur.fetchmany(500_000)
                 if not rows:
                     break
-                chunks.append(pd.DataFrame(rows, columns=cols))
+                chunks.append(_rows_to_df(rows, cols))
+                del rows
         df = pd.concat(chunks, ignore_index=True)
+        del chunks
     finally:
         conn.close()
     df["month_start_date"] = pd.to_datetime(df["month_start_date"], errors="coerce")
-    _money = ["m_netpay","m_salbrut","m_salimp","m_retrait","m_cps","m_cpe",
-              "m_capdeces","m_sub","m_avkm","m_avlog"]
-    for col in _money:
-        if col in df.columns:
-            df[col] = pd.to_numeric(df[col], errors="coerce").astype("float64")
     return df
 
 
