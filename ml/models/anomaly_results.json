@@ -1,237 +1,237 @@
 {
   "model": "anomaly_detection_comparison",
   "winner": "if",
-  "total_records": 2104251,
-  "total_employees": 401466,
+  "total_records": 42118034,
+  "total_employees": 464565,
   "zscore_threshold": 3.0,
   "contamination": 0.03,
   "method_comparison": {
     "zscore": {
-      "n_flagged": 213,
-      "rate_pct": 0.01,
+      "n_flagged": 350109,
+      "rate_pct": 0.831,
       "agreement_pct": 100.0,
-      "avg_zscore": 3.138,
-      "max_zscore": 3.711,
-      "score": 0.5145
+      "avg_zscore": 5.252,
+      "max_zscore": 11.533,
+      "score": 0.7554
     },
     "if": {
-      "n_flagged": 63128,
-      "rate_pct": 3.0,
-      "agreement_pct": 97.01,
-      "avg_zscore": 0.916,
-      "max_zscore": 3.711,
-      "score": 0.5856
+      "n_flagged": 1256123,
+      "rate_pct": 2.982,
+      "agreement_pct": 97.1,
+      "avg_zscore": 1.532,
+      "max_zscore": 11.533,
+      "score": 0.6474
     },
     "lof": {
-      "n_flagged": 63128,
-      "rate_pct": 3.0,
-      "agreement_pct": 97.0,
-      "avg_zscore": 0.783,
-      "max_zscore": 3.711,
-      "score": 0.5723
+      "n_flagged": 15000,
+      "rate_pct": 0.036,
+      "agreement_pct": 99.13,
+      "avg_zscore": 0.864,
+      "max_zscore": 10.893,
+      "score": 0.2871
     },
     "ocsvm": {
-      "n_flagged": 63324,
-      "rate_pct": 3.009,
-      "agreement_pct": 97.0,
-      "avg_zscore": 0.887,
-      "max_zscore": 3.711,
-      "score": 0.5827
+      "n_flagged": 1499,
+      "rate_pct": 0.004,
+      "agreement_pct": 99.17,
+      "avg_zscore": 1.848,
+      "max_zscore": 10.797,
+      "score": 0.3834
     },
     "autoencoder": {
-      "n_flagged": 8176,
-      "rate_pct": 0.389,
-      "agreement_pct": 99.6,
-      "avg_zscore": 0.742,
-      "max_zscore": 3.271,
-      "score": 0.2993
+      "n_flagged": 206278,
+      "rate_pct": 0.49,
+      "agreement_pct": 98.69,
+      "avg_zscore": 0.735,
+      "max_zscore": 10.814,
+      "score": 0.3035
     }
   },
   "final_flag": {
     "method": "zscore OR if",
-    "n_anomalies": 63162,
-    "anomaly_rate": 3.0016
+    "n_anomalies": 1414187,
+    "anomaly_rate": 3.3577
   },
   "top_anomalies": [
     {
-      "employee_sk": 966484,
-      "year_num": 2016,
-      "month_num": 4,
-      "m_netpay": 3007.281,
-      "emp_mean": 1490.2676470588235,
-      "z_score": 3.7112792005871387,
-      "pct_deviation": 117.06716038154632
-    },
-    {
-      "employee_sk": 830239,
-      "year_num": 2021,
-      "month_num": 3,
-      "m_netpay": 3302.022,
-      "emp_mean": 1221.2897058823528,
-      "z_score": 3.6360587477912225,
-      "pct_deviation": 227.8814550610777
-    },
-    {
-      "employee_sk": 32301,
-      "year_num": 2019,
-      "month_num": 2,
-      "m_netpay": 5769.208,
-      "emp_mean": 2720.1487894736842,
-      "z_score": 3.6041412328596274,
-      "pct_deviation": 127.86720588159781
-    },
-    {
-      "employee_sk": 718096,
-      "year_num": 2021,
-      "month_num": 3,
-      "m_netpay": 3551.223,
-      "emp_mean": 1472.7984705882354,
-      "z_score": 3.566058205877502,
-      "pct_deviation": 162.9479868082592
-    },
-    {
-      "employee_sk": 875158,
-      "year_num": 2020,
-      "month_num": 9,
-      "m_netpay": 3550.446,
-      "emp_mean": 1756.2685294117646,
-      "z_score": 3.5588970684677053,
-      "pct_deviation": 103.58131966050344
-    },
-    {
-      "employee_sk": 592417,
-      "year_num": 2020,
-      "month_num": 9,
-      "m_netpay": 4295.492,
-      "emp_mean": 1328.1913125,
-      "z_score": 3.5271935708823285,
-      "pct_deviation": 325.46642419343976
-    },
-    {
-      "employee_sk": 957596,
-      "year_num": 2024,
-      "month_num": 9,
-      "m_netpay": 4746.868,
-      "emp_mean": 1919.7358666666667,
-      "z_score": 3.496001691032938,
-      "pct_deviation": 175.80206773055127
-    },
-    {
-      "employee_sk": 72678,
-      "year_num": 2020,
-      "month_num": 9,
-      "m_netpay": 3899.182,
-      "emp_mean": 1514.1176666666665,
-      "z_score": 3.4602413275654973,
-      "pct_deviation": 208.32713254917462
-    },
-    {
-      "employee_sk": 722360,
+      "employee_sk": 900737,
       "year_num": 2015,
-      "month_num": 3,
-      "m_netpay": 5797.972,
-      "emp_mean": 1587.792,
-      "z_score": 3.4185040090953525,
-      "pct_deviation": 353.582797253456
-    },
-    {
-      "employee_sk": 850044,
-      "year_num": 2024,
-      "month_num": 8,
-      "m_netpay": 3777.587,
-      "emp_mean": 1148.5237857142856,
-      "z_score": 3.40736073893737,
-      "pct_deviation": 283.8929250493638
-    },
-    {
-      "employee_sk": 621096,
-      "year_num": 2023,
       "month_num": 1,
-      "m_netpay": 3031.61,
-      "emp_mean": 1588.8001666666669,
-      "z_score": 3.3733882864839373,
-      "pct_deviation": 89.39471794392833
+      "m_netpay": 164.07000732421875,
+      "emp_mean": 28.383281707763672,
+      "z_score": 11.532575836791963,
+      "pct_deviation": 500.00006103515625
     },
     {
-      "employee_sk": 888011,
-      "year_num": 2020,
-      "month_num": 9,
-      "m_netpay": 3476.11,
-      "emp_mean": 1789.131,
-      "z_score": 3.3435424251710364,
-      "pct_deviation": 107.99411699239016
-    },
-    {
-      "employee_sk": 66507,
-      "year_num": 2024,
-      "month_num": 6,
-      "m_netpay": 2856.526,
-      "emp_mean": 1662.662,
-      "z_score": 3.3362602042626093,
-      "pct_deviation": 82.99708898580879
-    },
-    {
-      "employee_sk": 35406,
-      "year_num": 2019,
-      "month_num": 5,
-      "m_netpay": 6435.918,
-      "emp_mean": 2786.585785714286,
-      "z_score": 3.3295162767391,
-      "pct_deviation": 142.70372986383754
-    },
-    {
-      "employee_sk": 774747,
-      "year_num": 2018,
-      "month_num": 1,
-      "m_netpay": 9.832,
-      "emp_mean": 9.647384615384615,
-      "z_score": 3.3282011773513793,
-      "pct_deviation": 2.0764119601329014
-    },
-    {
-      "employee_sk": 64491,
-      "year_num": 2020,
-      "month_num": 9,
-      "m_netpay": 2979.746,
-      "emp_mean": 1588.8343333333332,
-      "z_score": 3.3274654705575277,
-      "pct_deviation": 88.70402480466203
-    },
-    {
-      "employee_sk": 633526,
-      "year_num": 2017,
-      "month_num": 4,
-      "m_netpay": 9092.46,
-      "emp_mean": 1548.8303076923075,
-      "z_score": 3.323510767151624,
-      "pct_deviation": 902.1923225723251
-    },
-    {
-      "employee_sk": 776170,
+      "employee_sk": 791953,
       "year_num": 2015,
-      "month_num": 10,
-      "m_netpay": 7990.095,
-      "emp_mean": 1351.0828461538463,
-      "z_score": 3.322622472085749,
-      "pct_deviation": 913.2770690136201
+      "month_num": 4,
+      "m_netpay": 13285.6650390625,
+      "emp_mean": 713.4531860351562,
+      "z_score": 11.481707859392802,
+      "pct_deviation": 2174.000244140625
     },
     {
-      "employee_sk": 702226,
+      "employee_sk": 953683,
       "year_num": 2022,
-      "month_num": 8,
-      "m_netpay": 2981.606,
-      "emp_mean": 1431.2611428571429,
-      "z_score": 3.321343264674783,
-      "pct_deviation": 112.55168800246658
+      "month_num": 3,
+      "m_netpay": 13204.697265625,
+      "emp_mean": 766.9038696289062,
+      "z_score": 11.467968623437583,
+      "pct_deviation": 1848.9407958984375
     },
     {
-      "employee_sk": 863849,
-      "year_num": 2021,
+      "employee_sk": 921001,
+      "year_num": 2015,
       "month_num": 4,
-      "m_netpay": 3324.812,
-      "emp_mean": 1546.2902857142856,
-      "z_score": 3.3196040589456057,
-      "pct_deviation": 133.08394861627937
+      "m_netpay": 319.864990234375,
+      "emp_mean": 16.12803840637207,
+      "z_score": 11.445851048654811,
+      "pct_deviation": 2213.336181640625
+    },
+    {
+      "employee_sk": 59486,
+      "year_num": 2015,
+      "month_num": 1,
+      "m_netpay": 9658.8203125,
+      "emp_mean": 825.8272094726562,
+      "z_score": 11.429754074258764,
+      "pct_deviation": 1166.277099609375
+    },
+    {
+      "employee_sk": 774030,
+      "year_num": 2022,
+      "month_num": 2,
+      "m_netpay": 19605.955078125,
+      "emp_mean": 1225.603271484375,
+      "z_score": 11.37906774594935,
+      "pct_deviation": 1896.12255859375
+    },
+    {
+      "employee_sk": 596930,
+      "year_num": 2015,
+      "month_num": 1,
+      "m_netpay": 9510.802734375,
+      "emp_mean": 865.7160034179688,
+      "z_score": 11.376388907231561,
+      "pct_deviation": 1041.0694580078125
+    },
+    {
+      "employee_sk": 978747,
+      "year_num": 2022,
+      "month_num": 4,
+      "m_netpay": 19783.771484375,
+      "emp_mean": 1575.4365234375,
+      "z_score": 11.366335513401499,
+      "pct_deviation": 1218.102294921875
+    },
+    {
+      "employee_sk": 970685,
+      "year_num": 2017,
+      "month_num": 2,
+      "m_netpay": 17058.55078125,
+      "emp_mean": 1516.0308837890625,
+      "z_score": 11.362367511340274,
+      "pct_deviation": 1056.86572265625
+    },
+    {
+      "employee_sk": 969591,
+      "year_num": 2015,
+      "month_num": 1,
+      "m_netpay": 8750.2958984375,
+      "emp_mean": 765.7369384765625,
+      "z_score": 11.353580614721928,
+      "pct_deviation": 1177.6617431640625
+    },
+    {
+      "employee_sk": 668641,
+      "year_num": 2024,
+      "month_num": 7,
+      "m_netpay": 9522.3486328125,
+      "emp_mean": 832.1859741210938,
+      "z_score": 11.349877678529639,
+      "pct_deviation": 1128.1702880859375
+    },
+    {
+      "employee_sk": 554821,
+      "year_num": 2015,
+      "month_num": 1,
+      "m_netpay": 8623.947265625,
+      "emp_mean": 820.0090942382812,
+      "z_score": 11.324242370979702,
+      "pct_deviation": 1007.6806030273438
+    },
+    {
+      "employee_sk": 851191,
+      "year_num": 2015,
+      "month_num": 4,
+      "m_netpay": 16934.396484375,
+      "emp_mean": 1639.0594482421875,
+      "z_score": 11.313028838552235,
+      "pct_deviation": 984.3836059570312
+    },
+    {
+      "employee_sk": 798214,
+      "year_num": 2015,
+      "month_num": 1,
+      "m_netpay": 8623.947265625,
+      "emp_mean": 827.3743286132812,
+      "z_score": 11.308536745547535,
+      "pct_deviation": 947.6075439453125
+    },
+    {
+      "employee_sk": 749157,
+      "year_num": 2015,
+      "month_num": 4,
+      "m_netpay": 15473.0791015625,
+      "emp_mean": 1272.6654052734375,
+      "z_score": 11.308276179190656,
+      "pct_deviation": 1244.6187744140625
+    },
+    {
+      "employee_sk": 588006,
+      "year_num": 2015,
+      "month_num": 3,
+      "m_netpay": 10501.83203125,
+      "emp_mean": 899.9546508789062,
+      "z_score": 11.308115304565328,
+      "pct_deviation": 1107.1488037109375
+    },
+    {
+      "employee_sk": 730327,
+      "year_num": 2015,
+      "month_num": 1,
+      "m_netpay": 9922.322265625,
+      "emp_mean": 902.6824951171875,
+      "z_score": 11.306738229123184,
+      "pct_deviation": 1116.3883056640625
+    },
+    {
+      "employee_sk": 822316,
+      "year_num": 2016,
+      "month_num": 2,
+      "m_netpay": 10481.5419921875,
+      "emp_mean": 853.142578125,
+      "z_score": 11.301441437673237,
+      "pct_deviation": 1251.8848876953125
+    },
+    {
+      "employee_sk": 606412,
+      "year_num": 2015,
+      "month_num": 2,
+      "m_netpay": 22765.431640625,
+      "emp_mean": 2896.45556640625,
+      "z_score": 11.287664100351481,
+      "pct_deviation": 719.85888671875
+    },
+    {
+      "employee_sk": 654501,
+      "year_num": 2015,
+      "month_num": 1,
+      "m_netpay": 8750.2958984375,
+      "emp_mean": 783.1429443359375,
+      "z_score": 11.283835574893876,
+      "pct_deviation": 1137.763671875
     }
   ]
 }

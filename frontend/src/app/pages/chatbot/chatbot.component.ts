@@ -1,6 +1,7 @@
 import { Component, OnInit, OnDestroy, AfterViewChecked, ViewChild, ElementRef } from '@angular/core';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { MlService } from '../../services/ml.service';
+import { AuthService } from '../../services/auth.service';
 import { TranslateService } from '@ngx-translate/core';
 import { Subscription } from 'rxjs';
 
@@ -16,10 +17,39 @@ interface Message {
   elapsed?: number;
 }
 
-const STORAGE_KEY = 'insaf_chat_history_v2';
-const MAX_HISTORY  = 6;  // turns sent to LLM
+interface ChatSession {
+  id: string;
+  title: string;
+  createdAt: string;
+  messages: Omit<Message, 'html'>[];
+}
 
-const HINT_KEYS = ['h1','h2','h3','h4','h5','h6','h7','h8'];
+const MAX_HISTORY  = 6;
+const MAX_SESSIONS = 30;
+
+// All possible autocomplete suggestions
+const ALL_SUGGESTIONS = [
+  'Quel est le salaire moyen par grade ?',
+  'Montre-moi les tendances salariales',
+  'Quels sont les grades les mieux payés ?',
+  'Répartition des salaires par tranche',
+  'Combien d\'employés dans ma direction ?',
+  'Évolution de la masse salariale par année',
+  'Quelles anomalies ont été détectées ?',
+  'Prévisions pour les 6 prochains mois',
+  'Comparaison des ministères par salaire',
+  'Quel est le salaire moyen en 2025 ?',
+  'Distribution des salaires cette année',
+  'Quelles primes sont versées ?',
+  'Analyse des déductions salariales',
+  'Top 10 des grades par effectif',
+  'Masse salariale du dernier mois',
+  'Évolution du nombre de fonctionnaires',
+  'Quels établissements ont le plus d\'employés ?',
+  'Salaire médian par catégorie',
+  'Anomalies récentes dans ma direction',
+  'Répartition géographique des effectifs',
+];
 
 @Component({
   selector: 'app-chatbot',
@@ -28,54 +58,169 @@ const HINT_KEYS = ['h1','h2','h3','h4','h5','h6','h7','h8'];
 })
 export class ChatbotComponent implements OnInit, OnDestroy, AfterViewChecked {
   @ViewChild('msgContainer') msgContainer!: ElementRef;
-  @ViewChild('inputRef') inputRef!: ElementRef;
+  @ViewChild('inputRef')     inputRef!:     ElementRef;
 
-  messages: Message[] = [];
-  input = '';
-  loading = false;
-  hints: string[] = [];
+  messages: Message[]      = [];
+  input                    = '';
+  loading                  = false;
+  sidebarOpen              = true;
+  sessions: ChatSession[]  = [];
+  activeSessionId          = '';
+  suggestions: string[]    = [];
+  showSuggestions          = false;
+
   private shouldScroll = false;
   private langSub?: Subscription;
 
   constructor(
-    private ml: MlService,
+    private ml:        MlService,
     private translate: TranslateService,
     private sanitizer: DomSanitizer,
+    private auth:      AuthService,
   ) {}
 
+  // ── Storage keys (per user) ──────────────────────────────────────────────────
+
+  private get sessionsKey(): string {
+    const u = this.auth.getCurrentUser();
+    return u ? `insaf_sessions_${u.username}` : 'insaf_sessions';
+  }
+
+  private get activeKey(): string {
+    const u = this.auth.getCurrentUser();
+    return u ? `insaf_active_${u.username}` : 'insaf_active';
+  }
+
+  // ── Lifecycle ────────────────────────────────────────────────────────────────
+
   ngOnInit(): void {
-    this.buildHints();
-    this.langSub = this.translate.onLangChange.subscribe(() => this.buildHints());
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        this.messages = parsed.map((m: any) => ({
-          ...m,
-          timestamp: new Date(m.timestamp),
-          html: m.role === 'bot' && m.text ? this.renderMarkdown(m.text) : undefined,
-        }));
-      } catch { this.messages = []; }
+    this.langSub = this.translate.onLangChange.subscribe(() => {});
+    this._loadSessions();
+  }
+
+  ngOnDestroy(): void {
+    this.langSub?.unsubscribe();
+  }
+
+  ngAfterViewChecked(): void {
+    if (this.shouldScroll) { this._scrollBottom(); this.shouldScroll = false; }
+  }
+
+  // ── Autocomplete ─────────────────────────────────────────────────────────────
+
+  onInputChange(): void {
+    const q = this.input.trim().toLowerCase();
+    if (q.length < 2) { this.showSuggestions = false; this.suggestions = []; return; }
+
+    this.suggestions = ALL_SUGGESTIONS
+      .filter(s => s.toLowerCase().includes(q))
+      .slice(0, 5);
+    this.showSuggestions = this.suggestions.length > 0;
+  }
+
+  pickSuggestion(s: string): void {
+    this.input = s;
+    this.showSuggestions = false;
+    this.send();
+  }
+
+  closeSuggestions(): void {
+    setTimeout(() => { this.showSuggestions = false; }, 150);
+  }
+
+  // ── Session management ───────────────────────────────────────────────────────
+
+  private _loadSessions(): void {
+    try {
+      const raw = localStorage.getItem(this.sessionsKey);
+      this.sessions = raw ? JSON.parse(raw) : [];
+    } catch { this.sessions = []; }
+
+    const lastId = localStorage.getItem(this.activeKey);
+    const found  = lastId ? this.sessions.find(s => s.id === lastId) : null;
+
+    if (found) {
+      this._activateSession(found.id, false);
+    } else if (this.sessions.length > 0) {
+      this._activateSession(this.sessions[0].id, false);
+    } else {
+      this._createSession();
     }
   }
 
-  ngOnDestroy(): void { this.langSub?.unsubscribe(); }
-
-  ngAfterViewChecked(): void {
-    if (this.shouldScroll) { this.scrollBottom(); this.shouldScroll = false; }
+  private _activateSession(id: string, save = true): void {
+    this.activeSessionId = id;
+    if (save) localStorage.setItem(this.activeKey, id);
+    const session = this.sessions.find(s => s.id === id);
+    this.messages = (session?.messages || []).map(m => ({
+      ...m,
+      timestamp: new Date(m.timestamp),
+      html: m.role === 'bot' && m.text ? this.renderMarkdown(m.text) : undefined,
+    }));
+    this.shouldScroll = true;
   }
 
-  private buildHints(): void {
-    this.hints = HINT_KEYS.map(k => this.translate.instant(`chatbot.hints.${k}`));
+  private _createSession(): void {
+    const session: ChatSession = {
+      id: this.uid(), title: 'Nouvelle conversation',
+      createdAt: new Date().toISOString(), messages: [],
+    };
+    this.sessions.unshift(session);
+    this._saveSessions();
+    this._activateSession(session.id);
   }
 
-  get hasMessages(): boolean { return this.messages.length > 0; }
+  newSession(): void  { this._createSession(); }
+  loadSession(id: string): void { this._activateSession(id); }
 
-  /** Convert last MAX_HISTORY non-typing messages to history array for the API */
+  deleteSession(id: string, event: Event): void {
+    event.stopPropagation();
+    this.sessions = this.sessions.filter(s => s.id !== id);
+    this._saveSessions();
+    if (this.activeSessionId === id) {
+      this.sessions.length > 0 ? this._activateSession(this.sessions[0].id) : this._createSession();
+    }
+  }
+
+  clearCurrent(): void {
+    const s = this.sessions.find(s => s.id === this.activeSessionId);
+    if (s) { s.messages = []; s.title = 'Nouvelle conversation'; this._saveSessions(); }
+    this.messages = [];
+  }
+
+  private _saveSessions(): void {
+    if (this.sessions.length > MAX_SESSIONS) this.sessions = this.sessions.slice(0, MAX_SESSIONS);
+    localStorage.setItem(this.sessionsKey, JSON.stringify(this.sessions));
+  }
+
+  private _saveCurrentMessages(): void {
+    const session = this.sessions.find(s => s.id === this.activeSessionId);
+    if (!session) return;
+    session.messages = this.messages.filter(m => !m.isTyping).slice(-40)
+      .map(({ html: _h, ...rest }) => rest);
+
+    // Smart title: first user message, cleaned up
+    if (session.title === 'Nouvelle conversation') {
+      const first = session.messages.find(m => m.role === 'user');
+      if (first) {
+        let t = first.text.trim();
+        t = t.charAt(0).toUpperCase() + t.slice(1);
+        session.title = t.length > 45 ? t.slice(0, 42) + '…' : t;
+      }
+    }
+    this._saveSessions();
+  }
+
+  // ── Messaging ────────────────────────────────────────────────────────────────
+
+  get hasMessages(): boolean { return this.messages.filter(m => !m.isTyping).length > 0; }
+
+  get hints(): string[] {
+    return ALL_SUGGESTIONS.slice(0, 8);
+  }
+
   private buildHistory(): {role: string, text: string}[] {
-    return this.messages
-      .filter(m => !m.isTyping)
-      .slice(-MAX_HISTORY)
+    return this.messages.filter(m => !m.isTyping).slice(-MAX_HISTORY)
       .map(m => ({ role: m.role === 'user' ? 'user' : 'bot', text: m.text }));
   }
 
@@ -83,125 +228,118 @@ export class ChatbotComponent implements OnInit, OnDestroy, AfterViewChecked {
     const q = (text || this.input).trim();
     if (!q || this.loading) return;
 
+    this.showSuggestions = false;
     this.messages.push({ id: this.uid(), role: 'user', text: q, timestamp: new Date() });
     this.input = '';
     this.loading = true;
     this.shouldScroll = true;
 
-    const history = this.buildHistory();
+    const history    = this.buildHistory();
     const typingMsg: Message = { id: this.uid(), role: 'bot', text: '', timestamp: new Date(), isTyping: true };
     this.messages.push(typingMsg);
 
     const t0 = Date.now();
-    this.ml.chat(q, history).subscribe({
-      next: (res: any) => {
-        const elapsed = Math.round((Date.now() - t0) / 100) / 10;
-        const idx = this.messages.indexOf(typingMsg);
-        const rawText = res.answer || res.response || JSON.stringify(res);
-        this.messages[idx] = {
-          id: this.uid(), role: 'bot',
-          text: rawText,
-          html: this.renderMarkdown(rawText),
-          timestamp: new Date(),
-          llm_used: res.llm_used,
-          entities: res.entities,
-          elapsed,
-        };
-        this.loading = false;
-        this.shouldScroll = true;
-        this.saveHistory();
+    let   botMsg: Message | null = null;
+
+    this.ml.chatStream(q, history).subscribe({
+      next: (chunk) => {
+        // First token: replace typing indicator with a real bot message
+        if (!botMsg) {
+          botMsg = {
+            id: this.uid(), role: 'bot', text: '',
+            html: this.renderMarkdown(''), timestamp: new Date(),
+            isTyping: false,
+          };
+          const idx = this.messages.indexOf(typingMsg);
+          if (idx >= 0) this.messages[idx] = botMsg;
+          this.loading = false;
+        }
+
+        if (chunk.token) {
+          botMsg.text += chunk.token;
+          botMsg.html  = this.renderMarkdown(botMsg.text);
+          this.shouldScroll = true;
+        }
+
+        if (chunk.done) {
+          botMsg.elapsed  = Math.round((Date.now() - t0) / 100) / 10;
+          botMsg.entities = chunk.entities;
+          botMsg.llm_used = true;
+          this._saveCurrentMessages();
+        }
       },
       error: () => {
-        const idx = this.messages.indexOf(typingMsg);
-        const errText = this.translate.instant('chatbot.ai_error');
+        const idx     = this.messages.indexOf(typingMsg);
+        const errText = '❌ Une erreur est survenue. Réessayez dans un moment.';
         this.messages[idx] = {
-          id: this.uid(), role: 'bot',
-          text: errText,
-          html: this.renderMarkdown(errText),
-          timestamp: new Date(),
+          id: this.uid(), role: 'bot', text: errText,
+          html: this.renderMarkdown(errText), timestamp: new Date(),
         };
         this.loading = false;
         this.shouldScroll = true;
-        this.saveHistory();
+        this._saveCurrentMessages();
       }
     });
   }
 
-  clearHistory(): void {
-    this.messages = [];
-    localStorage.removeItem(STORAGE_KEY);
-  }
+  // ── Typewriter animation ─────────────────────────────────────────────────────
 
-  copyText(text: string): void {
-    navigator.clipboard?.writeText(text).catch(() => {});
-  }
 
-  onKey(e: KeyboardEvent): void {
-    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); this.send(); }
-  }
+  // ── Formatting helpers ───────────────────────────────────────────────────────
 
   fmtTime(d: Date): string {
     return new Date(d).toLocaleTimeString('fr-TN', { hour: '2-digit', minute: '2-digit' });
   }
 
-  /** Simple markdown → safe HTML renderer */
-  renderMarkdown(text: string): SafeHtml {
-    let html = text
-      // Escape HTML entities first
-      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-      // Bold **text**
-      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-      // Italic *text*
-      .replace(/\*([^*\n]+?)\*/g, '<em>$1</em>')
-      // Inline code `code`
-      .replace(/`([^`\n]+?)`/g, '<code>$1</code>')
-      // Headers ### or ##
-      .replace(/^###\s+(.+)$/gm, '<h4>$1</h4>')
-      .replace(/^##\s+(.+)$/gm, '<h3>$1</h3>')
-      // Horizontal rule
-      .replace(/^---+$/gm, '<hr>')
-      // Numbered lists
-      .replace(/^(\d+)\.\s+(.+)$/gm, '<li class="ol-item"><span class="li-num">$1.</span> $2</li>')
-      // Bullet lists (-, •, *)
-      .replace(/^[-•]\s+(.+)$/gm, '<li class="ul-item">$1</li>')
-      // Wrap consecutive <li> in <ul>
-      .replace(/(<li[^>]*>.*?<\/li>\n?)+/gs, (match) => `<ul>${match}</ul>`)
-      // Double newlines → paragraphs
-      .replace(/\n\n+/g, '</p><p>')
-      // Single newlines → <br>
-      .replace(/\n/g, '<br>');
+  fmtDate(iso: string): string {
+    const d = new Date(iso);
+    const diffDays = Math.floor((Date.now() - d.getTime()) / 86400000);
+    if (diffDays === 0) return 'Aujourd\'hui';
+    if (diffDays === 1) return 'Hier';
+    if (diffDays < 7)  return `Il y a ${diffDays}j`;
+    return d.toLocaleDateString('fr-TN', { day: 'numeric', month: 'short' });
+  }
 
-    html = `<p>${html}</p>`;
-    // Clean up empty <p> tags
-    html = html.replace(/<p>\s*<\/p>/g, '').replace(/<p>(<[hul])/g, '$1').replace(/(<\/[hul][^>]*>)<\/p>/g, '$1');
+  copyText(text: string): void { navigator.clipboard?.writeText(text).catch(() => {}); }
 
-    return this.sanitizer.bypassSecurityTrustHtml(html);
+  onKey(e: KeyboardEvent): void {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); this.send(); }
+    if (e.key === 'Escape') { this.showSuggestions = false; }
+    if (e.key === 'ArrowDown' && this.showSuggestions) { e.preventDefault(); }
   }
 
   hasEntities(m: Message): boolean {
-    return m.entities && Object.keys(m.entities).length > 0;
+    return m.entities && Object.keys(m.entities).filter(k => m.entities[k]).length > 0;
   }
 
   formatEntities(e: any): string {
-    const parts: string[] = [];
-    if (e.years?.length)    parts.push(`Year: ${e.years.join(', ')}`);
-    if (e.months?.length)   parts.push(`Month: ${e.months.join(', ')}`);
-    if (e.ministry_code)    parts.push(`Ministry: ${e.ministry_code}`);
-    if (e.grade_code)       parts.push(`Grade: ${e.grade_code}`);
-    if (e.employee_sk)      parts.push(`Employee: ${e.employee_sk}`);
-    if (e.top_n)            parts.push(`Top: ${e.top_n}`);
-    return parts.join(' · ');
+    const p: string[] = [];
+    if (e.years?.length)  p.push(e.years.join(', '));
+    if (e.grade_code)     p.push(`Grade: ${e.grade_code}`);
+    if (e.ministry_code)  p.push(`Min: ${e.ministry_code}`);
+    return p.join(' · ');
   }
 
-  private saveHistory(): void {
-    const toSave = this.messages
-      .filter(m => !m.isTyping)
-      .slice(-20)
-      .map(({ html: _html, ...rest }) => rest); // don't persist SafeHtml
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(toSave));
+  renderMarkdown(text: string): SafeHtml {
+    let html = text
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+      .replace(/\*([^*\n]+?)\*/g, '<em>$1</em>')
+      .replace(/`([^`\n]+?)`/g, '<code>$1</code>')
+      .replace(/^###\s+(.+)$/gm, '<h4>$1</h4>')
+      .replace(/^##\s+(.+)$/gm,  '<h3>$1</h3>')
+      .replace(/^---+$/gm, '<hr>')
+      .replace(/^(\d+)\.\s+(.+)$/gm, '<li class="ol-item"><span class="li-num">$1.</span> $2</li>')
+      .replace(/^[-•]\s+(.+)$/gm, '<li class="ul-item">$1</li>')
+      .replace(/(<li[^>]*>.*?<\/li>\n?)+/gs, m => `<ul>${m}</ul>`)
+      .replace(/\n\n+/g, '</p><p>')
+      .replace(/\n/g, '<br>');
+    html = `<p>${html}</p>`;
+    html = html.replace(/<p>\s*<\/p>/g, '').replace(/<p>(<[hul])/g, '$1').replace(/(<\/[hul][^>]*>)<\/p>/g, '$1');
+    return this.sanitizer.bypassSecurityTrustHtml(html);
   }
 
-  private scrollBottom(): void {
+  private _scrollBottom(): void {
     try { this.msgContainer.nativeElement.scrollTop = this.msgContainer.nativeElement.scrollHeight; } catch {}
   }
 

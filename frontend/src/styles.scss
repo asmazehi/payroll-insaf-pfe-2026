@@ -2,49 +2,49 @@
 @import '@angular/material/prebuilt-themes/indigo-pink.css';
 
 /* ══════════════════════════════════════════════════════════
-   TOKENS
+   TOKENS  —  CNI palette: sky blue + golden yellow
    ══════════════════════════════════════════════════════════ */
 :root {
-  /* Canvas — deep navy-purple, not pure black */
-  --bg-base:     #0d0d1f;
-  --bg-surface:  rgba(255,255,255,0.04);
-  --bg-raised:   rgba(255,255,255,0.07);
-  --bg-hover:    rgba(255,255,255,0.09);
-  --border:      rgba(255,255,255,0.08);
-  --border-hi:   rgba(255,255,255,0.14);
+  /* Canvas — deep navy (no purple tint) */
+  --bg-base:     #07111E;
+  --bg-surface:  rgba(255,255,255,0.045);
+  --bg-raised:   rgba(255,255,255,0.075);
+  --bg-hover:    rgba(255,255,255,0.10);
+  --border:      rgba(30,140,240,0.13);
+  --border-hi:   rgba(30,140,240,0.26);
 
-  /* Brand — vibrant violet */
-  --brand:      #8b5cf6;
-  --brand-hi:   #a78bfa;
-  --brand-glow: rgba(139,92,246,0.18);
-  --brand-rgb:  139,92,246;
+  /* Brand — CNI Sky Blue */
+  --brand:      #1B8AE8;
+  --brand-hi:   #52AAFF;
+  --brand-glow: rgba(27,138,232,0.16);
+  --brand-rgb:  27,138,232;
 
-  /* Gold */
-  --gold:       #C9A84C;
-  --gold-light: #F0D080;
-  --gold-glow:  rgba(201,168,76,0.18);
+  /* Gold — CNI Yellow (bright, like the logo text) */
+  --gold:       #F5C400;
+  --gold-light: #FFD833;
+  --gold-glow:  rgba(245,196,0,0.16);
 
   /* Accent */
-  --cyan:       #06b6d4;
-  --cyan-glow:  rgba(6,182,212,0.15);
+  --cyan:       #00CDE4;
+  --cyan-glow:  rgba(0,205,228,0.13);
 
   /* Semantic */
   --green:      #22c55e;
-  --green-bg:   rgba(34,197,94,0.1);
+  --green-bg:   rgba(34,197,94,0.10);
   --amber:      #f59e0b;
-  --amber-bg:   rgba(245,158,11,0.1);
+  --amber-bg:   rgba(245,158,11,0.10);
   --red:        #ef4444;
-  --red-bg:     rgba(239,68,68,0.1);
+  --red-bg:     rgba(239,68,68,0.10);
 
   /* Text */
-  --t1: rgba(255,255,255,0.93);
-  --t2: rgba(255,255,255,0.58);
-  --t3: rgba(255,255,255,0.30);
-  --t4: rgba(255,255,255,0.14);
+  --t1: rgba(255,255,255,0.94);
+  --t2: rgba(255,255,255,0.62);
+  --t3: rgba(255,255,255,0.36);
+  --t4: rgba(255,255,255,0.18);
 
   /* Layout */
-  --sidebar-w: 220px;
-  --topbar-h:  56px;
+  --sidebar-w: 240px;
+  --topbar-h:  60px;
 
   /* Radii */
   --r-sm: 6px;
@@ -65,24 +65,24 @@
 html, body {
   height: 100%; overflow: hidden;
   font-family: 'Inter', system-ui, sans-serif;
-  font-size: 14px; line-height: 1.5;
+  font-size: 15px; line-height: 1.55;
   background: var(--bg-base);
   color: var(--t1);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Global ambient gradient — the page feels alive, not flat */
+/* Global ambient gradient — CNI blue glow top-right, subtle */
 body {
   background-image:
-    radial-gradient(ellipse 80% 50% at 90% -10%, rgba(139,92,246,0.18) 0%, transparent 60%),
-    radial-gradient(ellipse 60% 40% at 10% 110%, rgba(6,182,212,0.10) 0%, transparent 50%);
+    radial-gradient(ellipse 70% 45% at 100% -5%, rgba(27,138,232,0.14) 0%, transparent 55%),
+    radial-gradient(ellipse 50% 35% at 0% 100%, rgba(0,205,228,0.07) 0%, transparent 50%);
 }
 
-::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar { width: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 4px; }
-::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.18); }
+::-webkit-scrollbar-thumb { background: rgba(27,138,232,0.2); border-radius: 5px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(27,138,232,0.35); }
 
 /* ══════════════════════════════════════════════════════════
    SHELL
@@ -99,17 +99,20 @@ body {
 }
 
 /* ══════════════════════════════════════════════════════════
-   PAGE
+   PAGE ENTRY ANIMATION
    ══════════════════════════════════════════════════════════ */
-.page { animation: pageIn 240ms ease both; }
+.page { animation: pageIn 220ms ease both; }
 
 @keyframes pageIn {
-  from { opacity: 0; transform: translateY(8px); }
+  from { opacity: 0; transform: translateY(6px); }
   to   { opacity: 1; transform: none; }
 }
 
+/* ══════════════════════════════════════════════════════════
+   PAGE HEADER  (dashboard, reports, etc. use .page-header)
+   ══════════════════════════════════════════════════════════ */
 .page-header {
-  padding: 28px 32px 24px;
+  padding: 28px 36px 24px;
   border-bottom: 1px solid var(--border);
   display: flex; align-items: flex-end; justify-content: space-between; gap: 16px;
 }
@@ -122,17 +125,44 @@ body {
   &::before {
     content: '';
     display: inline-block; width: 18px; height: 1px;
-    background: var(--brand); opacity: 0.6;
+    background: var(--brand); opacity: 0.7;
   }
 }
 
 .page-header__title {
-  font-size: 1.45rem; font-weight: 700; color: var(--t1); letter-spacing: -0.025em;
+  font-size: 1.5rem; font-weight: 700; color: var(--t1); letter-spacing: -0.025em;
 }
 
 .page-header__sub { font-size: 13px; color: var(--t2); margin-top: 4px; }
 
-.page-body { padding: 28px 32px; }
+/* ══════════════════════════════════════════════════════════
+   PAGE HERO  (users, tickets, etc. use .page-hero)
+   ══════════════════════════════════════════════════════════ */
+.page-hero {
+  background: linear-gradient(135deg, rgba(27,138,232,0.14) 0%, rgba(27,138,232,0.04) 100%);
+  border-bottom: 1px solid var(--border);
+  padding: 28px 40px;
+
+  &__inner {
+    display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  }
+
+  &__title {
+    display: flex; align-items: center; gap: 16px;
+    h2 { margin: 0; font-size: 1.45rem; font-weight: 700; color: var(--t1); }
+    p  { margin: 4px 0 0; color: var(--t2); font-size: 13px; }
+  }
+
+  .hero-icon {
+    width: 52px; height: 52px;
+    background: rgba(27,138,232,0.13); border: 1px solid rgba(27,138,232,0.25);
+    border-radius: 14px;
+    display: flex; align-items: center; justify-content: center;
+    mat-icon { font-size: 26px; width: 26px; height: 26px; color: var(--brand-hi); }
+  }
+}
+
+.page-body { padding: 28px 36px; }
 
 /* ══════════════════════════════════════════════════════════
    GLASS CARD  (the core building block)
@@ -148,7 +178,6 @@ body {
   &:hover { border-color: var(--border-hi); background: var(--bg-raised); }
 }
 
-/* chart-card is just an alias kept for template compat */
 .chart-card {
   background: var(--bg-surface);
   backdrop-filter: blur(16px);
@@ -165,9 +194,9 @@ body {
    ══════════════════════════════════════════════════════════ */
 .kpi-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px,1fr));
+  grid-template-columns: repeat(auto-fit, minmax(210px,1fr));
   gap: 14px;
-  margin-bottom: 20px;
+  margin-bottom: 22px;
 }
 
 .kpi-card {
@@ -181,36 +210,33 @@ body {
   cursor: default;
   transition: border-color var(--ease), transform var(--ease), box-shadow var(--ease);
 
-  /* Top accent line */
   &::before {
     content: '';
     position: absolute; top: 0; left: 0; right: 0; height: 1px;
-    background: linear-gradient(90deg, transparent, var(--kc, rgba(139,92,246,0.6)), transparent);
+    background: linear-gradient(90deg, transparent, var(--kc, rgba(27,138,232,0.6)), transparent);
     opacity: 0; transition: opacity var(--ease);
   }
 
-  /* Ambient corner glow */
   &::after {
     content: '';
     position: absolute; top: -60px; right: -60px;
     width: 160px; height: 160px; border-radius: 50%;
-    background: radial-gradient(circle, var(--kg, rgba(139,92,246,0.08)) 0%, transparent 70%);
+    background: radial-gradient(circle, var(--kg, rgba(27,138,232,0.08)) 0%, transparent 70%);
     pointer-events: none;
   }
 
   &:hover {
-    border-color: var(--kb, rgba(139,92,246,0.3));
+    border-color: var(--kb, rgba(27,138,232,0.3));
     transform: translateY(-2px);
-    box-shadow: 0 12px 40px rgba(0,0,0,0.3), 0 0 0 1px var(--kb, rgba(139,92,246,0.1));
+    box-shadow: 0 12px 40px rgba(0,0,0,0.3), 0 0 0 1px var(--kb, rgba(27,138,232,0.1));
     &::before { opacity: 1; }
   }
 
-  /* Color variants */
-  &.v-violet { --kc: rgba(139,92,246,0.8); --kb: rgba(139,92,246,0.25); --kg: rgba(139,92,246,0.1); --ki: #8b5cf6; }
-  &.v-cyan   { --kc: rgba(6,182,212,0.8);  --kb: rgba(6,182,212,0.25);  --kg: rgba(6,182,212,0.1);  --ki: #06b6d4; }
-  &.v-green  { --kc: rgba(34,197,94,0.8);  --kb: rgba(34,197,94,0.25);  --kg: rgba(34,197,94,0.1);  --ki: #22c55e; }
-  &.v-amber  { --kc: rgba(245,158,11,0.8); --kb: rgba(245,158,11,0.25); --kg: rgba(245,158,11,0.1); --ki: #f59e0b; }
-  &.v-rose   { --kc: rgba(244,114,182,0.8);--kb: rgba(244,114,182,0.25);--kg: rgba(244,114,182,0.1);--ki: #f472b6; }
+  &.v-violet { --kc: rgba(27,138,232,0.8); --kb: rgba(27,138,232,0.28); --kg: rgba(27,138,232,0.10); --ki: #1B8AE8; }
+  &.v-cyan   { --kc: rgba(0,205,228,0.8);  --kb: rgba(0,205,228,0.28);  --kg: rgba(0,205,228,0.10);  --ki: #00CDE4; }
+  &.v-green  { --kc: rgba(34,197,94,0.8);  --kb: rgba(34,197,94,0.28);  --kg: rgba(34,197,94,0.10);  --ki: #22c55e; }
+  &.v-amber  { --kc: rgba(245,196,0,0.8);  --kb: rgba(245,196,0,0.28);  --kg: rgba(245,196,0,0.10);  --ki: #F5C400; }
+  &.v-rose   { --kc: rgba(244,114,182,0.8);--kb: rgba(244,114,182,0.28);--kg: rgba(244,114,182,0.10);--ki: #f472b6; }
 }
 
 .kpi-top {
@@ -224,17 +250,17 @@ body {
 }
 
 .kpi-icon {
-  width: 28px; height: 28px; border-radius: 7px;
+  width: 30px; height: 30px; border-radius: 8px;
   display: flex; align-items: center; justify-content: center;
   background: rgba(255,255,255,0.06);
   color: var(--ki, var(--brand));
   flex-shrink: 0;
-  mat-icon { font-size: 15px; width: 15px; height: 15px; }
+  mat-icon { font-size: 16px; width: 16px; height: 16px; }
 }
 
 .kpi-value {
   font-family: 'JetBrains Mono', monospace;
-  font-size: 1.7rem; font-weight: 600; line-height: 1;
+  font-size: 1.75rem; font-weight: 600; line-height: 1;
   color: var(--t1); letter-spacing: -0.03em;
 }
 
@@ -268,7 +294,7 @@ body {
    ══════════════════════════════════════════════════════════ */
 .badge {
   display: inline-flex; align-items: center; gap: 5px;
-  padding: 3px 9px; border-radius: 20px;
+  padding: 3px 10px; border-radius: 20px;
   font-size: 11px; font-weight: 600; letter-spacing: 0.01em;
   font-family: 'JetBrains Mono', monospace;
 
@@ -290,24 +316,24 @@ body {
 .data-table {
   width: 100%; border-collapse: collapse; font-size: 13px;
 
-  thead { background: rgba(255,255,255,0.03); }
+  thead { background: rgba(27,138,232,0.05); }
 
   th {
-    padding: 9px 14px; text-align: left;
-    font-size: 10px; font-weight: 700; text-transform: uppercase;
-    letter-spacing: 0.08em; color: var(--t3); white-space: nowrap;
+    padding: 10px 14px; text-align: left;
+    font-size: 11px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.07em; color: var(--t3); white-space: nowrap;
     border-bottom: 1px solid var(--border);
   }
 
   td {
-    padding: 11px 14px; color: var(--t2);
+    padding: 12px 14px; color: var(--t2);
     border-bottom: 1px solid rgba(255,255,255,0.04);
     transition: background var(--ease), color var(--ease);
     vertical-align: middle;
   }
 
   tr:last-child td { border-bottom: none; }
-  tbody tr:hover td { background: rgba(255,255,255,0.04); color: var(--t1); }
+  tbody tr:hover td { background: rgba(27,138,232,0.05); color: var(--t1); }
 }
 
 .rank {
@@ -348,7 +374,7 @@ body {
    ══════════════════════════════════════════════════════════ */
 .btn {
   display: inline-flex; align-items: center; gap: 7px;
-  padding: 8px 15px; border-radius: var(--r-sm);
+  padding: 8px 16px; border-radius: var(--r-sm);
   font-size: 13px; font-weight: 500; font-family: 'Inter', sans-serif;
   cursor: pointer; border: none; text-decoration: none;
   transition: all var(--ease); white-space: nowrap;
@@ -392,12 +418,20 @@ body {
    ══════════════════════════════════════════════════════════ */
 .mat-mdc-progress-spinner circle { stroke: var(--brand) !important; }
 
+/* Make Material raised buttons use brand blue */
+.mat-mdc-raised-button.mat-primary {
+  background-color: var(--brand) !important;
+  color: #fff !important;
+}
+.mat-mdc-raised-button.mat-primary:hover {
+  background-color: var(--brand-hi) !important;
+}
+
 /* ══════════════════════════════════════════════════════════
    RTL SUPPORT
    ══════════════════════════════════════════════════════════ */
 body.rtl {
   .shell { flex-direction: row-reverse; }
-
   .page-header { flex-direction: row-reverse; }
   .page-header__eyebrow {
     flex-direction: row-reverse;
@@ -405,38 +439,24 @@ body.rtl {
     &::after {
       content: '';
       display: inline-block; width: 18px; height: 1px;
-      background: var(--brand); opacity: 0.6;
+      background: var(--brand); opacity: 0.7;
     }
   }
-
   .section-header { flex-direction: row-reverse; }
-
   .data-table th, .data-table td { text-align: right; }
-
   .kpi-top { flex-direction: row-reverse; }
-
   .sidebar__nav { direction: rtl; }
   .nav-item { flex-direction: row-reverse; }
   .nav-item--active::before { left: auto; right: 0; }
-
   .topbar__left { flex-direction: row-reverse; }
   .topbar__right { flex-direction: row-reverse; }
   .topbar__user { flex-direction: row-reverse; }
-
   .badge { flex-direction: row-reverse; }
-
   .btn { flex-direction: row-reverse; }
 }
 
 /* ══════════════════════════════════════════════════════════
-   LEGACY COMPAT (pages not yet migrated)
-   ══════════════════════════════════════════════════════════ */
-.page-hero       { display: none !important; }
-.page-body       { padding: 24px 32px; }
-
-/* ══════════════════════════════════════════════════════════
-   ANGULAR MATERIAL TOOLTIP OVERRIDES
-   Must be global — CDK overlays render outside component DOM
+   ANGULAR MATERIAL TOOLTIP
    ══════════════════════════════════════════════════════════ */
 .model-tooltip.mdc-tooltip .mdc-tooltip__surface,
 .model-tooltip .mat-mdc-tooltip-surface {

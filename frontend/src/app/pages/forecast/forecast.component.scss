@@ -3,6 +3,38 @@
   display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
 }
 
+/* ── Chart legend guide ────────────────────────────────────────────────────── */
+.chart-legend-guide {
+  display: flex; align-items: center; gap: 20px; flex-wrap: wrap;
+  margin-bottom: 14px; padding: 10px 14px;
+  background: rgba(255,255,255,.03); border-radius: 10px;
+  border: 1px solid rgba(255,255,255,.07);
+}
+
+.clg {
+  display: flex; align-items: center; gap: 8px;
+  font-size: .75rem; font-weight: 500; color: rgba(255,255,255,.5);
+
+  &__line {
+    width: 28px; height: 2.5px; border-radius: 3px;
+    background: #6366f1;
+    &--dash {
+      background: repeating-linear-gradient(90deg, #f59e0b 0px, #f59e0b 6px, transparent 6px, transparent 10px);
+      height: 2.5px;
+    }
+  }
+
+  &__band {
+    width: 22px; height: 8px; border-radius: 3px;
+    background: rgba(245,158,11,.18);
+    border: 1px solid rgba(245,158,11,.45);
+  }
+
+  &--hist { color: #818cf8; }
+  &--fore { color: #fbbf24; }
+  &--ci   { color: rgba(245,158,11,.7); }
+}
+
 .winner-chip {
   display: flex; align-items: center; gap: 8px;
   padding: 8px 18px; border-radius: 24px;

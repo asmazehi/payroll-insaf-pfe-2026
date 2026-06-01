@@ -23,6 +23,13 @@ import json
 import os
 import shutil
 import tempfile
+
+# Load .env (GROK_API_KEY etc.) before anything else
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass  # python-dotenv not installed — env vars must be set manually
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
@@ -42,11 +49,19 @@ app = FastAPI(
     version="1.0.0",
 )
 
+_ALLOWED_ORIGINS = [
+    "http://localhost:4200",   # Angular dev
+    "http://localhost:8081",   # Spring Boot (internal calls)
+    "http://127.0.0.1:4200",
+    "http://127.0.0.1:8081",
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # tighten in production
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=_ALLOWED_ORIGINS,
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "Accept"],
+    allow_credentials=True,
 )
 
 # Simple in-memory cache for expensive DB queries
@@ -62,8 +77,99 @@ def _cache_get(key: str):
 def _cache_set(key: str, value: object):
     _cache[key] = (time.time(), value)
 
+
+def _resolve_ministry_codetabs(ministry: str) -> list[str]:
+    """
+    Expand a top-level ministry code to all its sub-establishment codetabs.
+    Uses dw.v_ministry_codetabs: returns [ministry] itself + all establishments
+    whose codtutel = ministry OR (natorg='8' AND ministry='W00').
+    Caches results for 1 hour to avoid repeated DB lookups on every API call.
+    """
+    cache_key = f"ministry_codetabs:{ministry}"
+    cached = _cache_get(cache_key)
+    if cached is not None:
+        return cached
+
+    try:
+        from etl.core.config import DB_CONFIG
+        import psycopg2
+        with psycopg2.connect(**DB_CONFIG) as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT sub_codetab FROM dw.v_ministry_codetabs WHERE ministry_codetab = %s",
+                    (ministry,)
+                )
+                codetabs = [r[0] for r in cur.fetchall()]
+        if not codetabs:
+            codetabs = [ministry]
+    except Exception:
+        codetabs = [ministry]
+
+    _cache_set(cache_key, codetabs)
+    return codetabs
+
+
+def _build_ministry_name_map() -> dict[str, str]:
+    """
+    Build a codetab → parent ministry name mapping from the DB.
+    Used to enrich the anomaly report so charts show ministry names
+    (e.g. 'Ministère de la Jeunesse et des Sports') instead of
+    establishment codes (e.g. 'A52 – Football Federation').
+    Cached for 1 hour.
+    """
+    cached = _cache_get("ministry_name_map")
+    if cached is not None:
+        return cached
+
+    try:
+        from etl.core.config import DB_CONFIG
+        import psycopg2
+        with psycopg2.connect(**DB_CONFIG) as conn:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    SELECT v.sub_codetab,
+                           COALESCE(de.libletabl, de.libcetabl, v.ministry_codetab) AS ministry_name
+                    FROM dw.v_ministry_codetabs v
+                    JOIN dw.dim_etablissement de ON de.codetab = v.ministry_codetab
+                """)
+                mapping = {r[0]: r[1] for r in cur.fetchall()}
+    except Exception:
+        mapping = {}
+
+    _cache_set("ministry_name_map", mapping)
+    return mapping
+
+
+def _load_reviews() -> dict:
+    """Load review data from DB as {(emp_sk, year, month): {status, notes, reviewed_by, reviewed_at}}."""
+    try:
+        from etl.core.config import DB_CONFIG
+        import psycopg2
+        with psycopg2.connect(**DB_CONFIG) as conn:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    SELECT employee_sk, year_num, month_num, status, notes, reviewed_by, reviewed_at
+                    FROM public.anomaly_reviews
+                """)
+                return {
+                    (int(r[0]), int(r[1]), int(r[2])): {
+                        "status":      r[3],
+                        "notes":       r[4],
+                        "reviewed_by": r[5],
+                        "reviewed_at": str(r[6]) if r[6] else None,
+                    }
+                    for r in cur.fetchall()
+                }
+    except Exception:
+        return {}
+
+
 def _load_anomaly_report():
-    """Load anomaly_report.csv with 1-hour in-memory cache."""
+    """Load anomaly_report.csv with 1-hour in-memory cache.
+    Enriches ministry_code with parent ministry name so charts show the
+    top-level ministry (e.g. 'Ministère de la Jeunesse et des Sports')
+    instead of individual establishment labels (e.g. 'Football Federation').
+    """
     cached = _cache_get("anomaly_report")
     if cached is not None:
         return cached
@@ -72,17 +178,117 @@ def _load_anomaly_report():
     if not report_path.exists():
         return None
     df = pd.read_csv(report_path)
+
+    # Enrich with parent ministry code and name
+    name_map = _build_ministry_name_map()
+    if name_map and "ministry_code" in df.columns:
+        # Build codetab -> parent_ministry_code mapping
+        try:
+            from etl.core.config import DB_CONFIG
+            import psycopg2
+            with psycopg2.connect(**DB_CONFIG) as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        "SELECT sub_codetab, ministry_codetab FROM dw.v_ministry_codetabs"
+                    )
+                    parent_map = {r[0]: r[1] for r in cur.fetchall()}
+        except Exception:
+            parent_map = {}
+
+        df["parent_ministry_code"] = df["ministry_code"].map(
+            lambda c: parent_map.get(str(c), str(c)) if c is not None else None
+        )
+        df["parent_ministry_name"] = df["parent_ministry_code"].map(
+            lambda c: name_map.get(str(c), str(c)) if c is not None else None
+        )
+
     _cache_set("anomaly_report", df)
     return df
 
 
-def _classify_anomaly(row: dict) -> dict:
-    """Rule-based anomaly diagnosis — type, plain-language explanation, recommended action."""
+_T = {
+    "en": {
+        "expl_spike":      "Net pay of {netpay:,.0f} TND is {pct:.1f}% above the employee's historical average ({mean:,.0f} TND) — a statistically extreme spike (z={z:.2f}).",
+        "expl_drop":       "Net pay of {netpay:,.0f} TND is {pct:.1f}% below the historical average ({mean:,.0f} TND) — a statistically extreme reduction (z={z:.2f}).",
+        "expl_pers_raise": "Net pay has been elevated for multiple consecutive months ({pct:.1f}% above mean), suggesting a structural, ongoing change.",
+        "expl_pers_drop":  "Net pay has been significantly below average for multiple consecutive months ({pct:.1f}% below mean), indicating a sustained reduction.",
+        "expl_one_spike":  "A one-time net pay spike of {pct:.1f}% above the employee's mean was detected{chg}. Pay appears normal in adjacent months.",
+        "expl_one_drop":   "A one-time net pay drop of {pct:.1f}% below the employee's mean was observed{chg}. Pay appears normal in adjacent months.",
+        "expl_pattern":    "The payment pattern is atypical for this employee based on ML analysis (z={z:.2f}), though the absolute deviation may be modest.",
+        "act_spike":       "Cross-check the payment record against the HR authorization document and verify with the payroll officer responsible for this ministry.",
+        "act_drop":        "Investigate potential unprocessed salary elements, illegal deductions, or incorrect payroll computation for this period.",
+        "act_pers_raise":  "Confirm whether a grade promotion or salary adjustment was officially approved and properly documented in the HR system.",
+        "act_pers_drop":   "Verify if a demotion, disciplinary action, or benefit removal was applied and correctly authorized through the proper channels.",
+        "act_one_spike":   "Check for retroactive payments, one-time indemnities, overtime pay, or data entry errors specific to this pay period.",
+        "act_one_drop":    "Check for missed allowances, erroneous deductions, or partial-month payment in this period.",
+        "act_pattern":     "Review the employee's pay history for this period and verify the computation against applicable payroll rules.",
+        "pc_retro":        "Most likely retroactive salary adjustment: the salary increased from ~{pre:,.0f} to ~{post:,.0f} TND/month (+{raise_amt:,.0f} TND). This spike probably includes {months} months of back-pay ({raise_amt:,.0f} × {months} ≈ {total:,.0f} TND) paid as a lump sum in this period.",
+        "pc_retro_large":  "Salary did rise from ~{pre:,.0f} to ~{post:,.0f} TND after this month, but the spike ({extra:,.0f} TND above new salary) is too large to be explained by retroactive pay alone. Likely also includes a one-time allowance or a data entry error.",
+        "pc_duplicate":    "Possible duplicate payment: {netpay:,.0f} TND ≈ {ratio:.1f}× the usual salary ({pre:,.0f} TND). No salary change in the following months. The employee may have been paid twice for this period.",
+        "pc_data_error":   "Most likely a data entry error: pay returned to {next:,.0f} TND the following month with no lasting change, and the z-score ({z:.1f}) is extreme even by anomaly standards. A wrong amount was probably keyed into the payroll system for this period.",
+        "pc_onetime":      "One-time payment (~{extra:,.0f} TND above baseline) with no lasting salary change. Likely a one-off indemnity, overtime batch, or end-of-year allowance paid outside the normal cycle.",
+        "pc_drop":         "Pay returned to normal the following month, suggesting a one-time deduction — possibly an overpayment recovery, absence penalty, or incorrect deduction that was later corrected.",
+        "chg_str":         " ({pct:+.1f}% vs previous month)",
+    },
+    "fr": {
+        "expl_spike":      "Le salaire net de {netpay:,.0f} TND est supérieur de {pct:.1f}% à la moyenne historique de l'employé ({mean:,.0f} TND) — un pic statistiquement extrême (z={z:.2f}).",
+        "expl_drop":       "Le salaire net de {netpay:,.0f} TND est inférieur de {pct:.1f}% à la moyenne historique ({mean:,.0f} TND) — une réduction statistiquement extrême (z={z:.2f}).",
+        "expl_pers_raise": "Le salaire net est élevé depuis plusieurs mois consécutifs ({pct:.1f}% au-dessus de la moyenne), suggérant un changement structurel.",
+        "expl_pers_drop":  "Le salaire net est significativement inférieur à la moyenne depuis plusieurs mois consécutifs ({pct:.1f}% en dessous), indiquant une réduction durable.",
+        "expl_one_spike":  "Un pic ponctuel de {pct:.1f}% au-dessus de la moyenne de l'employé a été détecté{chg}. Le salaire semble normal les mois adjacents.",
+        "expl_one_drop":   "Une baisse ponctuelle de {pct:.1f}% en dessous de la moyenne de l'employé a été observée{chg}. Le salaire semble normal les mois adjacents.",
+        "expl_pattern":    "Le schéma de paiement est atypique pour cet employé selon l'analyse ML (z={z:.2f}), bien que l'écart absolu soit modéré.",
+        "act_spike":       "Vérifier le dossier de paiement par rapport au document d'autorisation RH et confirmer avec le responsable de la paie du ministère concerné.",
+        "act_drop":        "Investiguer les éléments salariaux non traités, les déductions illégales ou le calcul de paie incorrect pour cette période.",
+        "act_pers_raise":  "Confirmer si une promotion de grade ou un ajustement salarial a été officiellement approuvé et correctement documenté dans le système RH.",
+        "act_pers_drop":   "Vérifier si une rétrogradation, une mesure disciplinaire ou une suppression d'avantage a été appliquée et autorisée par les voies appropriées.",
+        "act_one_spike":   "Vérifier les paiements rétroactifs, les indemnités ponctuelles, les heures supplémentaires ou les erreurs de saisie spécifiques à cette période.",
+        "act_one_drop":    "Vérifier les allocations manquantes, les déductions erronées ou le paiement partiel du mois dans cette période.",
+        "act_pattern":     "Examiner l'historique salarial de l'employé pour cette période et vérifier le calcul selon les règles de paie applicables.",
+        "pc_retro":        "Très probablement un rappel salarial rétroactif : le salaire est passé de ~{pre:,.0f} à ~{post:,.0f} TND/mois (+{raise_amt:,.0f} TND). Ce pic inclut probablement {months} mois de rappel ({raise_amt:,.0f} × {months} ≈ {total:,.0f} TND) versés en une seule fois.",
+        "pc_retro_large":  "Le salaire a bien augmenté de ~{pre:,.0f} à ~{post:,.0f} TND après ce mois, mais le montant du pic ({extra:,.0f} TND au-dessus du nouveau salaire) est trop élevé pour être expliqué uniquement par un rappel. Peut également inclure une indemnité ponctuelle ou une erreur de saisie.",
+        "pc_duplicate":    "Possible doublon de paiement : {netpay:,.0f} TND ≈ {ratio:.1f}× le salaire habituel ({pre:,.0f} TND). Aucun changement salarial les mois suivants. L'employé a peut-être été payé deux fois pour cette période.",
+        "pc_data_error":   "Très probablement une erreur de saisie : le salaire est revenu à {next:,.0f} TND le mois suivant sans changement durable, et le z-score ({z:.1f}) est extrême même par rapport aux normes des anomalies. Un mauvais montant a probablement été saisi dans le système de paie.",
+        "pc_onetime":      "Paiement ponctuel (~{extra:,.0f} TND au-dessus de la base) sans changement salarial durable. Probablement une indemnité exceptionnelle, un lot d'heures supplémentaires ou une prime de fin d'année hors cycle normal.",
+        "pc_drop":         "Le salaire est revenu à la normale le mois suivant, suggérant une déduction ponctuelle — peut-être un remboursement de trop-perçu, une pénalité d'absence ou une déduction incorrecte corrigée ultérieurement.",
+        "chg_str":         " ({pct:+.1f}% par rapport au mois précédent)",
+    },
+    "ar": {
+        "expl_spike":      "صافي الأجر {netpay:,.0f} دينار يفوق المتوسط التاريخي للموظف ({mean:,.0f} دينار) بنسبة {pct:.1f}% — ارتفاع إحصائي استثنائي (z={z:.2f}).",
+        "expl_drop":       "صافي الأجر {netpay:,.0f} دينار أقل من المتوسط التاريخي ({mean:,.0f} دينار) بنسبة {pct:.1f}% — انخفاض إحصائي استثنائي (z={z:.2f}).",
+        "expl_pers_raise": "ارتفع صافي الأجر لعدة أشهر متتالية ({pct:.1f}% فوق المتوسط)، مما يشير إلى تغيير هيكلي مستمر.",
+        "expl_pers_drop":  "انخفض صافي الأجر بشكل ملحوظ لعدة أشهر متتالية ({pct:.1f}% دون المتوسط)، مما يدل على انخفاض مستمر.",
+        "expl_one_spike":  "تم رصد ارتفاع مؤقت بنسبة {pct:.1f}% فوق متوسط الموظف{chg}. يبدو الأجر طبيعياً في الأشهر المجاورة.",
+        "expl_one_drop":   "تم رصد انخفاض مؤقت بنسبة {pct:.1f}% دون متوسط الموظف{chg}. يبدو الأجر طبيعياً في الأشهر المجاورة.",
+        "expl_pattern":    "النمط المرتبط بالمدفوعات غير عادي لهذا الموظف وفق تحليل الذكاء الاصطناعي (z={z:.2f}).",
+        "act_spike":       "مراجعة سجل الدفع مقابل وثيقة الاعتماد الإداري والتحقق مع مسؤول الأجور في الوزارة المعنية.",
+        "act_drop":        "التحقيق في العناصر الراتبية غير المعالجة أو الاقتطاعات غير المشروعة أو الأخطاء الحسابية في الأجر لهذه الفترة.",
+        "act_pers_raise":  "التأكد من الموافقة الرسمية على ترقية الدرجة أو تعديل الراتب وتوثيقه في نظام الموارد البشرية.",
+        "act_pers_drop":   "التحقق مما إذا كان قد تم تطبيق تخفيض أو إجراء تأديبي أو إلغاء مزايا بشكل مرخص.",
+        "act_one_spike":   "البحث عن مدفوعات بأثر رجعي أو مكافآت استثنائية أو أخطاء إدخال بيانات خاصة بهذه الفترة.",
+        "act_one_drop":    "التحقق من العلاوات المفقودة أو الاقتطاعات الخاطئة أو الدفع الجزئي للشهر.",
+        "act_pattern":     "مراجعة سجل الأجور للموظف خلال هذه الفترة والتحقق من الحساب وفق قواعد الأجر المعمول بها.",
+        "pc_retro":        "الأرجح أنه تسوية راتب بأثر رجعي: ارتفع الراتب من ~{pre:,.0f} إلى ~{post:,.0f} دينار/شهر (+{raise_amt:,.0f} دينار). يشمل هذا الارتفاع على الأرجح {months} أشهر من الفروقات ({raise_amt:,.0f} × {months} ≈ {total:,.0f} دينار) صُرفت دفعةً واحدة.",
+        "pc_retro_large":  "ارتفع الراتب من ~{pre:,.0f} إلى ~{post:,.0f} دينار بعد هذا الشهر، لكن مبلغ الارتفاع ({extra:,.0f} دينار فوق الراتب الجديد) أكبر من أن يفسره التسوية بأثر رجعي وحدها. قد يتضمن أيضاً تعويضاً استثنائياً أو خطأً في إدخال البيانات.",
+        "pc_duplicate":    "يُحتمل أنه دفع مكرر: {netpay:,.0f} دينار ≈ {ratio:.1f}× الراتب المعتاد ({pre:,.0f} دينار). لا يوجد تغيير في الراتب خلال الأشهر التالية. ربما صُرف للموظف أجران عن هذه الفترة.",
+        "pc_data_error":   "الأرجح أنه خطأ في إدخال البيانات: عاد الأجر إلى {next:,.0f} دينار في الشهر التالي دون أي تغيير دائم، ومعامل z ({z:.1f}) بالغ الارتفاع. على الأرجح أُدخل مبلغ خاطئ في نظام الأجور.",
+        "pc_onetime":      "دفعة استثنائية (~{extra:,.0f} دينار فوق الأساس) دون تغيير دائم في الراتب. يُرجَّح أنها تعويض استثنائي أو دفعة ساعات إضافية أو علاوة نهاية السنة خارج الدورة المعتادة.",
+        "pc_drop":         "عاد الأجر إلى مستواه الطبيعي في الشهر التالي، مما يشير إلى اقتطاع مؤقت — ربما تحصيل مبالغ مدفوعة زيادةً أو جزاء غياب أو اقتطاع خاطئ تم تصحيحه لاحقاً.",
+        "chg_str":         " ({pct:+.1f}% مقارنةً بالشهر السابق)",
+    },
+}
+
+def _classify_anomaly(row: dict, lang: str = "en") -> dict:
+    """Rule-based anomaly diagnosis — type, explanation, probable cause, recommended action."""
+    t = _T.get(lang, _T["en"])   # fallback to English
+
     z       = float(row.get("z_score") or 0)
     pct_dev = float(row.get("pct_deviation") or 0)
-    pct_chg = row.get("pct_change_vs_prev")   # None when temporal context unavailable
+    pct_chg = row.get("pct_change_vs_prev")
+    prev1   = row.get("pay_prev_1m")
     next1   = row.get("pay_next_1m")
     next2   = row.get("pay_next_2m")
+    next3   = row.get("pay_next_3m")
     mean    = float(row.get("emp_mean") or 0)
     netpay  = float(row.get("m_netpay") or 0)
 
@@ -100,54 +306,75 @@ def _classify_anomaly(row: dict) -> dict:
         elif is_drop:
             persistent = n1 < mean * 0.85 and n2 < mean * 0.85
 
-    chg_str = f" ({pct_chg:+.1f}% vs previous month)" if pct_chg is not None else ""
+    chg_str = t["chg_str"].format(pct=pct_chg) if pct_chg is not None else ""
+
+    # ── Probable cause: data-driven inference from temporal context ──────────
+    probable_cause = None
+
+    if is_spike and next1 is not None and next2 is not None:
+        n1, n2 = float(next1), float(next2)
+        pre_ref = float(prev1) if prev1 is not None else mean
+        post_avg = (n1 + n2) / 2
+
+        salary_raised = post_avg > pre_ref * 1.08
+        raise_per_month = post_avg - pre_ref if salary_raised else 0
+        extra_above_new = netpay - post_avg if salary_raised else netpay - mean
+        extra_above_old = netpay - pre_ref
+
+        if salary_raised and raise_per_month > 30:
+            months_bp = round(extra_above_new / raise_per_month) if raise_per_month > 0 else 0
+            reconstructed = post_avg + months_bp * raise_per_month
+            fit_pct = abs(reconstructed - netpay) / netpay * 100
+            if 3 <= months_bp <= 36 and fit_pct < 15:
+                probable_cause = t["pc_retro"].format(pre=pre_ref, post=post_avg,
+                    raise_amt=raise_per_month, months=months_bp, total=raise_per_month * months_bp)
+            else:
+                probable_cause = t["pc_retro_large"].format(pre=pre_ref, post=post_avg, extra=extra_above_new)
+        else:
+            ratio = netpay / pre_ref if pre_ref > 0 else 0
+            if 1.8 <= ratio <= 2.2:
+                probable_cause = t["pc_duplicate"].format(netpay=netpay, ratio=ratio, pre=pre_ref)
+            elif abs_z >= 8:
+                probable_cause = t["pc_data_error"].format(next=n1, z=z)
+            else:
+                probable_cause = t["pc_onetime"].format(extra=extra_above_old)
+
+    elif is_drop and next1 is not None and not persistent:
+        probable_cause = t["pc_drop"]
 
     if abs_z >= 3.5 and is_spike:
         atype  = "extreme_spike"
-        expl   = (f"Net pay of {netpay:,.0f} TND is {abs_pct:.1f}% above the employee's "
-                  f"historical average ({mean:,.0f} TND) - a statistically extreme spike (z={z:.2f}).")
-        action = ("Verify for unauthorized bonus, payroll error, or duplicate payment. "
-                  "Cross-check with HR approval chain and supporting documents.")
+        expl   = t["expl_spike"].format(netpay=netpay, pct=abs_pct, mean=mean, z=z)
+        action = t["act_spike"]
     elif abs_z >= 3.5 and is_drop:
         atype  = "extreme_drop"
-        expl   = (f"Net pay of {netpay:,.0f} TND is {abs_pct:.1f}% below the historical "
-                  f"average ({mean:,.0f} TND) - a statistically extreme reduction (z={z:.2f}).")
-        action = ("Investigate potential unprocessed salary elements, illegal deductions, "
-                  "or incorrect payroll computation for this period.")
+        expl   = t["expl_drop"].format(netpay=netpay, pct=abs_pct, mean=mean, z=z)
+        action = t["act_drop"]
     elif is_spike and persistent:
         atype  = "persistent_raise"
-        expl   = (f"Net pay has been elevated for multiple consecutive months "
-                  f"({abs_pct:.1f}% above mean), suggesting a structural, ongoing change.")
-        action = ("Confirm whether a grade promotion or salary adjustment was officially "
-                  "approved and properly documented in the HR system.")
+        expl   = t["expl_pers_raise"].format(pct=abs_pct)
+        action = t["act_pers_raise"]
     elif is_drop and persistent:
         atype  = "persistent_drop"
-        expl   = (f"Net pay has been significantly below average for multiple consecutive months "
-                  f"({abs_pct:.1f}% below mean), indicating a sustained reduction.")
-        action = ("Verify if a demotion, disciplinary action, or benefit removal was applied "
-                  "and correctly authorized through the proper channels.")
+        expl   = t["expl_pers_drop"].format(pct=abs_pct)
+        action = t["act_pers_drop"]
     elif is_spike:
         atype  = "one_time_spike"
-        expl   = (f"A one-time net pay spike of {abs_pct:.1f}% above the employee's mean "
-                  f"was detected{chg_str}. Pay appears normal in adjacent months.")
-        action = ("Check for retroactive payments, one-time indemnities, overtime pay, "
-                  "or data entry errors specific to this pay period.")
+        expl   = t["expl_one_spike"].format(pct=abs_pct, chg=chg_str)
+        action = t["act_one_spike"]
     elif is_drop:
         atype  = "one_time_drop"
-        expl   = (f"A one-time net pay drop of {abs_pct:.1f}% below the employee's mean "
-                  f"was observed{chg_str}. Pay appears normal in adjacent months.")
-        action = ("Check for missed allowances, erroneous deductions, "
-                  "or partial-month payment in this period.")
+        expl   = t["expl_one_drop"].format(pct=abs_pct, chg=chg_str)
+        action = t["act_one_drop"]
     else:
         atype  = "pattern_anomaly"
-        expl   = (f"The payment pattern is atypical for this employee based on ML analysis "
-                  f"(z={z:.2f}), though the absolute deviation may be modest.")
-        action = ("Review the employee's pay history for this period "
-                  "and verify the computation against applicable payroll rules.")
+        expl   = t["expl_pattern"].format(z=z)
+        action = t["act_pattern"]
 
     return {
         "anomaly_type":       atype,
         "explanation":        expl,
+        "probable_cause":     probable_cause,
         "recommended_action": action,
     }
 
@@ -208,9 +435,10 @@ def _detect_file_type(path: Path) -> str | None:
 # ── Schemas ───────────────────────────────────────────────────────────────────
 
 class ChatRequest(BaseModel):
-    question: str
-    model:    str = "llama3.2"
-    history:  list[dict] = []
+    question:      str
+    model:         str = "llama3.2"
+    history:       list[dict] = []
+    ministry_code: Optional[str] = None  # None = admin (no filter), set = user scope
 
 
 class AnomalyExplainRequest(BaseModel):
@@ -581,13 +809,17 @@ def get_forecast(
         winner_m  = model_comparison.get(winner, {})
         avg_hist  = float(df["total_netpay"].mean())
         avg_fore  = sum(p["predicted_netpay"] for p in predictions) / max(len(predictions), 1)
-        rmse      = winner_m.get("rmse", avg_hist * 0.05)
+
+        # Use MAPE-relative CI: ±MAPE% of predicted value.
+        # RMSE-based CI (±1.96*RMSE) produces huge absolute bands on aggregate payroll
+        # because RMSE is in the tens-of-millions even at 5% MAPE.
+        mape_frac = (winner_m.get("mape") or 5.0) / 100.0
 
         forecast_with_ci = [
             {
                 **p,
-                "lower": round(max(p["predicted_netpay"] - 1.96 * rmse, 0), 2),
-                "upper": round(p["predicted_netpay"] + 1.96 * rmse, 2),
+                "lower": round(max(p["predicted_netpay"] * (1 - mape_frac), 0), 2),
+                "upper": round(p["predicted_netpay"] * (1 + mape_frac), 2),
             }
             for p in predictions
         ]
@@ -642,20 +874,21 @@ def get_forecast_dimensions(ministry: Optional[str] = Query(None)):
         from etl.core.config import DB_CONFIG
         with psycopg2.connect(**DB_CONFIG) as conn:
             with conn.cursor() as cur:
-                # Ministries: join with dim_etablissement for Arabic names
+                # Ministries: all top-level ministries from dim_etablissement (natorg='1').
+                # This shows all 41 real ministries regardless of whether they have payroll data,
+                # which is correct for ministry-scoped users who need to see their dropdown.
                 min_cached = _cache_get("dims:ministries")
                 if min_cached is not None:
                     ministries = min_cached
                 else:
                     cur.execute("""
-                        SELECT m.ministry_code,
-                               m.ministry_name                       AS name_fr,
-                               COALESCE(de.libletaba, de.libcetaba)  AS name_ar
-                        FROM dw.mv_payroll_by_ministry m
-                        LEFT JOIN dw.dim_etablissement de
-                               ON de.codetab = m.ministry_code
-                        WHERE m.ministry_code IS NOT NULL
-                        ORDER BY m.total_netpay DESC
+                        SELECT codetab                               AS code,
+                               COALESCE(libletabl, libcetabl, codetab) AS name_fr,
+                               COALESCE(libletaba, libcetaba, codetab) AS name_ar
+                        FROM dw.dim_etablissement
+                        WHERE natorg = '1'
+                          AND (codtutel IS NULL OR codtutel = codetab)
+                        ORDER BY COALESCE(libletabl, libcetabl, codetab)
                     """)
                     ministries = [
                         {"code": r[0], "name_fr": r[1] or r[0], "name_ar": r[2] or r[1] or r[0]}
@@ -715,8 +948,10 @@ def get_forecast_historical(
         params: list = []
 
         if ministry:
-            conditions.append("fp.codetab = %s")
-            params.append(ministry)
+            codetabs = _resolve_ministry_codetabs(ministry)
+            placeholders = ",".join(["%s"] * len(codetabs))
+            conditions.append(f"fp.codetab IN ({placeholders})")
+            params.extend(codetabs)
         if grade:
             conditions.append("dg.grade_code = %s")
             params.append(grade)
@@ -983,6 +1218,7 @@ def get_anomalies(
     limit: int = Query(100, ge=1, le=500),
     ministry:  Optional[str] = Query(None, description="Filter by ministry code"),
     year:      Optional[int] = Query(None, description="Filter by year"),
+    lang:      str           = Query("en", description="Language for diagnosis text (en/fr/ar)"),
 ):
     """
     Returns a balanced sample of anomalies (top N per severity tier) so all three
@@ -1018,12 +1254,70 @@ def get_anomalies(
         total_sampled_records   = total
         total_sampled_employees = int(full_df["employee_sk"].nunique())
 
-    # Apply optional filters
+    # Apply optional filters — expand ministry code to all sub-establishments
     df = full_df.copy()
+    max_year = int(full_df["year_num"].max())
     if ministry:
-        df = df[df["ministry_code"] == ministry]
+        codetabs = _resolve_ministry_codetabs(ministry)
+        df = df[df["ministry_code"].isin(codetabs)]
     if year:
         df = df[df["year_num"] == year]
+        filter_min_year = year
+    else:
+        # Default: only show the last 2 years (current year + previous year)
+        filter_min_year = max_year - 1
+        df = df[df["year_num"] >= filter_min_year]
+
+    # KPI counts from the filtered (recent) dataset
+    z_filtered = df["z_score"].abs()
+    severity_summary = {
+        "high":   int((z_filtered >= 3.5).sum()),
+        "medium": int(((z_filtered >= 2.5) & (z_filtered < 3.5)).sum()),
+        "low":    int((z_filtered < 2.5).sum()),
+    }
+    total_filtered = int(len(df))
+
+    # Anomaly rate = anomalies in period / total records in same period
+    # Use mv_ministry_details (pre-aggregated) for fast period record count.
+    # When a ministry is specified, expand it to all sub-codetabs via v_ministry_codetabs.
+    try:
+        from etl.core.config import DB_CONFIG
+        import psycopg2
+        with psycopg2.connect(**DB_CONFIG) as _conn:
+            with _conn.cursor() as _cur:
+                if ministry:
+                    codetabs = _resolve_ministry_codetabs(ministry)
+                    placeholders = ",".join(["%s"] * len(codetabs))
+                    if year:
+                        _cur.execute(
+                            f"SELECT COALESCE(SUM(record_count),1) FROM dw.mv_ministry_details "
+                            f"WHERE year_num = %s AND codetab IN ({placeholders})",
+                            (year, *codetabs)
+                        )
+                    else:
+                        _cur.execute(
+                            f"SELECT COALESCE(SUM(record_count),1) FROM dw.mv_ministry_details "
+                            f"WHERE year_num >= %s AND codetab IN ({placeholders})",
+                            (filter_min_year, *codetabs)
+                        )
+                elif year:
+                    _cur.execute(
+                        "SELECT COALESCE(SUM(record_count),1) FROM dw.mv_ministry_details "
+                        "WHERE year_num = %s", (year,)
+                    )
+                else:
+                    _cur.execute(
+                        "SELECT COALESCE(SUM(record_count),1) FROM dw.mv_ministry_details "
+                        "WHERE year_num >= %s", (filter_min_year,)
+                    )
+                period_records = int(_cur.fetchone()[0])
+    except Exception:
+        # Fallback: estimate from year proportion
+        all_years = int(full_df["year_num"].max()) - int(full_df["year_num"].min()) + 1
+        filtered_years = 1 if year else 2
+        period_records = max(int(total_sampled_records * filtered_years / max(all_years, 1)), 1)
+
+    anomaly_rate_pct = round(total_filtered / period_records * 100, 2)
 
     # Balanced fetch: top N records from each severity tier
     per_tier   = max(limit // 3, 1)
@@ -1040,13 +1334,40 @@ def get_anomalies(
     # Detect whether the CSV has the new columns (post-retrain)
     has_new_cols = "detection_method" in df.columns and df["detection_method"].notna().any()
 
-    # Enrich each record with rule-based anomaly diagnosis
+    # Load review statuses — vectorized (no iterrows on 374K rows)
+    reviews = _load_reviews()
+    review_stats = {"LEGITIMATE": 0, "ERROR": 0, "INVESTIGATING": 0}
+    for v in reviews.values():
+        s = v["status"] if isinstance(v, dict) else v
+        if s in review_stats:
+            review_stats[s] += 1
+
+    if not reviews:
+        unreviewed = total_filtered          # fast path: nothing reviewed yet
+    else:
+        reviewed_keys = set(reviews.keys())
+        keys = set(zip(
+            df["employee_sk"].astype(int).tolist(),
+            df["year_num"].astype(int).tolist(),
+            df["month_num"].astype(int).tolist()
+        ))
+        unreviewed = total_filtered - len(keys & reviewed_keys)
+
+    # Enrich each record with rule-based anomaly diagnosis (in requested language)
     records = json.loads(result_df.to_json(orient="records"))
     for rec in records:
-        rec.update(_classify_anomaly(rec))
+        rec.update(_classify_anomaly(rec, lang=lang))
+        key = (int(rec.get("employee_sk", 0)), int(rec.get("year_num", 0)), int(rec.get("month_num", 0)))
+        rev = reviews.get(key)
+        rec["review_status"]  = rev["status"]      if rev else None
+        rec["review_notes"]   = rev["notes"]        if rev else None
+        rec["reviewed_by"]    = rev["reviewed_by"]  if rev else None
+        rec["reviewed_at"]    = rev["reviewed_at"]  if rev else None
 
     return {
-        "total_anomalies_in_report": total,
+        "total_anomalies_in_report": total_filtered,
+        "unreviewed":                unreviewed,
+        "review_stats":              review_stats,
         "total_sampled_records":     total_sampled_records,
         "total_sampled_employees":   total_sampled_employees,
         "severity_summary":          severity_summary,
@@ -1065,15 +1386,28 @@ def get_anomalies_by_ministry(ministry: Optional[str] = None):
     df = _load_anomaly_report()
     if df is None:
         raise HTTPException(503, "Anomaly report not found.")
+    # Restrict to last 2 years by default
+    max_year = int(df["year_num"].max())
+    df = df[df["year_num"] >= max_year - 1]
     if ministry:
-        df = df[df["ministry_code"] == ministry]
+        codetabs = _resolve_ministry_codetabs(ministry)
+        df = df[df["ministry_code"].isin(codetabs)]
 
+    # Group by parent ministry code so establishments are merged under their ministry
+    group_col = "parent_ministry_code" if "parent_ministry_code" in df.columns else "ministry_code"
     rows = []
-    for ministry, g in df.groupby("ministry_code"):
+    for ministry, g in df.groupby(group_col):
         z_abs = g["z_score"].abs()
+        # Prefer parent_ministry_name, then ministry_name_fr, then code
+        if "parent_ministry_name" in g.columns and g["parent_ministry_name"].notna().any():
+            name = str(g["parent_ministry_name"].dropna().iloc[0])
+        elif "ministry_name_fr" in g.columns and g["ministry_name_fr"].notna().any():
+            name = str(g["ministry_name_fr"].dropna().iloc[0])
+        else:
+            name = str(ministry)
         rows.append({
             "ministry_code":   str(ministry),
-            "ministry_name":   str(g["ministry_name_fr"].iloc[0]) if "ministry_name_fr" in g.columns else str(ministry),
+            "ministry_name":   name,
             "total_anomalies": int(len(g)),
             "high":            int((z_abs >= 3.5).sum()),
             "medium":          int(((z_abs >= 2.5) & (z_abs < 3.5)).sum()),
@@ -1092,8 +1426,12 @@ def get_anomalies_by_grade(ministry: Optional[str] = None):
     df = _load_anomaly_report()
     if df is None:
         raise HTTPException(503, "Anomaly report not found.")
+    # Restrict to last 2 years by default
+    max_year = int(df["year_num"].max())
+    df = df[df["year_num"] >= max_year - 1]
     if ministry:
-        df = df[df["ministry_code"] == ministry]
+        codetabs = _resolve_ministry_codetabs(ministry)
+        df = df[df["ministry_code"].isin(codetabs)]
 
     rows = []
     for grade, g in df.groupby("grade_code"):
@@ -1215,10 +1553,76 @@ def chat_endpoint(req: ChatRequest):
     """
     try:
         from api.chatbot import chat
-        result = chat(question=req.question, model=req.model, history=req.history)
+
+        # Resolve human-readable ministry name for the system prompt
+        ministry_name: Optional[str] = None
+        if req.ministry_code:
+            try:
+                import psycopg2
+                from etl.core.config import DB_CONFIG
+                with psycopg2.connect(**DB_CONFIG) as conn:
+                    with conn.cursor() as cur:
+                        cur.execute(
+                            "SELECT COALESCE(libletabl, libcetabl, codetab) "
+                            "FROM dw.dim_etablissement WHERE codetab = %s LIMIT 1",
+                            (req.ministry_code,)
+                        )
+                        row = cur.fetchone()
+                        if row:
+                            ministry_name = row[0]
+            except Exception:
+                ministry_name = req.ministry_code
+
+        result = chat(
+            question=req.question,
+            model=req.model,
+            history=req.history,
+            ministry_code=req.ministry_code or None,
+            ministry_name=ministry_name,
+        )
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/chat/stream", tags=["RAG Chatbot"])
+async def chat_stream_endpoint(req: ChatRequest):
+    """Streaming chat — returns SSE token stream from Ollama in real-time."""
+    ministry_name: Optional[str] = None
+    if req.ministry_code:
+        try:
+            import psycopg2
+            from etl.core.config import DB_CONFIG
+            with psycopg2.connect(**DB_CONFIG) as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        "SELECT COALESCE(libletabl, libcetabl, codetab) "
+                        "FROM dw.dim_etablissement WHERE codetab = %s LIMIT 1",
+                        (req.ministry_code,)
+                    )
+                    row = cur.fetchone()
+                    if row:
+                        ministry_name = row[0]
+        except Exception:
+            ministry_name = req.ministry_code
+
+    from api.chatbot import chat_stream
+
+    def generate():
+        yield from chat_stream(
+            question=req.question,
+            model=req.model,
+            history=req.history,
+            ministry_code=req.ministry_code or None,
+            ministry_name=ministry_name,
+        )
+
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no",
+                 "Connection": "keep-alive"},
+    )
 
 
 @app.get("/plots", tags=["Visualizations"])

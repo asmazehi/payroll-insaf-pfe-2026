@@ -1,0 +1,142 @@
+.profile-layout {
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  gap: 24px;
+  align-items: start;
+
+  @media (max-width: 768px) {
+    grid-template-columns: 1fr;
+  }
+}
+
+// ── Identity card ─────────────────────────────────────────────────────────────
+.identity-card {
+  background: rgba(255,255,255,.04);
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: 16px;
+  padding: 32px 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.identity-avatar {
+  width: 72px; height: 72px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #6366f1, #06b6d4);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.6rem; font-weight: 700; color: #fff;
+  margin-bottom: 6px;
+}
+
+.identity-name  { font-size: 1.1rem; font-weight: 600; color: #fff; }
+.identity-email { font-size: 0.8rem; color: rgba(255,255,255,.4); }
+
+.identity-badge {
+  background: rgba(99,102,241,.2);
+  border: 1px solid rgba(99,102,241,.4);
+  color: #818cf8;
+  border-radius: 20px;
+  padding: 3px 14px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  margin-top: 4px;
+}
+
+.identity-meta {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 0.8rem; color: rgba(255,255,255,.35);
+  mat-icon { font-size: 14px; width: 14px; height: 14px; }
+}
+
+// ── Form card ─────────────────────────────────────────────────────────────────
+.profile-form-card {
+  background: rgba(255,255,255,.04);
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: 16px;
+  padding: 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+.form-section {
+  display: flex; flex-direction: column; gap: 14px;
+
+  &__title {
+    font-size: 0.85rem; font-weight: 600; letter-spacing: 0.06em;
+    text-transform: uppercase; color: rgba(255,255,255,.4);
+    margin: 0; padding-bottom: 8px;
+    border-bottom: 1px solid rgba(255,255,255,.07);
+  }
+
+  &__hint { font-size: 0.8rem; color: rgba(255,255,255,.3); margin: 0; }
+}
+
+.field-group    { display: flex; flex-direction: column; gap: 6px; }
+.field-label    { font-size: 0.78rem; font-weight: 600; color: rgba(255,255,255,.5); letter-spacing: 0.04em; }
+.field-hint     { font-size: 0.72rem; color: rgba(255,255,255,.3); }
+.field-hint--warn { color: #fbbf24 !important; }
+
+.field-input {
+  background: rgba(255,255,255,.07);
+  border: 1px solid rgba(255,255,255,.15);
+  border-radius: 8px;
+  padding: 10px 14px;
+  color: #fff;
+  font-size: 0.9rem;
+  outline: none;
+  width: 100%;
+  box-sizing: border-box;
+  transition: border-color 0.2s;
+
+  &:focus { border-color: #6366f1; background: rgba(255,255,255,.09); }
+  &::placeholder { color: rgba(255,255,255,.2); }
+}
+
+.pwd-wrap {
+  position: relative;
+  .field-input { padding-right: 44px; }
+}
+
+.pwd-eye {
+  position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
+  background: none; border: none; cursor: pointer;
+  color: rgba(255,255,255,.35);
+  display: flex; align-items: center;
+  padding: 4px;
+
+  &:hover { color: rgba(255,255,255,.7); }
+  mat-icon { font-size: 18px; width: 18px; height: 18px; }
+}
+
+.form-actions {
+  display: flex; justify-content: flex-end;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255,255,255,.07);
+}
+
+.alert-success {
+  display: flex; align-items: center; gap: 10px;
+  background: rgba(16,185,129,.12);
+  border: 1px solid rgba(16,185,129,.3);
+  border-radius: 10px;
+  padding: 12px 16px;
+  color: #34d399;
+  font-size: 0.9rem;
+  mat-icon { font-size: 18px; width: 18px; height: 18px; }
+}
+
+.alert-error {
+  background: rgba(239,68,68,.1);
+  border: 1px solid rgba(239,68,68,.25);
+  border-radius: 10px;
+  padding: 12px 16px;
+  color: #f87171;
+  font-size: 0.9rem;
+}
+
+.loading-wrap { display: flex; justify-content: center; padding: 60px; }

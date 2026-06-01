@@ -16,17 +16,16 @@ public class DashboardService {
         return ministryCode != null && !ministryCode.isBlank();
     }
 
-    private String ctFilter(String col, String ministryCode) {
-        return hasFilter(ministryCode)
-                ? "AND " + col + " = '" + ministryCode.replace("'", "''") + "'"
-                : "";
-    }
+    // Sub-query that expands a top-level ministry code to all its establishments.
+    // Uses v_ministry_codetabs view: includes the ministry itself + establishments
+    // linked via codtutel + sport federations (natorg='8') under W00.
+    private static final String SUBQ =
+        "(SELECT sub_codetab FROM dw.v_ministry_codetabs WHERE ministry_codetab = ?)";
 
     // ── Summary ───────────────────────────────────────────────────────────────
 
     public Map<String, Object> getSummary(String ministryCode) {
         if (!hasFilter(ministryCode)) {
-            // Aggregate the pre-computed monthly MV — sub-millisecond
             return jdbc.queryForMap("""
                 SELECT
                     SUM(employee_count)  AS total_records,
@@ -38,20 +37,17 @@ public class DashboardService {
                 FROM dw.mv_payroll_by_month
             """);
         }
-        // Ministry-filtered: codetab index limits scan to that ministry only
-        String f = ctFilter("fp.codetab", ministryCode);
         return jdbc.queryForMap("""
             SELECT
-                COUNT(*)                        AS total_records,
-                COUNT(DISTINCT fp.employee_sk)  AS total_employees,
-                SUM(fp.m_netpay)                AS total_netpay,
-                SUM(fp.m_salbrut)               AS total_grosspay,
-                MIN(dt.year_num)                AS year_min,
-                MAX(dt.year_num)                AS year_max
-            FROM dw.fact_paie fp
-            JOIN dw.dim_temps dt ON dt.time_sk = fp.time_sk
-            WHERE fp.employee_sk <> 0 AND dt.year_num > 0
-            """ + f);
+                SUM(record_count)    AS total_records,
+                SUM(employee_count)  AS total_employees,
+                SUM(total_netpay)    AS total_netpay,
+                SUM(total_grosspay)  AS total_grosspay,
+                MIN(year_num)        AS year_min,
+                MAX(year_num)        AS year_max
+            FROM dw.mv_ministry_details
+            WHERE codetab IN """ + SUBQ,
+            ministryCode);
     }
 
     // ── Payroll by year ───────────────────────────────────────────────────────
@@ -70,21 +66,18 @@ public class DashboardService {
                 ORDER BY year_num
             """);
         }
-        String f = ctFilter("fp.codetab", ministryCode);
         return jdbc.queryForList("""
             SELECT
-                dt.year_num,
-                SUM(fp.m_netpay)                AS total_netpay,
-                SUM(fp.m_salbrut)               AS total_grosspay,
-                COUNT(DISTINCT fp.employee_sk)  AS employees,
-                AVG(fp.m_netpay)                AS avg_netpay
-            FROM dw.fact_paie fp
-            JOIN dw.dim_temps dt ON dt.time_sk = fp.time_sk
-            WHERE fp.employee_sk <> 0 AND dt.year_num > 0
-            """ + f + """
-            GROUP BY dt.year_num
-            ORDER BY dt.year_num
-        """);
+                year_num,
+                SUM(total_netpay)    AS total_netpay,
+                SUM(total_grosspay)  AS total_grosspay,
+                SUM(employee_count)  AS employees,
+                AVG(avg_netpay)      AS avg_netpay
+            FROM dw.mv_ministry_details
+            WHERE codetab IN """ + SUBQ + """
+            GROUP BY year_num
+            ORDER BY year_num
+        """, ministryCode);
     }
 
     // ── Payroll by month ──────────────────────────────────────────────────────
@@ -104,21 +97,20 @@ public class DashboardService {
                 ORDER BY month_num
             """, year);
         }
-        String f = ctFilter("fp.codetab", ministryCode);
         return jdbc.queryForList("""
             SELECT
-                dt.month_num,
-                dt.month_start_date,
-                SUM(fp.m_netpay)               AS total_netpay,
-                SUM(fp.m_salbrut)              AS total_grosspay,
-                COUNT(DISTINCT fp.employee_sk) AS employees
-            FROM dw.fact_paie fp
-            JOIN dw.dim_temps dt ON dt.time_sk = fp.time_sk
-            WHERE fp.employee_sk <> 0 AND dt.year_num = ?
-            """ + f + """
-            GROUP BY dt.month_num, dt.month_start_date
-            ORDER BY dt.month_num
-        """, year);
+                month_num,
+                MIN(month_start_date)  AS month_start_date,
+                SUM(total_netpay)      AS total_netpay,
+                SUM(total_grosspay)    AS total_grosspay,
+                SUM(employee_count)    AS employees,
+                AVG(avg_netpay)        AS avg_netpay
+            FROM dw.mv_ministry_details
+            WHERE codetab IN """ + SUBQ + """
+              AND year_num = ?
+            GROUP BY month_num
+            ORDER BY month_num
+        """, ministryCode, year);
     }
 
     // ── Payroll by grade ──────────────────────────────────────────────────────
@@ -126,35 +118,27 @@ public class DashboardService {
     public List<Map<String, Object>> getPayrollByGrade(String ministryCode) {
         if (!hasFilter(ministryCode)) {
             return jdbc.queryForList("""
-                SELECT
-                    grade_code,
-                    grade_label_fr  AS lib_grade,
-                    category,
-                    employee_count  AS employees,
-                    total_netpay,
-                    avg_netpay
+                SELECT grade_code, grade_label_fr AS lib_grade, category,
+                       employee_count AS employees, total_netpay, avg_netpay
                 FROM dw.mv_grade_distribution
-                ORDER BY total_netpay DESC
-                LIMIT 20
+                ORDER BY avg_netpay DESC
+                LIMIT 8
             """);
         }
-        String f = ctFilter("fp.codetab", ministryCode);
         return jdbc.queryForList("""
             SELECT
-                dg.grade_code,
-                dg.grade_label_fr               AS lib_grade,
-                dg.category,
-                COUNT(DISTINCT fp.employee_sk)  AS employees,
-                SUM(fp.m_netpay)               AS total_netpay,
-                AVG(fp.m_netpay)               AS avg_netpay
-            FROM dw.fact_paie fp
-            JOIN dw.dim_grade dg ON dg.grade_sk = fp.grade_sk
-            WHERE fp.employee_sk <> 0 AND fp.grade_sk <> 0
-            """ + f + """
-            GROUP BY dg.grade_code, dg.grade_label_fr, dg.category
-            ORDER BY total_netpay DESC
-            LIMIT 20
-        """);
+                mgm.grade_code,
+                COALESCE(mgm.grade_label_fr, mgm.grade_code)  AS lib_grade,
+                mgm.category,
+                SUM(mgm.employee_count)  AS employees,
+                SUM(mgm.total_netpay)    AS total_netpay,
+                AVG(mgm.avg_netpay)      AS avg_netpay
+            FROM dw.mv_grade_by_ministry mgm
+            WHERE mgm.codetab IN """ + SUBQ + """
+            GROUP BY mgm.grade_code, mgm.grade_label_fr, mgm.category
+            ORDER BY avg_netpay DESC
+            LIMIT 8
+        """, ministryCode);
     }
 
     // ── Payroll by ministry ───────────────────────────────────────────────────
@@ -173,22 +157,20 @@ public class DashboardService {
                 LIMIT 20
             """);
         }
-        String f = ctFilter("fp.codetab", ministryCode);
+        // For a ministry user, show breakdown by sub-establishment
         return jdbc.queryForList("""
             SELECT
-                de2.libletabl                  AS ministry,
-                fp.codetab,
-                COUNT(DISTINCT fp.employee_sk)  AS employees,
-                SUM(fp.m_netpay)               AS total_netpay,
-                AVG(fp.m_netpay)               AS avg_netpay
-            FROM dw.fact_paie fp
-            JOIN dw.dim_etablissement de2 ON de2.codetab = fp.codetab
-            WHERE fp.employee_sk <> 0 AND fp.codetab IS NOT NULL
-            """ + f + """
-            GROUP BY de2.libletabl, fp.codetab
-            ORDER BY total_netpay DESC
-            LIMIT 20
-        """);
+                md.codetab,
+                COALESCE(de.libletabl, de.libcetabl, md.codetab)  AS ministry,
+                SUM(md.employee_count)                             AS employees,
+                SUM(md.total_netpay)                               AS total_netpay,
+                AVG(md.avg_netpay)                                 AS avg_netpay
+            FROM dw.mv_ministry_details md
+            LEFT JOIN dw.dim_etablissement de ON de.codetab = md.codetab
+            WHERE md.codetab IN """ + SUBQ + """
+            GROUP BY md.codetab, de.libletabl, de.libcetabl
+            ORDER BY SUM(md.total_netpay) DESC
+        """, ministryCode);
     }
 
     // ── Indemnity summary ─────────────────────────────────────────────────────
@@ -204,9 +186,8 @@ public class DashboardService {
                 FROM dw.mv_indem_by_month
             """);
         }
-        String f = (ministryCode != null && !ministryCode.isBlank())
-                ? "AND fi.codetab = '" + ministryCode.replace("'", "''") + "'"
-                : "";
+        // fact_indem uses organisme_sk — filter via dim_organisme.codetab
+        // which maps the same 3-char codes as dim_etablissement.codetab
         return jdbc.queryForMap("""
             SELECT
                 COUNT(*)                        AS total_records,
@@ -214,7 +195,9 @@ public class DashboardService {
                 SUM(fi.m_netpay)                AS total_amount,
                 AVG(fi.m_netpay)                AS avg_amount
             FROM dw.fact_indem fi
+            JOIN dw.dim_organisme dorg ON dorg.organisme_sk = fi.organisme_sk
             WHERE fi.employee_sk <> 0
-            """ + f);
+              AND dorg.codetab IN """ + SUBQ,
+            ministryCode);
     }
 }

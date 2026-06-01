@@ -9,6 +9,7 @@ export interface UserDto {
   email: string;
   role: string;
   ministryCode: string | null;
+  ministryName: string | null;
   phone: string | null;
   profession: string | null;
   profilePhoto: string | null;
@@ -17,7 +18,19 @@ export interface UserDto {
 
 export interface MinistryOption {
   code: string;
-  name: string;
+  name: string;       // French label
+  name_ar?: string;   // Arabic label
+}
+
+export interface Ticket {
+  id: number;
+  title: string;
+  description: string | null;
+  status: string;
+  ministryCode: string | null;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface EtlJob {
@@ -48,6 +61,18 @@ export class AdminService {
     return this.http.get<MinistryOption[]>(`${this.base}/admin/users/ministries`);
   }
 
+  getEstablishments(ministryCode: string): Observable<MinistryOption[]> {
+    return this.http.get<MinistryOption[]>(
+      `${this.base}/admin/users/establishments?ministry=${encodeURIComponent(ministryCode)}`
+    );
+  }
+
+  getParentMinistry(code: string): Observable<{ parentMinistry: string; code: string }> {
+    return this.http.get<{ parentMinistry: string; code: string }>(
+      `${this.base}/admin/users/parent-ministry?code=${encodeURIComponent(code)}`
+    );
+  }
+
   createUser(payload: Partial<UserDto> & { password: string }): Observable<UserDto> {
     return this.http.post<UserDto>(`${this.base}/admin/users`, payload);
   }
@@ -66,5 +91,26 @@ export class AdminService {
 
   getEtlJobs(): Observable<EtlJob[]> {
     return this.http.get<EtlJob[]>(`${this.base}/etl/jobs`);
+  }
+
+  // Tickets
+  getTickets(): Observable<Ticket[]> {
+    return this.http.get<Ticket[]>(`${this.base}/tickets`);
+  }
+
+  createTicket(title: string, description: string): Observable<Ticket> {
+    return this.http.post<Ticket>(`${this.base}/tickets`, { title, description });
+  }
+
+  updateTicketStatus(id: number, status: string): Observable<Ticket> {
+    return this.http.put<Ticket>(`${this.base}/tickets/${id}/status`, { status });
+  }
+
+  deleteTicket(id: number): Observable<any> {
+    return this.http.delete(`${this.base}/tickets/${id}`);
+  }
+
+  getOpenTicketCount(): Observable<{ count: number }> {
+    return this.http.get<{ count: number }>(`${this.base}/tickets/count/open`);
   }
 }

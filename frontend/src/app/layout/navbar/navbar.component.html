@@ -1,3 +1,10 @@
+<!-- First-login banner: shown to non-admin users who haven't changed their password yet -->
+<div class="pwd-banner" *ngIf="auth.needsPasswordChange()" [routerLink]="['/profile']">
+  <mat-icon>lock_open</mat-icon>
+  <span>Your account was set up by an administrator. <strong>Please change your password</strong> for security.</span>
+  <span class="pwd-banner__cta">Go to My Profile →</span>
+</div>
+
 <header class="topbar">
   <div class="topbar__left">
     <span class="topbar__bc-section">INSAF</span>
@@ -23,6 +30,14 @@
       <span class="live-dot"></span>
       <span class="live-txt">{{ 'topbar.live' | translate }}</span>
     </div>
+
+    <div class="topbar__sep"></div>
+
+    <!-- Ticket bell (admin only) -->
+    <button class="topbar__bell" (click)="goToTickets()" [title]="'Support Tickets'">
+      <mat-icon>notifications</mat-icon>
+      <span class="bell-badge" *ngIf="openTicketCount > 0">{{ openTicketCount > 99 ? '99+' : openTicketCount }}</span>
+    </button>
 
     <div class="topbar__sep"></div>
 

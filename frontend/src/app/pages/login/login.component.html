@@ -1,6 +1,6 @@
 <div class="login-page">
 
-  <!-- Animated background blobs -->
+  <!-- Animated background -->
   <div class="blob blob-1"></div>
   <div class="blob blob-2"></div>
   <div class="blob blob-3"></div>
@@ -13,9 +13,7 @@
 
       <!-- Brand -->
       <div class="brand">
-        <div class="brand__logo">
-          <img src="assets/images/LogoCNI.png" alt="CNI Logo">
-        </div>
+        <div class="brand__logo"><img src="assets/images/LogoCNI.png" alt="CNI Logo"></div>
         <div class="brand__text">
           <div class="brand__name">INSAF</div>
           <div class="brand__sub">{{ 'login.platform' | translate }}</div>
@@ -28,20 +26,20 @@
         <p>{{ 'login.tagline_sub' | translate }}</p>
       </div>
 
-      <!-- Stats -->
+      <!-- Dynamic stats from API -->
       <div class="stats-row">
         <div class="stat">
-          <div class="stat__value">756K+</div>
+          <div class="stat__value">{{ fmtStat(displayRecords) }}</div>
           <div class="stat__label">{{ 'login.records' | translate }}</div>
         </div>
         <div class="stat-divider"></div>
         <div class="stat">
-          <div class="stat__value">24.9K</div>
+          <div class="stat__value">{{ fmtStat(displayEmployees) }}</div>
           <div class="stat__label">{{ 'login.civil_servants' | translate }}</div>
         </div>
         <div class="stat-divider"></div>
         <div class="stat">
-          <div class="stat__value">10+</div>
+          <div class="stat__value">{{ displayYears }}+</div>
           <div class="stat__label">{{ 'login.years_data' | translate }}</div>
         </div>
       </div>
@@ -52,6 +50,13 @@
         <div class="chip"><span class="chip__dot chip__dot--gold"></span>{{ 'login.anomaly_detection' | translate }}</div>
         <div class="chip"><span class="chip__dot chip__dot--green"></span>{{ 'login.rag_chatbot' | translate }}</div>
         <div class="chip"><span class="chip__dot chip__dot--purple"></span>{{ 'login.pbi_reports' | translate }}</div>
+      </div>
+
+      <!-- Language switcher on left panel -->
+      <div class="left-lang">
+        <button *ngFor="let l of lang.langs" class="left-lang__btn"
+                [class.left-lang__btn--active]="lang.current === l.code"
+                (click)="setLang(l.code)">{{ l.label }}</button>
       </div>
 
     </div>
@@ -71,14 +76,15 @@
         <p>{{ 'login.sign_in_sub' | translate }}</p>
       </div>
 
-      <form [formGroup]="form" (ngSubmit)="submit()" class="login-form">
+      <form [formGroup]="form" (ngSubmit)="submit()" class="login-form" *ngIf="!showForgot">
 
         <div class="field">
           <label>{{ 'login.username' | translate }}</label>
           <div class="field__input-wrap">
             <mat-icon class="field__icon">person_outline</mat-icon>
             <input formControlName="username" type="text"
-                   [placeholder]="'login.username_ph' | translate" autocomplete="username">
+                   [placeholder]="'login.username_ph' | translate"
+                   autocomplete="username" [disabled]="locked">
           </div>
         </div>
 
@@ -86,27 +92,91 @@
           <label>{{ 'login.password' | translate }}</label>
           <div class="field__input-wrap">
             <mat-icon class="field__icon">lock_outline</mat-icon>
-            <input formControlName="password" type="password"
-                   [placeholder]="'login.password_ph' | translate" autocomplete="current-password">
+            <input formControlName="password" [type]="showPwd ? 'text' : 'password'"
+                   [placeholder]="'login.password_ph' | translate"
+                   autocomplete="current-password" [disabled]="locked">
+            <button type="button" class="field__eye" (click)="showPwd = !showPwd">
+              <mat-icon>{{ showPwd ? 'visibility_off' : 'visibility' }}</mat-icon>
+            </button>
           </div>
         </div>
 
-        <div class="error-msg" *ngIf="error">
+        <!-- Lockout message -->
+        <div class="error-msg error-msg--locked" *ngIf="locked">
+          <mat-icon>lock</mat-icon>
+          <span>{{ error }}</span>
+        </div>
+
+        <!-- Normal error -->
+        <div class="error-msg" *ngIf="error && !locked">
           <mat-icon>error_outline</mat-icon>
           <span>{{ error }}</span>
         </div>
 
-        <button type="submit" class="login-btn" [disabled]="loading || form.invalid">
+        <button type="submit" class="login-btn"
+                [disabled]="loading || form.invalid || locked">
           <span class="login-btn__spinner" *ngIf="loading"></span>
           <mat-icon *ngIf="!loading">login</mat-icon>
           <span>{{ (loading ? 'login.signing_in' : 'login.sign_in') | translate }}</span>
         </button>
 
+        <button type="button" class="forgot-link" (click)="openForgot()">
+          Mot de passe oublié ?
+        </button>
+
       </form>
 
-      <p class="login-card__footer">
+      <!-- ── Forgot password panel ───────────────────────────────── -->
+      <div class="forgot-panel" *ngIf="showForgot">
+
+        <!-- Success state -->
+        <div class="forgot-success" *ngIf="forgotSuccess">
+          <mat-icon>mark_email_read</mat-icon>
+          <h4>Email envoyé !</h4>
+          <p>Si cette adresse est enregistrée, un mot de passe temporaire vous a été envoyé.</p>
+          <button class="forgot-back" (click)="closeForgot()">
+            <mat-icon>arrow_back</mat-icon> Retour à la connexion
+          </button>
+        </div>
+
+        <!-- Form state -->
+        <ng-container *ngIf="!forgotSuccess">
+          <h4 class="forgot-panel__title">
+            <mat-icon>lock_reset</mat-icon>
+            Réinitialiser le mot de passe
+          </h4>
+          <p class="forgot-panel__sub">Entrez l'adresse email associée à votre compte. Un mot de passe temporaire vous sera envoyé.</p>
+
+          <div class="field">
+            <label>Adresse email</label>
+            <div class="field__input-wrap">
+              <mat-icon class="field__icon">email</mat-icon>
+              <input type="email" [(ngModel)]="forgotEmail" name="forgot-email"
+                     placeholder="votre@email.com" autocomplete="email" />
+            </div>
+          </div>
+
+          <div class="error-msg" *ngIf="forgotError">
+            <mat-icon>error_outline</mat-icon>
+            <span>{{ forgotError }}</span>
+          </div>
+
+          <button class="login-btn" [disabled]="forgotLoading || !forgotEmail.trim()" (click)="submitForgot()">
+            <span class="login-btn__spinner" *ngIf="forgotLoading"></span>
+            <mat-icon *ngIf="!forgotLoading">send</mat-icon>
+            <span>{{ forgotLoading ? 'Envoi...' : 'Envoyer' }}</span>
+          </button>
+
+          <button class="forgot-back" (click)="closeForgot()">
+            <mat-icon>arrow_back</mat-icon> Retour à la connexion
+          </button>
+        </ng-container>
+      </div>
+
+      <p class="login-card__footer" *ngIf="!showForgot">
         {{ 'login.footer' | translate }}
       </p>
+
     </div>
   </div>
 

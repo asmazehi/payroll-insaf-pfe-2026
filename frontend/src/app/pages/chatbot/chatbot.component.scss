@@ -1,8 +1,112 @@
 .chat-shell {
-  display: flex; flex-direction: column;
+  display: flex; flex-direction: row;
   height: calc(100vh - var(--topbar-h));
   background: var(--bg-base);
   overflow: hidden;
+}
+
+/* ── History sidebar ─────────────────────────────────────────────── */
+.chat-sidebar {
+  width: 0; min-width: 0; overflow: hidden;
+  background: var(--bg-surface);
+  border-right: 1px solid var(--border);
+  display: flex; flex-direction: column;
+  transition: width .25s ease, min-width .25s ease;
+  flex-shrink: 0;
+
+  &--open { width: 260px; min-width: 260px; }
+}
+
+.sidebar-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 16px 14px 12px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.sidebar-title {
+  font-size: .8rem; font-weight: 700; color: var(--t2);
+  text-transform: uppercase; letter-spacing: .06em;
+  white-space: nowrap;
+}
+.new-chat-btn {
+  width: 30px; height: 30px; border-radius: 8px;
+  border: 1px solid var(--border); background: var(--bg-raised);
+  cursor: pointer; display: flex; align-items: center; justify-content: center;
+  color: var(--t2); transition: all .15s; flex-shrink: 0;
+  mat-icon { font-size: 17px; width: 17px; height: 17px; }
+  &:hover { background: rgba(var(--brand-rgb),.12); color: var(--brand-hi); border-color: rgba(var(--brand-rgb),.3); }
+}
+
+.session-list {
+  flex: 1; overflow-y: auto; padding: 8px 0;
+  &::-webkit-scrollbar { width: 3px; }
+  &::-webkit-scrollbar-thumb { background: var(--border-hi); border-radius: 2px; }
+}
+
+.session-item {
+  display: flex; align-items: center; gap: 9px;
+  padding: 9px 12px; cursor: pointer;
+  border-radius: 10px; margin: 2px 6px;
+  transition: background .15s;
+  position: relative;
+
+  &:hover { background: var(--bg-raised); }
+  &--active { background: rgba(var(--brand-rgb),.12); }
+
+  &:hover .session-delete { opacity: 1; }
+}
+.session-icon {
+  font-size: 16px; width: 16px; height: 16px;
+  color: var(--t3); flex-shrink: 0;
+}
+.session-info {
+  flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px;
+}
+.session-title {
+  font-size: .8rem; font-weight: 500; color: var(--t1);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.session-date {
+  font-size: .67rem; color: var(--t3);
+}
+.session-delete {
+  opacity: 0; width: 20px; height: 20px; border-radius: 5px;
+  border: none; background: transparent; cursor: pointer;
+  color: var(--t3); display: flex; align-items: center; justify-content: center;
+  transition: all .15s; flex-shrink: 0;
+  mat-icon { font-size: 14px; width: 14px; height: 14px; }
+  &:hover { background: rgba(239,68,68,.15); color: #FCA5A5; }
+}
+
+.no-sessions {
+  display: flex; flex-direction: column; align-items: center;
+  gap: 8px; padding: 32px 16px; color: var(--t3);
+  font-size: .78rem; text-align: center;
+  mat-icon { font-size: 28px; width: 28px; height: 28px; opacity: .4; }
+}
+
+/* ── Main chat area ──────────────────────────────────────────────── */
+.chat-main {
+  flex: 1; display: flex; flex-direction: column;
+  min-width: 0; overflow: hidden;
+}
+
+.sidebar-toggle {
+  width: 34px; height: 34px; border-radius: 9px;
+  border: 1px solid var(--border); background: var(--bg-raised);
+  cursor: pointer; display: flex; align-items: center; justify-content: center;
+  color: var(--t2); transition: all .15s; flex-shrink: 0;
+  mat-icon { font-size: 18px; width: 18px; height: 18px; }
+  &:hover { background: rgba(var(--brand-rgb),.1); color: var(--brand-hi); }
+}
+
+.icon-btn {
+  width: 32px; height: 32px; border-radius: 8px;
+  border: 1px solid var(--border); background: var(--bg-raised);
+  cursor: pointer; display: flex; align-items: center; justify-content: center;
+  color: var(--t2); transition: all .15s;
+  mat-icon { font-size: 17px; width: 17px; height: 17px; }
+  &:hover { background: rgba(var(--brand-rgb),.1); color: var(--brand-hi); }
 }
 
 /* ── Header ─────────────────────────────────────────────────────── */
@@ -243,6 +347,7 @@
   border-top: 1px solid var(--border);
   flex-shrink: 0;
   background: var(--bg-surface);
+  position: relative;
 }
 .input-wrap {
   display: flex; align-items: flex-end; gap: 10px;
@@ -273,3 +378,39 @@
   &:disabled { background: var(--bg-raised); cursor: not-allowed; box-shadow: none; opacity: .5; }
 }
 .input-hint { font-size: .68rem; color: var(--t3); text-align: center; margin-top: 9px; }
+
+/* ── Autocomplete dropdown ───────────────────────────────────────── */
+.autocomplete-drop {
+  position: absolute; bottom: calc(100% + 8px); left: 24px; right: 24px;
+  background: var(--bg-surface);
+  border: 1px solid rgba(var(--brand-rgb),.3);
+  border-radius: 14px;
+  box-shadow: 0 -8px 32px rgba(0,0,0,.3);
+  overflow: hidden;
+  animation: dropIn .15s ease;
+  z-index: 100;
+}
+@keyframes dropIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.autocomplete-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 11px 16px; cursor: pointer;
+  font-size: .82rem; color: var(--t2);
+  border-bottom: 1px solid var(--border);
+  transition: background .12s, color .12s;
+
+  &:last-child { border-bottom: none; }
+  mat-icon { font-size: 15px; width: 15px; height: 15px; color: var(--brand); flex-shrink: 0; }
+  &:hover { background: rgba(var(--brand-rgb),.1); color: var(--t1); }
+}
+
+/* ── Empty tip ──────────────────────────────────────────────────── */
+.empty-tip {
+  font-size: .78rem; color: var(--t3); margin-top: 16px;
+  strong { color: var(--t2); }
+}
+
+/* ── Hints grid (wider) ─────────────────────────────────────────── */
+.hints-grid { grid-template-columns: repeat(2, 1fr); max-width: 680px; }

@@ -9,7 +9,7 @@
           <p>{{ 'users.subtitle' | translate }}</p>
         </div>
       </div>
-      <button mat-raised-button color="primary" (click)="openCreate()">
+      <button mat-raised-button color="primary" (click)="openCreate()" *ngIf="isAdmin()">
         <mat-icon>person_add</mat-icon> {{ 'users.new_user' | translate }}
       </button>
     </div>
@@ -18,6 +18,31 @@
   <div class="page-body">
 
     <div class="alert-error" *ngIf="error">{{ error }}</div>
+
+    <!-- Admin contact card (visible to non-admin users only) -->
+    <div class="admin-contacts" *ngIf="!isAdmin() && admins.length > 0">
+      <div class="admin-contacts__header">
+        <mat-icon>support_agent</mat-icon>
+        <span>Need help? Contact your administrator</span>
+      </div>
+      <div class="admin-contacts__list">
+        <div class="admin-contact-item" *ngFor="let a of admins">
+          <div class="admin-avatar">{{ initials(a.username) }}</div>
+          <div class="admin-info">
+            <span class="admin-name">{{ a.username }}</span>
+            <span *ngIf="a.profession" class="admin-profession">{{ a.profession }}</span>
+          </div>
+          <div class="admin-actions">
+            <a *ngIf="a.email" [href]="'mailto:' + a.email" class="contact-link contact-link--email">
+              <mat-icon>email</mat-icon> {{ a.email }}
+            </a>
+            <a *ngIf="a.phone" [href]="'tel:' + a.phone" class="contact-link contact-link--phone">
+              <mat-icon>phone</mat-icon> {{ a.phone }}
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
 
     <div class="loading-wrap" *ngIf="loading">
       <mat-spinner diameter="40"></mat-spinner>
@@ -64,7 +89,7 @@
 
         <ng-container matColumnDef="ministryCode">
           <th mat-header-cell *matHeaderCellDef>{{ 'users.ministry' | translate }}</th>
-          <td mat-cell *matCellDef="let u">{{ ministryName(u.ministryCode) }}</td>
+          <td mat-cell *matCellDef="let u">{{ ministryName(u) }}</td>
         </ng-container>
 
         <ng-container matColumnDef="status">
@@ -79,16 +104,19 @@
         <ng-container matColumnDef="actions">
           <th mat-header-cell *matHeaderCellDef>{{ 'users.actions' | translate }}</th>
           <td mat-cell *matCellDef="let u">
-            <button mat-icon-button [title]="'users.edit' | translate" (click)="openEdit(u)">
-              <mat-icon>edit</mat-icon>
-            </button>
-            <button mat-icon-button (click)="toggle(u)"
-                    [title]="u.enabled ? ('users.disabled' | translate) : ('users.active' | translate)">
-              <mat-icon>{{ u.enabled ? 'block' : 'check_circle' }}</mat-icon>
-            </button>
-            <button mat-icon-button color="warn" [title]="'common.delete' | translate" (click)="delete(u)">
-              <mat-icon>delete</mat-icon>
-            </button>
+            <ng-container *ngIf="isAdmin()">
+              <button mat-icon-button [title]="'users.edit' | translate" (click)="openEdit(u)">
+                <mat-icon>edit</mat-icon>
+              </button>
+
+              <button mat-icon-button (click)="toggle(u)"
+                      [title]="u.enabled ? ('users.disabled' | translate) : ('users.active' | translate)">
+                <mat-icon>{{ u.enabled ? 'block' : 'check_circle' }}</mat-icon>
+              </button>
+              <button mat-icon-button color="warn" [title]="'common.delete' | translate" (click)="delete(u)">
+                <mat-icon>delete</mat-icon>
+              </button>
+            </ng-container>
           </td>
         </ng-container>
 
@@ -99,9 +127,25 @@
       <p class="no-data" *ngIf="users.length === 0">{{ 'common.no_data' | translate }}</p>
     </div>
 
+    <!-- Confirm delete dialog -->
+    <div class="modal-backdrop" *ngIf="confirmDialog" (click)="confirmNo()"></div>
+    <div class="confirm-dialog" *ngIf="confirmDialog">
+      <div class="confirm-dialog__icon">
+        <mat-icon>delete_forever</mat-icon>
+      </div>
+      <h3 class="confirm-dialog__title">{{ confirmDialog.title }}</h3>
+      <p class="confirm-dialog__msg" [innerHTML]="confirmDialog.message"></p>
+      <div class="confirm-dialog__actions">
+        <button class="confirm-btn confirm-btn--cancel" (click)="confirmNo()">Cancel</button>
+        <button class="confirm-btn confirm-btn--delete" (click)="confirmYes()">
+          <mat-icon>delete</mat-icon> Delete
+        </button>
+      </div>
+    </div>
+
     <!-- Create / Edit modal -->
     <div class="modal-backdrop" *ngIf="showForm" (click)="showForm=false"></div>
-    <div class="modal-panel chart-card" *ngIf="showForm" (click)="$event.stopPropagation()">
+    <div class="modal-panel" *ngIf="showForm" (click)="$event.stopPropagation()">
 
       <!-- Photo preview header -->
       <div class="modal-photo-header">
@@ -110,7 +154,7 @@
           <mat-icon *ngIf="!form.profilePhoto">person</mat-icon>
         </div>
         <div>
-          <h3 style="margin:0 0 4px">{{ (editingUser ? 'users.edit' : 'users.create') | translate }}</h3>
+          <h3>{{ (editingUser ? 'users.edit' : 'users.create') | translate }}</h3>
           <label class="photo-upload-btn">
             <mat-icon>photo_camera</mat-icon> Change photo
             <input type="file" accept="image/*" (change)="onPhotoChange($event)" style="display:none" />
@@ -120,54 +164,106 @@
 
       <div class="alert-error" *ngIf="saveError">{{ saveError }}</div>
 
+      <!-- autocomplete="off" prevents browser from filling saved login credentials -->
+      <form autocomplete="off" (submit)="$event.preventDefault()">
       <div class="form-grid">
-        <mat-form-field appearance="outline" class="full-width">
-          <mat-label>{{ 'users.username' | translate }}</mat-label>
-          <input matInput [(ngModel)]="form.username" [disabled]="!!editingUser" />
-        </mat-form-field>
+        <div class="form-row">
+          <div class="field-group">
+            <label class="field-label">{{ 'users.username' | translate }}</label>
+            <input class="field-input" [(ngModel)]="form.username" name="new-username"
+                   autocomplete="off"
+                   [disabled]="!!editingUser"
+                   (ngModelChange)="onUsernameChange()"
+                   placeholder="e.g. john.doe" />
+          </div>
+          <div class="field-group">
+            <label class="field-label">{{ 'users.email' | translate }}</label>
+            <input class="field-input" type="email" [(ngModel)]="form.email" name="new-email"
+                   autocomplete="off"
+                   placeholder="user@example.com" />
+            <span class="field-hint" *ngIf="!editingUser">Auto-filled from username</span>
+          </div>
+        </div>
 
-        <mat-form-field appearance="outline" class="full-width">
-          <mat-label>{{ 'users.email' | translate }}</mat-label>
-          <input matInput type="email" [(ngModel)]="form.email" />
-        </mat-form-field>
+        <div class="form-row">
+          <div class="field-group">
+            <label class="field-label">{{ 'users.password' | translate }}</label>
+            <input class="field-input" type="password" [(ngModel)]="form.password" name="new-password"
+                   autocomplete="new-password"
+                   [placeholder]="editingUser ? 'Leave blank to keep current' : 'Set a password'" />
+          </div>
+          <div class="field-group">
+            <label class="field-label">Phone</label>
+            <input class="field-input" [(ngModel)]="form.phone" name="new-phone"
+                   autocomplete="off" placeholder="+216 XX XXX XXX" />
+          </div>
+        </div>
 
-        <mat-form-field appearance="outline" class="full-width">
-          <mat-label>{{ 'users.password' | translate }}</mat-label>
-          <input matInput type="password" [(ngModel)]="form.password"
-                 [placeholder]="editingUser ? 'Leave blank to keep current' : ''" />
-        </mat-form-field>
+        <div class="form-row">
+          <div class="field-group">
+            <label class="field-label">Profession / Title</label>
+            <input class="field-input" [(ngModel)]="form.profession" name="new-profession"
+                   autocomplete="off" placeholder="e.g. Financial Analyst" />
+          </div>
+          <div class="field-group">
+            <label class="field-label">{{ 'users.role' | translate }}</label>
+            <select class="field-select" [(ngModel)]="form.role" name="new-role">
+              <option value="ROLE_USER">User</option>
+              <option value="ROLE_ADMIN">Admin</option>
+            </select>
+          </div>
+        </div>
 
-        <mat-form-field appearance="outline" class="full-width">
-          <mat-label>Phone</mat-label>
-          <input matInput [(ngModel)]="form.phone" placeholder="+216 XX XXX XXX" />
-          <mat-icon matPrefix>phone</mat-icon>
-        </mat-form-field>
+        <!-- Two-level ministry picker: 1) top-level ministry  2) specific establishment -->
+        <div class="form-row" *ngIf="form.role !== 'ROLE_ADMIN'">
+          <div class="field-group">
+            <label class="field-label">
+              {{ 'users.ministry' | translate }}
+              <span class="field-required">*</span>
+            </label>
+            <select class="field-select" [(ngModel)]="selectedMinistry" name="new-ministry"
+                    (ngModelChange)="onMinistryChange()"
+                    [class.field-select--required]="!selectedMinistry">
+              <option value="">— Select a ministry —</option>
+              <option *ngFor="let m of ministries" [value]="m.code">
+                {{ m.code }} – {{ labelOf(m) }}
+              </option>
+            </select>
+          </div>
 
-        <mat-form-field appearance="outline" class="full-width">
-          <mat-label>Profession / Title</mat-label>
-          <input matInput [(ngModel)]="form.profession" placeholder="e.g. Financial Analyst" />
-          <mat-icon matPrefix>work</mat-icon>
-        </mat-form-field>
+          <div class="field-group">
+            <label class="field-label">
+              Center / Establishment
+              <span class="field-required">*</span>
+            </label>
+            <select class="field-select" name="new-establishment"
+                    [(ngModel)]="form.ministryCode"
+                    [disabled]="!selectedMinistry || loadingEstablishments"
+                    [class.field-select--required]="selectedMinistry && !form.ministryCode">
+              <option value="" *ngIf="!selectedMinistry">— Select ministry first —</option>
+              <option value="" *ngIf="selectedMinistry && !loadingEstablishments && establishments.length <= 1">
+                — Entire ministry —
+              </option>
+              <option *ngFor="let e of establishments" [value]="e.code">
+                <ng-container *ngIf="e.code === selectedMinistry">★ </ng-container>
+                {{ e.code }} – {{ labelOf(e) }}
+              </option>
+            </select>
+            <span class="field-hint" *ngIf="loadingEstablishments">Loading establishments…</span>
+            <span class="field-hint" *ngIf="selectedMinistry && !loadingEstablishments && establishments.length > 1">
+              {{ establishments.length - 1 }} establishments available
+            </span>
+          </div>
+        </div>
 
-        <mat-form-field appearance="outline" class="full-width">
-          <mat-label>{{ 'users.role' | translate }}</mat-label>
-          <select matNativeControl [(ngModel)]="form.role">
-            <option value="ROLE_USER">{{ 'users.user' | translate }}</option>
-            <option value="ROLE_ADMIN">{{ 'users.admin' | translate }}</option>
-          </select>
-        </mat-form-field>
-
-        <mat-form-field appearance="outline" class="full-width">
-          <mat-label>{{ 'users.ministry' | translate }}</mat-label>
-          <select matNativeControl [(ngModel)]="form.ministryCode"
-                  [disabled]="form.role === 'ROLE_ADMIN'">
-            <option value="">— None (Admin access) —</option>
-            <option *ngFor="let m of ministries" [value]="m.code">
-              {{ m.code }} – {{ m.name }}
-            </option>
-          </select>
-          <mat-icon matPrefix>account_balance</mat-icon>
-        </mat-form-field>
+        <div class="form-row" *ngIf="form.role === 'ROLE_ADMIN'">
+          <div class="field-group full">
+            <label class="field-label">{{ 'users.ministry' | translate }}</label>
+            <select class="field-select" disabled>
+              <option>— Full access (Admin) —</option>
+            </select>
+          </div>
+        </div>
       </div>
 
       <div class="form-actions">
@@ -176,6 +272,7 @@
           {{ saving ? ('common.loading' | translate) : ('users.save' | translate) }}
         </button>
       </div>
+      </form>
     </div>
 
   </div>

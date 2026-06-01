@@ -9,10 +9,11 @@ CREATE TABLE IF NOT EXISTS public.users (
     enabled        BOOLEAN      NOT NULL DEFAULT TRUE
 );
 
-ALTER TABLE public.users ADD COLUMN IF NOT EXISTS ministry_code  VARCHAR(10)  DEFAULT NULL;
-ALTER TABLE public.users ADD COLUMN IF NOT EXISTS phone         VARCHAR(30)  DEFAULT NULL;
-ALTER TABLE public.users ADD COLUMN IF NOT EXISTS profession    VARCHAR(100) DEFAULT NULL;
-ALTER TABLE public.users ADD COLUMN IF NOT EXISTS profile_photo TEXT         DEFAULT NULL;
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS ministry_code     VARCHAR(10)  DEFAULT NULL;
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS phone            VARCHAR(30)  DEFAULT NULL;
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS profession       VARCHAR(100) DEFAULT NULL;
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS profile_photo    TEXT         DEFAULT NULL;
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS password_changed BOOLEAN      NOT NULL DEFAULT FALSE;
 
 -- ETL job tracking
 CREATE TABLE IF NOT EXISTS public.etl_jobs (
@@ -58,6 +59,56 @@ CREATE TABLE IF NOT EXISTS dw.dim_etablissement (
 
 -- Raw codetab on fact_paie for direct join to dim_etablissement
 ALTER TABLE dw.fact_paie ADD COLUMN IF NOT EXISTS codetab CHAR(3);
+
+-- Support tickets
+CREATE TABLE IF NOT EXISTS public.tickets (
+    id           BIGSERIAL    PRIMARY KEY,
+    title        VARCHAR(200) NOT NULL,
+    description  TEXT,
+    status       VARCHAR(20)  NOT NULL DEFAULT 'OPEN',
+    ministry_code VARCHAR(10),
+    created_by   VARCHAR(50)  NOT NULL,
+    created_at   TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+    updated_at   TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+);
+
+-- Per-ministry aggregated MV — used by ministry-scoped dashboard queries (sub-ms vs 36s on raw table)
+-- REFRESH MATERIALIZED VIEW dw.mv_ministry_details; — run after each ETL load
+CREATE MATERIALIZED VIEW IF NOT EXISTS dw.mv_ministry_details AS
+SELECT fp.codetab, dt.year_num, dt.month_num, dt.month_start_date,
+    COUNT(*)                        AS record_count,
+    COUNT(DISTINCT fp.employee_sk)  AS employee_count,
+    SUM(fp.m_netpay)                AS total_netpay,
+    SUM(fp.m_salbrut)               AS total_grosspay,
+    AVG(fp.m_netpay)                AS avg_netpay
+FROM dw.fact_paie fp
+JOIN dw.dim_temps dt ON dt.time_sk = fp.time_sk
+WHERE fp.employee_sk <> 0 AND dt.year_num > 0 AND fp.codetab IS NOT NULL
+GROUP BY fp.codetab, dt.year_num, dt.month_num, dt.month_start_date;
+
+CREATE INDEX IF NOT EXISTS idx_mv_ministry_codetab  ON dw.mv_ministry_details (codetab);
+CREATE INDEX IF NOT EXISTS idx_mv_ministry_year     ON dw.mv_ministry_details (codetab, year_num);
+CREATE INDEX IF NOT EXISTS idx_fact_paie_codetab    ON dw.fact_paie (codetab);
+CREATE INDEX IF NOT EXISTS idx_fact_paie_grade_tab  ON dw.fact_paie (codetab, grade_sk) WHERE m_netpay IS NOT NULL;
+
+-- Ministry hierarchy view: maps each establishment codetab → its parent ministry codetab.
+-- Ministries (natorg='1') self-reference; sub-establishments link via codtutel.
+-- Sport federations (natorg='8') map to W00 (Ministry of Youth and Sports) when
+-- codtutel is not explicitly set.
+-- Used by dashboard and anomaly filters to include all sub-establishments when
+-- a ministry-level user is querying data.
+CREATE OR REPLACE VIEW dw.v_ministry_codetabs AS
+    -- Every establishment references itself (fallback — always returns at least 1 row per codetab)
+    SELECT codetab AS sub_codetab, codetab AS ministry_codetab
+    FROM dw.dim_etablissement
+
+    UNION
+
+    -- Sub-establishments with an explicit parent ministry via codtutel
+    -- (populated by the ETL loader using keyword matching + explicit reference data)
+    SELECT codetab AS sub_codetab, codtutel AS ministry_codetab
+    FROM dw.dim_etablissement
+    WHERE codtutel IS NOT NULL AND codtutel <> codetab;
 
 -- Default admin (password: admin123)
 INSERT INTO public.users (username, email, password, role)

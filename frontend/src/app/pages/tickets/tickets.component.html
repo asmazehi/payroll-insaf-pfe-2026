@@ -1,0 +1,114 @@
+<div class="page">
+
+  <div class="page-hero">
+    <div class="page-hero__inner">
+      <div class="page-hero__title">
+        <div class="hero-icon"><mat-icon>support_agent</mat-icon></div>
+        <div>
+          <h2>Support Tickets</h2>
+          <p *ngIf="isAdmin()">All tickets submitted by ministry users</p>
+          <p *ngIf="!isAdmin()">Report an issue to the system administrator</p>
+        </div>
+      </div>
+      <button mat-raised-button color="primary" (click)="openCreate()" *ngIf="!isAdmin()">
+        <mat-icon>add</mat-icon> New Ticket
+      </button>
+    </div>
+  </div>
+
+  <div class="page-body">
+
+    <div class="alert-error" *ngIf="error">{{ error }}</div>
+
+    <div class="loading-wrap" *ngIf="loading">
+      <mat-spinner diameter="40"></mat-spinner>
+    </div>
+
+    <div class="tickets-list" *ngIf="!loading">
+      <div *ngIf="tickets.length === 0" class="no-data">
+        <mat-icon>inbox</mat-icon>
+        <p>No tickets yet.</p>
+        <button *ngIf="!isAdmin()" mat-stroked-button color="primary" (click)="openCreate()">
+          Open your first ticket
+        </button>
+      </div>
+
+      <div class="ticket-card" *ngFor="let t of tickets">
+        <div class="ticket-card__header">
+          <div class="ticket-meta">
+            <span class="ticket-badge" [ngClass]="statusClass(t.status)">{{ statusLabel(t.status) }}</span>
+            <span class="ticket-by" *ngIf="isAdmin()">
+              <mat-icon>person</mat-icon> {{ t.createdBy }}
+              <span *ngIf="t.ministryCode" class="ticket-ministry">· {{ t.ministryCode }}</span>
+            </span>
+          </div>
+          <span class="ticket-date">{{ t.createdAt | date:'MMM d, y, HH:mm' }}</span>
+        </div>
+
+        <h3 class="ticket-title">{{ t.title }}</h3>
+        <p class="ticket-desc" *ngIf="t.description">{{ t.description }}</p>
+
+        <div class="ticket-card__footer" *ngIf="isAdmin()">
+          <div class="status-actions">
+            <button mat-stroked-button class="btn-open"
+                    (click)="setStatus(t, 'OPEN')"
+                    [disabled]="t.status === 'OPEN'">Open</button>
+            <button mat-stroked-button class="btn-progress"
+                    (click)="setStatus(t, 'IN_PROGRESS')"
+                    [disabled]="t.status === 'IN_PROGRESS'">In Progress</button>
+            <button mat-stroked-button class="btn-done"
+                    (click)="setStatus(t, 'DONE')"
+                    [disabled]="t.status === 'DONE'">Done</button>
+          </div>
+          <button mat-icon-button color="warn" (click)="remove(t)">
+            <mat-icon>delete</mat-icon>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Confirm delete dialog -->
+    <div class="modal-backdrop" *ngIf="confirmDialog" (click)="confirmNo()"></div>
+    <div class="confirm-dialog" *ngIf="confirmDialog">
+      <div class="confirm-dialog__icon"><mat-icon>delete_forever</mat-icon></div>
+      <h3 class="confirm-dialog__title">{{ confirmDialog.title }}</h3>
+      <p class="confirm-dialog__msg" [innerHTML]="confirmDialog.message"></p>
+      <div class="confirm-dialog__actions">
+        <button class="confirm-btn confirm-btn--cancel" (click)="confirmNo()">Cancel</button>
+        <button class="confirm-btn confirm-btn--delete" (click)="confirmYes()">
+          <mat-icon>delete</mat-icon> Delete
+        </button>
+      </div>
+    </div>
+
+    <!-- Create ticket modal -->
+    <div class="modal-backdrop" *ngIf="showForm" (click)="showForm=false"></div>
+    <div class="modal-panel" *ngIf="showForm" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <mat-icon class="modal-icon">confirmation_number</mat-icon>
+        <h3>Open a Support Ticket</h3>
+      </div>
+
+      <div class="alert-error" *ngIf="saveError">{{ saveError }}</div>
+
+      <mat-form-field appearance="outline" class="full-width">
+        <mat-label>Issue title</mat-label>
+        <input matInput [(ngModel)]="form.title" placeholder="Briefly describe the issue" maxlength="200" />
+      </mat-form-field>
+
+      <mat-form-field appearance="outline" class="full-width">
+        <mat-label>Details (optional)</mat-label>
+        <textarea matInput [(ngModel)]="form.description" rows="4"
+                  placeholder="Provide any additional details that will help resolve the issue"></textarea>
+      </mat-form-field>
+
+      <div class="form-actions">
+        <button mat-button (click)="showForm=false">Cancel</button>
+        <button mat-raised-button color="primary" (click)="submit()" [disabled]="saving">
+          {{ saving ? 'Submitting…' : 'Submit Ticket' }}
+        </button>
+      </div>
+    </div>
+
+  </div>
+</div>

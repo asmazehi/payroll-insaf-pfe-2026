@@ -17,14 +17,16 @@
       </a>
     </ng-container>
 
-    <div class="nav-sep"></div>
-    <span class="nav-group-label">{{ 'nav.pipeline' | translate }}</span>
-    <ng-container *ngFor="let item of pipelineNav">
-      <a *ngIf="isVisible(item)" class="nav-item"
-         [routerLink]="item.route" routerLinkActive="nav-item--active">
-        <div class="nav-item__icon"><mat-icon>{{ item.icon }}</mat-icon></div>
-        <span class="nav-item__label">{{ item.label | translate }}</span>
-      </a>
+    <ng-container *ngIf="auth.isAdmin()">
+      <div class="nav-sep"></div>
+      <span class="nav-group-label">{{ 'nav.pipeline' | translate }}</span>
+      <ng-container *ngFor="let item of pipelineNav">
+        <a *ngIf="isVisible(item)" class="nav-item"
+           [routerLink]="item.route" routerLinkActive="nav-item--active">
+          <div class="nav-item__icon"><mat-icon>{{ item.icon }}</mat-icon></div>
+          <span class="nav-item__label">{{ item.label | translate }}</span>
+        </a>
+      </ng-container>
     </ng-container>
 
     <div class="nav-sep"></div>

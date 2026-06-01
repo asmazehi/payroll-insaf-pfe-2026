@@ -163,7 +163,13 @@
           </div>
         </div>
       </div>
-      <div style="height:320px">
+      <!-- Legend guide -->
+      <div class="chart-legend-guide">
+        <span class="clg clg--hist"><span class="clg__line"></span> Historical payroll</span>
+        <span class="clg clg--fore"><span class="clg__line clg__line--dash"></span> Forecast</span>
+        <span class="clg clg--ci"><span class="clg__band"></span> Confidence interval</span>
+      </div>
+      <div style="height:380px; position:relative;">
         <canvas baseChart [data]="mainChartData" [options]="chartOptions" type="line"></canvas>
       </div>
     </div>
@@ -197,7 +203,7 @@
           </div>
         </div>
       </div>
-      <div style="height:240px">
+      <div style="height:280px; position:relative;">
         <canvas baseChart [data]="filteredChartData" [options]="chartOptions" type="line"></canvas>
       </div>
       <p class="estimate-note">

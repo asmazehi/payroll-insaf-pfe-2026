@@ -115,36 +115,45 @@ export class ForecastComponent implements OnInit, OnDestroy {
   chartOptions: ChartConfiguration['options'] = {
     responsive: true, maintainAspectRatio: false,
     interaction: { mode: 'index', intersect: false },
-    animation: { duration: 700 },
+    animation: { duration: 800 },
     plugins: {
       legend: {
         display: true, position: 'top',
-        labels: { font: { size: 11, family: 'Inter' }, boxWidth: 14, padding: 16, color: '#64748B' },
+        labels: {
+          font: { size: 12, family: 'Inter' }, boxWidth: 12, padding: 20,
+          color: 'rgba(255,255,255,.55)',
+          filter: (item: any) => !item.text.includes('CI '),  // hide CI bands from legend
+        },
       },
       tooltip: {
-        backgroundColor: 'rgba(13,27,42,.97)',
-        titleColor: '#E8C96A', bodyColor: '#CBD5E1',
-        padding: 16, cornerRadius: 10,
-        boxPadding: 4,
+        backgroundColor: 'rgba(8,8,28,.97)',
+        titleColor: 'rgba(255,255,255,.9)',
+        bodyColor:  'rgba(255,255,255,.65)',
+        borderColor: 'rgba(255,255,255,.1)', borderWidth: 1,
+        padding: 16, cornerRadius: 12, boxPadding: 5,
         callbacks: {
+          title: (items: any[]) => `📅  ${items[0]?.label || ''}`,
           label: (c: any) => {
             const v = c.parsed.y;
             if (v == null) return '';
-            const fmt = Math.round(v).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
-            return `  ${c.dataset.label}: ${fmt} TND`;
+            const fmtV = (n: number) => {
+              if (n >= 1e9) return (n / 1e9).toFixed(2) + ' B TND';
+              if (n >= 1e6) return (n / 1e6).toFixed(2) + ' M TND';
+              return Math.round(n).toLocaleString() + ' TND';
+            };
+            const lbl = c.dataset.label || '';
+            if (lbl.includes('CI ')) return '';          // suppress CI band rows in tooltip
+            const icon = lbl.includes('forecast') || lbl.includes('Forecast') || lbl.includes('Prév') ? '🔮' : '📊';
+            return `  ${icon}  ${lbl.split('—')[0].trim()}: ${fmtV(v)}`;
           },
           afterBody: (items: any[]) => {
             const label: string = String(items[0]?.label || '');
             const month = label.slice(5, 7);
             const tr = (this as any).translate as TranslateService;
 
-            // Employee chart: use pre-computed per-point notes
             const empNote = (this as any).empPointNotes?.[label];
-            if (empNote) {
-              return ['', ...(empNote as string).split('\n')];
-            }
+            if (empNote) return ['', ...(empNote as string).split('\n')];
 
-            // Main aggregate chart: seasonal + median deviation
             const hist = (this as any).result?.historical || [];
             if (!hist.length) return [];
             const vals   = hist.map((r: any) => r.actual_netpay as number);
@@ -167,9 +176,23 @@ export class ForecastComponent implements OnInit, OnDestroy {
       },
     } as any,
     scales: {
-      x: { grid: { display: false }, border: { display: false }, ticks: { color: '#64748B', font: { size: 10 }, maxTicksLimit: 18 } },
-      y: { grid: { color: '#F1F5F9' }, border: { display: false },
-           ticks: { color: '#64748B', font: { size: 10 }, callback: (v: any) => (v / 1e6).toFixed(0) + ' M TND' } },
+      x: {
+        grid: { display: false }, border: { display: false },
+        ticks: { color: 'rgba(255,255,255,.3)', font: { size: 10 }, maxTicksLimit: 14, padding: 6 }
+      },
+      y: {
+        grid: { color: 'rgba(255,255,255,.05)', drawTicks: false },
+        border: { display: false },
+        ticks: {
+          color: 'rgba(255,255,255,.3)', font: { size: 10 }, padding: 10,
+          callback: (v: any) => {
+            const n = v as number;
+            if (n >= 1e9) return (n / 1e9).toFixed(1) + 'B';
+            if (n >= 1e6) return (n / 1e6).toFixed(0) + 'M TND';
+            return n.toFixed(0);
+          }
+        }
+      }
     },
   };
 
@@ -243,33 +266,56 @@ export class ForecastComponent implements OnInit, OnDestroy {
 
     const t = (k: string) => this.translate.instant(k);
 
+    const HIST_COLOR = '#6366f1';
+    const FORE_COLOR = '#f59e0b';
+
     this.mainChartData = {
       labels: [...histLabels, ...foreLabels],
       datasets: [
+        // ── Historical payroll ──────────────────────────────────────────────
         {
           label: t('forecast.chart_hist'),
           data: padH(hist.map((r: any) => r.actual_netpay), foreLabels.length),
-          borderColor: '#1E3048', backgroundColor: 'rgba(30,48,72,.07)',
-          borderWidth: 2, pointRadius: 0, tension: 0.3, fill: true, spanGaps: true,
+          borderColor: HIST_COLOR,
+          backgroundColor: (ctx: any) => {
+            const c = ctx.chart.ctx;
+            const g = c.createLinearGradient(0, 0, 0, ctx.chart.height);
+            g.addColorStop(0, 'rgba(99,102,241,.28)');
+            g.addColorStop(1, 'rgba(99,102,241,.01)');
+            return g;
+          },
+          borderWidth: 2.5, pointRadius: 0, pointHoverRadius: 5,
+          pointHoverBackgroundColor: HIST_COLOR, pointHoverBorderColor: '#fff', pointHoverBorderWidth: 2,
+          tension: 0.38, fill: true, spanGaps: true,
         },
+        // ── CI upper — no visible line, just anchor for fill ────────────────
         {
-          label: `${t('forecast.chart_forecast')} — ${this.winnerLabel} (${this.result?.mape?.toFixed(2)}% MAPE)`,
-          data: pad(fore.map((r: any) => r.predicted_netpay), histLabels.length),
-          borderColor: '#C9A84C', backgroundColor: 'rgba(201,168,76,.10)',
-          borderWidth: 2.5, borderDash: [7, 4],
-          pointBackgroundColor: '#C9A84C', pointRadius: 5, tension: 0.2, fill: true, spanGaps: true,
-        },
-        {
-          label: t('forecast.chart_ci_upper'),
+          label: 'CI upper',
           data: pad(fore.map((r: any) => r.upper), histLabels.length),
-          borderColor: 'rgba(201,168,76,.25)', backgroundColor: 'transparent',
-          borderWidth: 1, borderDash: [3, 3], pointRadius: 0, tension: 0.2, spanGaps: true,
+          borderColor: 'transparent',
+          backgroundColor: 'transparent',
+          borderWidth: 0, pointRadius: 0, tension: 0.3,
+          spanGaps: false, fill: false,
         },
+        // ── CI lower — fills between itself and CI upper ─────────────────────
         {
-          label: t('forecast.chart_ci_lower'),
+          label: 'CI lower',
           data: pad(fore.map((r: any) => r.lower), histLabels.length),
-          borderColor: 'rgba(201,168,76,.25)', backgroundColor: 'rgba(201,168,76,.05)',
-          borderWidth: 1, borderDash: [3, 3], pointRadius: 0, tension: 0.2, fill: '-1', spanGaps: true,
+          borderColor: 'transparent',
+          backgroundColor: 'rgba(245,158,11,.13)',
+          borderWidth: 0, pointRadius: 0, tension: 0.3,
+          fill: '-1', spanGaps: false,
+        },
+        // ── Forecast ────────────────────────────────────────────────────────
+        {
+          label: `${t('forecast.chart_forecast')} — ${this.winnerLabel} (MAPE ${this.result?.mape?.toFixed(1)}%)`,
+          data: pad(fore.map((r: any) => r.predicted_netpay), histLabels.length),
+          borderColor: FORE_COLOR,
+          backgroundColor: 'transparent',
+          borderWidth: 2.5, borderDash: [7, 4],
+          pointBackgroundColor: FORE_COLOR, pointRadius: 4, pointHoverRadius: 6,
+          pointBorderColor: '#0e0e1a', pointBorderWidth: 1.5,
+          tension: 0.3, fill: false, spanGaps: false,
         },
       ] as any,
     };
@@ -288,8 +334,16 @@ export class ForecastComponent implements OnInit, OnDestroy {
       datasets: [{
         label: `${filterLabel} — ${this.translate.instant('forecast.chart_filtered')}`,
         data: data.map((r: any) => r.actual_netpay),
-        borderColor: '#8B5CF6', backgroundColor: 'rgba(139,92,246,.08)',
-        borderWidth: 2, pointRadius: 0, tension: 0.3, fill: true,
+        borderColor: '#8B5CF6',
+        backgroundColor: (ctx: any) => {
+          const c = ctx.chart.ctx;
+          const g = c.createLinearGradient(0, 0, 0, ctx.chart.height);
+          g.addColorStop(0, 'rgba(139,92,246,.3)');
+          g.addColorStop(1, 'rgba(139,92,246,.01)');
+          return g;
+        },
+        borderWidth: 2.5, pointRadius: 0, pointHoverRadius: 5,
+        pointHoverBackgroundColor: '#8B5CF6', tension: 0.38, fill: true,
       }],
     };
   }

@@ -18,8 +18,8 @@ export class SidebarComponent {
   coreNav: NavItem[] = [
     { label: 'nav.overview',  icon: 'grid_view',     route: '/dashboard' },
     { label: 'nav.reports',   icon: 'bar_chart',     route: '/reports' },
-    { label: 'nav.forecast',  icon: 'trending_up',   route: '/forecast',  roles: ['ROLE_ADMIN'] },
-    { label: 'nav.anomalies', icon: 'warning_amber', route: '/anomalies', roles: ['ROLE_ADMIN'] },
+    { label: 'nav.forecast',  icon: 'trending_up',   route: '/forecast' },
+    { label: 'nav.anomalies', icon: 'warning_amber', route: '/anomalies' },
     { label: 'nav.assistant', icon: 'smart_toy',     route: '/chatbot' },
   ];
 
@@ -28,7 +28,9 @@ export class SidebarComponent {
   ];
 
   adminNav: NavItem[] = [
-    { label: 'nav.users', icon: 'manage_accounts', route: '/users', roles: ['ROLE_ADMIN'] },
+    { label: 'nav.users',    icon: 'manage_accounts',  route: '/users',   roles: ['ROLE_ADMIN'] },
+    { label: 'nav.profile',  icon: 'account_circle',   route: '/profile', roles: ['ROLE_USER']  },
+    { label: 'nav.tickets',  icon: 'support_agent',    route: '/tickets' },
   ];
 
   constructor(public auth: AuthService) {}

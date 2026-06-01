@@ -58,6 +58,15 @@ public class JwtUtils {
                 .parseClaimsJws(token).getBody();
     }
 
+    public String getMinistryCodeFromToken(String token) {
+        try {
+            Object val = getClaimsFromToken(token).get("ministryCode");
+            return val != null ? val.toString() : null;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
     public boolean validateToken(String token) {
         try {
             Jwts.parserBuilder().setSigningKey(key()).build().parseClaimsJws(token);

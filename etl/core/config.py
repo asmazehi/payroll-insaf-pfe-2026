@@ -12,10 +12,14 @@ RAW_DIR       = BASE_DIR / "data" / "raw"
 RAW_PAIE      = RAW_DIR / "paie2015.json"       # payroll type 1  (~1 GB)
 RAW_INDEM     = RAW_DIR / "ind2015.json"         # indemnities type 3 (~75 MB)
 RAW_INDEM_DEF = RAW_DIR / "indem_def.json"       # indemnity code reference
-RAW_GRADE     = RAW_DIR / "grade.json"
-RAW_ORGANISME = RAW_DIR / "organisme.json"
-RAW_REGION    = RAW_DIR / "region.json"
-RAW_NATURE    = RAW_DIR / "nature.json"
+RAW_GRADE        = RAW_DIR / "grade.json"
+RAW_ORGANISME    = RAW_DIR / "organisme.json"
+RAW_REGION       = RAW_DIR / "region.json"
+RAW_NATURE       = RAW_DIR / "nature.json"
+
+# New-format data directory (Oracle exports with { "results": [{ "columns": [...], "items": [...] }] })
+NEW_RAW_DIR      = BASE_DIR / "data" / "newRawData"
+RAW_ETABLISSEMENT = NEW_RAW_DIR / "etablissement.json"
 
 # ── Clean output files ────────────────────────────────────────────────────────
 CLEAN_DIR         = BASE_DIR / "data" / "clean"

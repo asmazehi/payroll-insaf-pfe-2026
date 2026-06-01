@@ -23,11 +23,27 @@ spring:
   jackson:
     date-format: yyyy-MM-dd
     time-zone: Africa/Tunis
+  mail:
+    host: smtp.gmail.com
+    port: 587
+    username: asmazehi.insaf@gmail.com
+    password: njmqflucyratmwkc
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+            required: true
 
 app:
   jwt:
     secret: insaf-jwt-secret-key-change-in-production-must-be-256-bits-long
     expiration-ms: 86400000   # 24 hours
+
+  mail:
+    from: asmazehi.insaf@gmail.com
+    from-name: INSAF Payroll Platform
 
   ml:
     api-url: http://localhost:8000   # Python FastAPI for ML inference

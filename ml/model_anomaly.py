@@ -167,41 +167,49 @@ def _score_method(metrics: dict) -> float:
 LSTM_SEQ_LEN   = 12   # look at each employee's last 12 months
 LSTM_LATENT    = 32   # bottleneck size
 
-def _build_lstm_sequences(df: pd.DataFrame) -> tuple[np.ndarray, np.ndarray]:
-    """
-    Build per-employee salary sequences of length LSTM_SEQ_LEN.
+LSTM_TRAIN_SAMPLE = 80_000   # employees sampled for training (memory limit)
 
-    For each employee with >= LSTM_SEQ_LEN records, extract all
-    sliding windows of length LSTM_SEQ_LEN from their salary history.
+def _build_lstm_sequences(df: pd.DataFrame,
+                           train_sample: int = LSTM_TRAIN_SAMPLE
+                           ) -> tuple[np.ndarray, np.ndarray, np.ndarray, object]:
+    """
+    Build ONE sequence (the last LSTM_SEQ_LEN months) per employee.
+
+    Training uses up to `train_sample` randomly sampled employees.
+    Scoring uses all employees (one sequence each) — stays in RAM.
 
     Returns:
-        sequences : (N, LSTM_SEQ_LEN, 1) — scaled salary sequences
-        emp_sks   : (N,) — employee_sk for each sequence (last step)
-        row_idxs  : (N,) — index of the LAST record in each sequence
+        train_seq : (T, SEQ_LEN, 1) — training sequences
+        all_seq   : (N, SEQ_LEN, 1) — scoring sequences (all employees)
+        row_idxs  : (N,) — df index of the LAST month in each employee's window
+        seq_scaler: fitted MinMaxScaler
     """
     from sklearn.preprocessing import MinMaxScaler
 
     df_sorted = df.sort_values(["employee_sk", "year_num", "month_num"]).reset_index()
     seq_scaler = MinMaxScaler()
-    df_sorted["netpay_scaled"] = seq_scaler.fit_transform(
-        df_sorted[["m_netpay"]]
-    )
+    df_sorted["netpay_scaled"] = seq_scaler.fit_transform(df_sorted[["m_netpay"]])
 
-    sequences, emp_sks, row_idxs = [], [], []
-    for emp_sk, grp in df_sorted.groupby("employee_sk"):
+    all_seqs, row_idxs = [], []
+    for _emp_sk, grp in df_sorted.groupby("employee_sk"):
         vals = grp["netpay_scaled"].values
         idxs = grp["index"].values
         if len(vals) < LSTM_SEQ_LEN:
             continue
-        for i in range(len(vals) - LSTM_SEQ_LEN + 1):
-            sequences.append(vals[i: i + LSTM_SEQ_LEN].reshape(LSTM_SEQ_LEN, 1))
-            emp_sks.append(emp_sk)
-            row_idxs.append(idxs[i + LSTM_SEQ_LEN - 1])
+        # Only last window per employee
+        all_seqs.append(vals[-LSTM_SEQ_LEN:].reshape(LSTM_SEQ_LEN, 1))
+        row_idxs.append(idxs[-1])
 
-    return (np.array(sequences, dtype=np.float32),
-            np.array(emp_sks),
-            np.array(row_idxs),
-            seq_scaler)
+    all_seqs  = np.array(all_seqs,  dtype=np.float32)
+    row_idxs  = np.array(row_idxs)
+
+    # Sub-sample for training to stay within memory
+    rng = np.random.RandomState(42)
+    n_train = min(train_sample, len(all_seqs))
+    train_idx = rng.choice(len(all_seqs), n_train, replace=False)
+    train_seqs = all_seqs[train_idx]
+
+    return train_seqs, all_seqs, row_idxs, seq_scaler
 
 
 def _run_lstm_autoencoder(df: pd.DataFrame) -> tuple[np.ndarray, np.ndarray, object]:
@@ -220,14 +228,14 @@ def _run_lstm_autoencoder(df: pd.DataFrame) -> tuple[np.ndarray, np.ndarray, obj
     tf.get_logger().setLevel("ERROR")
 
     print(f"    Building employee salary sequences (window={LSTM_SEQ_LEN} months)...")
-    sequences, emp_sks, row_idxs, seq_scaler = _build_lstm_sequences(df)
+    train_seqs, all_seqs, row_idxs, seq_scaler = _build_lstm_sequences(df)
 
-    if len(sequences) == 0:
+    if len(all_seqs) == 0:
         print("    [!] No sequences built — not enough employee history")
         return np.zeros(len(df)), np.zeros(len(df), dtype=bool), None
 
-    print(f"    Sequences: {len(sequences):,} windows from "
-          f"{len(np.unique(emp_sks)):,} employees")
+    print(f"    Sequences: {len(all_seqs):,} employees "
+          f"({len(train_seqs):,} sampled for training)")
 
     # Build LSTM Autoencoder
     inputs  = tf.keras.Input(shape=(LSTM_SEQ_LEN, 1))
@@ -243,29 +251,29 @@ def _run_lstm_autoencoder(df: pd.DataFrame) -> tuple[np.ndarray, np.ndarray, obj
     lstm_ae.compile(optimizer="adam", loss="mse")
 
     print(f"    Training LSTM Autoencoder ({AE_EPOCHS} epochs, "
-          f"{len(sequences):,} sequences)...")
+          f"{len(train_seqs):,} sequences)...")
     lstm_ae.fit(
-        sequences, sequences,
+        train_seqs, train_seqs,
         epochs=AE_EPOCHS,
         batch_size=AE_BATCH_SIZE,
         validation_split=0.1,
         verbose=0,
     )
 
-    # Reconstruction error per sequence
-    reconstructed  = lstm_ae.predict(sequences, batch_size=AE_BATCH_SIZE, verbose=0)
-    seq_errors     = np.mean(np.square(sequences - reconstructed), axis=(1, 2))
+    # Reconstruction error — score ALL employees (one window each)
+    reconstructed  = lstm_ae.predict(all_seqs, batch_size=AE_BATCH_SIZE, verbose=0)
+    seq_errors     = np.mean(np.square(all_seqs - reconstructed), axis=(1, 2))
 
-    # Map sequence errors back to individual records
-    # Each record gets the error of the sequence where it was the LAST element
-    record_errors = np.zeros(len(df))
+    # Map sequence errors back to individual records (last month of each window)
+    record_errors = np.full(len(df), np.median(seq_errors))
     for seq_err, row_idx in zip(seq_errors, row_idxs):
         if row_idx < len(record_errors):
             record_errors[row_idx] = seq_err
 
-    # Records not covered by any sequence get median error
+    # Records not covered by any sequence keep median error
     uncovered = record_errors == 0
-    record_errors[uncovered] = np.median(seq_errors)
+    if uncovered.any():
+        record_errors[uncovered] = np.median(seq_errors)
 
     # Flag top AE_CONTAMINATION%
     threshold  = np.percentile(record_errors, (1 - AE_CONTAMINATION) * 100)
@@ -363,7 +371,8 @@ def train_anomaly_model() -> dict:
     X_sample = X_scaled[sample_idx]
     ocsvm = OneClassSVM(kernel="rbf", nu=OCSVN_NU, gamma="scale")
     ocsvm.fit(X_sample)
-    df["ocsvm_flag"] = ocsvm.predict(X_scaled) == -1
+    df["ocsvm_flag"] = False
+    df.loc[df.index[sample_idx], "ocsvm_flag"] = ocsvm.predict(X_sample) == -1
     ocsvm_metrics = _evaluate_method("One-Class SVM", df["ocsvm_flag"].values, df, zscore_flags)
 
     # ── Method 5: LSTM Autoencoder (Deep Learning) ───────────────────────────
@@ -450,6 +459,18 @@ def train_anomaly_model() -> dict:
     joblib.dump(encoders,     MODELS_DIR / "anomaly_encoders.pkl")
     joblib.dump(feature_cols, MODELS_DIR / "anomaly_features.pkl")
 
+    # Save per-employee baselines so incremental runs don't need to reload 42M rows
+    emp_baselines = (
+        df.groupby("employee_sk")
+          .agg(emp_mean=("m_netpay", "mean"),
+               emp_std=("m_netpay", lambda x: x.std() if len(x) > 1 else 0.0),
+               emp_median=("m_netpay", "median"),
+               emp_count=("m_netpay", "count"))
+          .reset_index()
+    )
+    emp_baselines["emp_std"] = emp_baselines["emp_std"].fillna(0)
+    joblib.dump(emp_baselines, MODELS_DIR / "anomaly_emp_baselines.pkl")
+
     # Full anomaly report
     anomalies_df.to_csv(MODELS_DIR / "anomaly_report.csv", index=False)
 
@@ -487,5 +508,191 @@ def train_anomaly_model() -> dict:
     return result
 
 
+def _models_exist() -> bool:
+    needed = ["anomaly_model.pkl", "anomaly_scaler.pkl", "anomaly_encoders.pkl",
+              "anomaly_features.pkl", "anomaly_report.csv"]
+    return all((MODELS_DIR / f).exists() for f in needed)
+
+
+def _ensure_emp_baselines():
+    """Compute and cache employee baselines if not yet saved (runs once, ~3 min)."""
+    path = MODELS_DIR / "anomaly_emp_baselines.pkl"
+    if path.exists():
+        return joblib.load(path)
+
+    print("  Computing employee baselines (one-time, ~3 min)...")
+    from etl.core.config import DB_CONFIG
+    import psycopg2
+    conn = psycopg2.connect(**DB_CONFIG, options="-c work_mem=512MB")
+    try:
+        df = pd.read_sql("""
+            SELECT employee_sk,
+                   AVG(m_netpay)    AS emp_mean,
+                   STDDEV(m_netpay) AS emp_std,
+                   PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY m_netpay) AS emp_median,
+                   COUNT(*)         AS emp_count
+            FROM dw.fact_paie
+            WHERE employee_sk <> 0 AND m_netpay IS NOT NULL
+            GROUP BY employee_sk
+        """, conn)
+    finally:
+        conn.close()
+
+    df["emp_std"] = df["emp_std"].fillna(0)
+    joblib.dump(df, path)
+    print(f"  Baselines saved for {len(df):,} employees.")
+    return df
+
+
+def score_incremental() -> int:
+    """
+    Score only rows from periods not yet in anomaly_report.csv.
+    Uses saved models — no retraining.  Returns number of new rows added (0 = up to date).
+    """
+    from etl.core.config import DB_CONFIG
+    import psycopg2
+
+    def _conn():
+        opts = "-c statement_timeout=0 -c work_mem=256MB"
+        return psycopg2.connect(**DB_CONFIG, options=opts)
+
+    report_path = MODELS_DIR / "anomaly_report.csv"
+
+    # Find which (year, month) pairs are already in the report
+    existing = pd.read_csv(report_path, usecols=["year_num", "month_num"])
+    covered  = set(zip(existing["year_num"].astype(int),
+                        existing["month_num"].astype(int)))
+
+    # Ask the DB for all distinct periods in fact_paie
+    with _conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT DISTINCT dt.year_num, dt.month_num
+                FROM dw.fact_paie fp
+                JOIN dw.dim_temps dt ON dt.time_sk = fp.time_sk
+                WHERE fp.employee_sk <> 0 AND dt.year_num > 0
+                ORDER BY dt.year_num, dt.month_num
+            """)
+            all_periods = {(r[0], r[1]) for r in cur.fetchall()}
+
+    new_periods = all_periods - covered
+    if not new_periods:
+        print("  Anomaly report is already up to date. Nothing to score.")
+        return 0
+
+    print(f"  {len(new_periods)} new period(s) found: "
+          f"{sorted(new_periods)[-min(3, len(new_periods)):]}")
+
+    # Load new rows from DB (only the new periods)
+    period_list = ",".join(f"({y},{m})" for y, m in sorted(new_periods))
+    sql = f"""
+        SELECT fp.employee_sk, dt.year_num, dt.month_num,
+               dg.grade_code, dn.nature_code,
+               fp.codetab AS ministry_code,
+               fp.pa_eche, fp.pa_sitfam,
+               fp.m_netpay, fp.m_salbrut, fp.m_salimp, fp.m_retrait,
+               fp.m_cps, fp.m_cpe, fp.m_capdeces, fp.m_sub, fp.m_avkm, fp.m_avlog
+        FROM dw.fact_paie fp
+        JOIN dw.dim_temps dt ON dt.time_sk = fp.time_sk
+        JOIN dw.dim_grade dg ON dg.grade_sk = fp.grade_sk
+        JOIN dw.dim_nature dn ON dn.nature_sk = fp.nature_sk
+        WHERE fp.employee_sk <> 0
+          AND fp.grade_sk <> 0
+          AND fp.nature_sk <> 0
+          AND fp.codetab IS NOT NULL
+          AND dt.year_num > 0
+          AND fp.m_netpay IS NOT NULL
+          AND (dt.year_num, dt.month_num) IN ({period_list})
+    """
+    with _conn() as conn:
+        df_new = pd.read_sql(sql, conn)
+
+    if df_new.empty:
+        print("  No rows found for new periods.")
+        return 0
+
+    print(f"  Loaded {len(df_new):,} new rows.")
+
+    # Apply saved employee baselines for z-score (computes once if missing)
+    baselines = _ensure_emp_baselines()
+    df_new = df_new.merge(baselines[["employee_sk", "emp_mean", "emp_std", "emp_median"]],
+                          on="employee_sk", how="left")
+    df_new["emp_mean"]   = df_new["emp_mean"].fillna(df_new["m_netpay"])
+    df_new["emp_std"]    = df_new["emp_std"].fillna(0)
+    df_new["emp_median"] = df_new["emp_median"].fillna(df_new["m_netpay"])
+
+    df_new["z_score"] = np.where(
+        df_new["emp_std"] > 0,
+        (df_new["m_netpay"] - df_new["emp_mean"]) / df_new["emp_std"],
+        0.0,
+    )
+    df_new["pct_deviation"] = np.where(
+        df_new["emp_median"] > 0,
+        np.abs(df_new["m_netpay"] - df_new["emp_median"]) / df_new["emp_median"] * 100,
+        0.0,
+    )
+    df_new["rolling_z"]   = df_new["z_score"]   # no rolling window for new rows
+    df_new["zscore_flag"] = df_new["z_score"].abs() > ZSCORE_THRESHOLD
+
+    # Score with saved IF model
+    feature_cols = joblib.load(MODELS_DIR / "anomaly_features.pkl")
+    scaler       = joblib.load(MODELS_DIR / "anomaly_scaler.pkl")
+    encoders     = joblib.load(MODELS_DIR / "anomaly_encoders.pkl")
+    iso          = joblib.load(MODELS_DIR / "anomaly_model.pkl")
+
+    for col, enc in encoders.items():
+        if col in df_new.columns:
+            known = set(enc.classes_)
+            df_new[col] = df_new[col].astype(str).apply(
+                lambda x: x if x in known else enc.classes_[0]
+            )
+            df_new[col] = enc.transform(df_new[col].astype(str))
+
+    available = [c for c in feature_cols if c in df_new.columns]
+    X = df_new[available].fillna(0).values.astype("float32")
+    X_scaled = scaler.transform(X)
+
+    df_new["if_flag"]    = iso.predict(X_scaled) == -1
+    df_new["lof_flag"]   = False
+    df_new["ocsvm_flag"] = False
+    df_new["ae_flag"]    = False
+
+    df_new["anomaly_flag"] = df_new["zscore_flag"] | df_new["if_flag"]
+    df_new["detection_method"] = ""
+    df_new.loc[ df_new["zscore_flag"] & ~df_new["if_flag"], "detection_method"] = "Z-score"
+    df_new.loc[~df_new["zscore_flag"] &  df_new["if_flag"], "detection_method"] = "Isolation Forest"
+    df_new.loc[ df_new["zscore_flag"] &  df_new["if_flag"], "detection_method"] = "Z-score + IF"
+
+    new_anomalies = df_new[df_new["anomaly_flag"]].copy()
+
+    # Add placeholder temporal context columns to match report schema
+    for col in ["pay_prev_2m", "pay_prev_1m", "pay_next_1m", "pay_next_2m",
+                "pay_next_3m", "pct_change_vs_prev"]:
+        new_anomalies[col] = None
+
+    # Append to existing report (keep only report columns)
+    report_cols = pd.read_csv(report_path, nrows=0).columns.tolist()
+    for col in report_cols:
+        if col not in new_anomalies.columns:
+            new_anomalies[col] = None
+
+    new_anomalies[report_cols].to_csv(report_path, mode="a", header=False, index=False)
+    print(f"  Appended {len(new_anomalies):,} new anomalies to report.")
+    return len(new_anomalies)
+
+
 if __name__ == "__main__":
-    train_anomaly_model()
+    import sys
+    force_full = "--full" in sys.argv
+
+    if force_full or not _models_exist():
+        if force_full:
+            print("  --full flag set: running full retrain.")
+        else:
+            print("  No saved models found: running full retrain.")
+        train_anomaly_model()
+    else:
+        print("=" * 60)
+        print("MODEL 4 — Anomaly Detection (Incremental Scoring)")
+        print("=" * 60)
+        score_incremental()

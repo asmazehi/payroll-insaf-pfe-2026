@@ -21,6 +21,7 @@ import { MatSelectModule }    from '@angular/material/select';
 import { MatTooltipModule }   from '@angular/material/tooltip';
 import { MatTabsModule }      from '@angular/material/tabs';
 import { MatChipsModule }     from '@angular/material/chips';
+import { MatBadgeModule }     from '@angular/material/badge';
 import { NgChartsModule }     from 'ng2-charts';
 
 import { AppRoutingModule } from './app-routing.module';
@@ -33,6 +34,8 @@ import { ChatbotComponent }   from './pages/chatbot/chatbot.component';
 import { ReportsComponent }   from './pages/reports/reports.component';
 import { IngestComponent }    from './pages/ingest/ingest.component';
 import { UsersComponent }     from './pages/users/users.component';
+import { TicketsComponent }   from './pages/tickets/tickets.component';
+import { ProfileComponent }   from './pages/profile/profile.component';
 import { NavbarComponent }    from './layout/navbar/navbar.component';
 import { SidebarComponent }   from './layout/sidebar/sidebar.component';
 import { JwtInterceptor }     from './interceptors/jwt.interceptor';
@@ -41,7 +44,8 @@ import { JwtInterceptor }     from './interceptors/jwt.interceptor';
   declarations: [
     AppComponent, LoginComponent, DashboardComponent,
     ForecastComponent, AnomaliesComponent, ChatbotComponent,
-    ReportsComponent, IngestComponent, UsersComponent, NavbarComponent, SidebarComponent
+    ReportsComponent, IngestComponent, UsersComponent, TicketsComponent,
+    ProfileComponent, NavbarComponent, SidebarComponent
   ],
   imports: [
     BrowserModule, BrowserAnimationsModule,
@@ -54,7 +58,7 @@ import { JwtInterceptor }     from './interceptors/jwt.interceptor';
     MatToolbarModule, MatSidenavModule, MatListModule, MatCardModule,
     MatButtonModule, MatInputModule, MatFormFieldModule, MatIconModule,
     MatTableModule, MatProgressSpinnerModule, MatSnackBarModule,
-    MatSelectModule, MatTooltipModule, MatTabsModule, MatChipsModule,
+    MatSelectModule, MatTooltipModule, MatTabsModule, MatChipsModule, MatBadgeModule,
   ],
   providers: [
     { provide: HTTP_INTERCEPTORS, useClass: JwtInterceptor, multi: true },

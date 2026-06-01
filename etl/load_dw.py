@@ -28,6 +28,7 @@ from etl.core.config import (
     CLEAN_DIR, CLEAN_DIM_EMPLOYEE, CLEAN_DIM_GRADE, CLEAN_DIM_NATURE,
     CLEAN_DIM_ORGANISME, CLEAN_DIM_REGION, CLEAN_DIM_TIME, CLEAN_DIM_INDEMNITE,
     CLEAN_FACT_PAIE, CLEAN_FACT_INDEM, DB_CONFIG,
+    RAW_ETABLISSEMENT,
 )
 from etl.core.logger import get_logger
 
@@ -235,6 +236,247 @@ def load_dim_organisme(cur, path: Path):
             dw_load_ts = NOW()
     """, rows)
     log.info("  dim_organisme: %d rows upserted", len(rows))
+
+
+def load_dim_etablissement(cur, path: Path):
+    """
+    Load dim_etablissement from the Oracle-export JSON (data/newRawData/etablissement.json).
+    Format: { "results": [{ "columns": [...], "items": [...] }] }
+    Populates natorg, codtutel, codchap, codsec — required for the v_ministry_codetabs view.
+    """
+    if not path.exists():
+        log.warning("etablissement.json not found, skipping: %s", path)
+        return
+
+    log.info("Loading dim_etablissement from %s", path.name)
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except Exception as exc:
+        log.warning("Could not parse etablissement.json: %s", exc)
+        return
+
+    # Handle Oracle-export format: { "results": [{ "items": [...] }] }
+    if isinstance(data, dict) and "results" in data:
+        items = data["results"][0].get("items", []) if data["results"] else []
+    elif isinstance(data, list):
+        items = data
+    else:
+        log.warning("Unexpected etablissement.json format")
+        return
+
+    rows = []
+    for r in items:
+        codetab = _v(r, "codetab") or _v(r, "CODETAB")
+        if not codetab or codetab == "???":
+            continue
+        codetab = str(codetab).strip().upper()[:3]
+
+        def _f(key):
+            v = r.get(key) or r.get(key.upper())
+            return str(v).strip() if v is not None and str(v).strip() else None
+
+        rows.append((
+            codetab,
+            _f("natorg"),
+            _f("libcetabl"),
+            _f("libcetaba"),
+            _f("libletabl"),
+            _f("libletaba"),
+            _f("sigle_etab"),
+            _f("typgest"),
+            _f("codgest"),
+            _f("adretabl"),
+            _f("adretaba"),
+            _f("teletab"),
+            _f("resp_etabl"),
+            _f("resp_etaba"),
+            _f("etat_etab"),
+            _f("code_resp"),
+            _f("stutel"),
+            _f("codtutel"),
+            _f("codchap"),
+            _f("codsec"),
+            _f("subv"),
+        ))
+
+    if not rows:
+        log.warning("dim_etablissement: no rows to insert")
+        return
+
+    cur.executemany("""
+        INSERT INTO dw.dim_etablissement
+            (codetab, natorg, libcetabl, libcetaba, libletabl, libletaba,
+             sigle_etab, typgest, codgest, adretabl, adretaba, teletab,
+             resp_etabl, resp_etaba, etat_etab, code_resp, stutel,
+             codtutel, codchap, codsec, subv)
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+        ON CONFLICT (codetab) DO UPDATE SET
+            natorg     = EXCLUDED.natorg,
+            libletabl  = COALESCE(EXCLUDED.libletabl, dw.dim_etablissement.libletabl),
+            libletaba  = COALESCE(EXCLUDED.libletaba, dw.dim_etablissement.libletaba),
+            libcetabl  = COALESCE(EXCLUDED.libcetabl, dw.dim_etablissement.libcetabl),
+            sigle_etab = COALESCE(EXCLUDED.sigle_etab, dw.dim_etablissement.sigle_etab),
+            codtutel   = COALESCE(EXCLUDED.codtutel,   dw.dim_etablissement.codtutel),
+            codchap    = COALESCE(EXCLUDED.codchap,    dw.dim_etablissement.codchap),
+            codsec     = COALESCE(EXCLUDED.codsec,     dw.dim_etablissement.codsec),
+            dw_load_ts = NOW()
+    """, rows)
+    log.info("  dim_etablissement: %d rows upserted", len(rows))
+
+    # ── Keyword-based ministry assignment ─────────────────────────────────────
+    _assign_ministry_by_keywords(cur)
+
+    # ── Deduplicate sub-entities that were incorrectly marked natorg='1' ──────
+    # B10, B30 = sub-entities of B00 (Présidence de la République)
+    cur.execute("""
+        UPDATE dw.dim_etablissement
+        SET codtutel = 'B00'
+        WHERE codetab IN ('B10', 'B30')
+          AND (codtutel IS NULL OR codtutel = '')
+    """)
+
+
+def _assign_ministry_by_keywords(cur) -> None:
+    """
+    Assign codtutel (parent ministry) to establishments using keyword matching.
+    Only touches rows where codtutel is still NULL — preserves explicit assignments.
+    """
+    RULES = [
+        # (ministry_codetab, natorg_filter_or_None, [keyword_conditions], [exclusion_conditions])
+        # Municipalities → Interior
+        ("F00",  "09", [], []),
+        # Health
+        ("H00",  None,
+         ["libletabl ILIKE '%hopital%'", "libletabl ILIKE '%clinique%'",
+          "libletabl ILIKE '%infirmeri%'", "libletabl ILIKE '%dispensaire%'",
+          "libletabl ILIKE '%maternite%'", "libletabl ILIKE '%pharmacie%'",
+          "libletabl ILIKE '%sanitaire%'"], []),
+        # Schools (not higher ed)
+        ("R00",  None,
+         ["libletabl ILIKE '%ecole%'", "libletabl ILIKE '%lycee%'",
+          "libletabl ILIKE '%college%'", "libletabl ILIKE '%primaire%'",
+          "libletabl ILIKE '%preparatoire%'"],
+         ["libletabl ILIKE '%superieur%'", "libletabl ILIKE '%universite%'",
+          "libletabl ILIKE '%iset%'"]),
+        # Higher education / research
+        ("S00",  None,
+         ["libletabl ILIKE '%universite%'", "libletabl ILIKE '%faculte%'",
+          "libletabl ILIKE '%ecole superieure%'", "libletabl ILIKE '%ecole nationale%'",
+          "libletabl ILIKE '%iset%'", "libletabl ILIKE '%inat%'",
+          "libletabl ILIKE '%institut superieur%'",
+          "libletabl ILIKE '%centre de recherche%'"], []),
+        # Agriculture
+        ("M00",  None,
+         ["libletabl ILIKE '%agriculture%'", "libletabl ILIKE '%agricole%'",
+          "libletabl ILIKE '%peche%'", "libletabl ILIKE '%foret%'",
+          "libletabl ILIKE '%elevage%'", "libletabl ILIKE '%hydraulique%'",
+          "libletabl ILIKE '%crda%'", "libletabl ILIKE '%barrage%'",
+          "libletabl ILIKE '%veterinaire%'"], []),
+        # Transport companies
+        ("X00",  None,
+         ["libletabl ILIKE '%societe%transport%'", "libletabl ILIKE '%transports%'"],
+         ["libletabl ILIKE '%hydrocarbure%'", "libletabl ILIKE '%petrolier%'"]),
+        # Finance / tax / customs
+        ("J00",  None,
+         ["libletabl ILIKE '%tresor%'", "libletabl ILIKE '%recette%'",
+          "libletabl ILIKE '%impots%'", "libletabl ILIKE '%douane%'",
+          "libletabl ILIKE '%tresorerie%'", "libletabl ILIKE '%fisc%'"], []),
+        # Justice
+        ("D00",  None,
+         ["libletabl ILIKE '%tribunal%'", "libletabl ILIKE '%prison%'",
+          "libletabl ILIKE '%penitentiaire%'", "libletabl ILIKE '%judiciaire%'"], []),
+        # Defense
+        ("G00",  None,
+         ["libletabl ILIKE '%militaire%'", "libletabl ILIKE '%armee%'",
+          "libletabl ILIKE '%gendarmerie%'"], []),
+        # Cultural affairs
+        ("L00",  None,
+         ["libletabl ILIKE '%musee%'", "libletabl ILIKE '%bibliotheque%'",
+          "libletabl ILIKE '%theatre%'", "libletabl ILIKE '%patrimoine%'",
+          "libletabl ILIKE '%culturel%'", "libletabl ILIKE '%cinema%'",
+          "libletabl ILIKE '%radio%'", "libletabl ILIKE '%television%'"], []),
+        # Social affairs
+        ("V00",  None,
+         ["libletabl ILIKE '%securite sociale%'", "libletabl ILIKE '%cnss%'",
+          "libletabl ILIKE '%cnrps%'", "libletabl ILIKE '%assistance sociale%'",
+          "libletabl ILIKE '%orphelinat%'", "libletabl ILIKE '%maison de retraite%'",
+          "libletabl ILIKE '%handicap%'"], []),
+        # Tourism
+        ("500",  None,
+         ["libletabl ILIKE '%tourisme%'", "libletabl ILIKE '%touristique%'"], []),
+        # ICT
+        ("P00",  None,
+         ["libletabl ILIKE '%informatique%'", "libletabl ILIKE '%numerique%'",
+          "libletabl ILIKE '%telecommunication%'"], []),
+        # Religious affairs
+        ("300",  None,
+         ["libletabl ILIKE '%mosquee%'", "libletabl ILIKE '%habous%'",
+          "libletabl ILIKE '%culte%'", "libletabl ILIKE '%religieux%'"], []),
+        # Equipment / housing
+        ("N00",  None,
+         ["libletabl ILIKE '%equipement%'", "libletabl ILIKE '%habitat%'",
+          "libletabl ILIKE '%logement%'", "libletabl ILIKE '%aeroport%'"], []),
+        # Industry / energy / mines
+        ("Y10",  None,
+         ["libletabl ILIKE '%industriel%'", "libletabl ILIKE '%energie%'",
+          "libletabl ILIKE '%electricite%'", "libletabl ILIKE '%hydrocarbure%'",
+          "libletabl ILIKE '%petrole%'", "libletabl ILIKE '%phosphate%'",
+          "libletabl ILIKE '%mines%'", "libletabl ILIKE '%chimique%'"],
+         ["libletabl ILIKE '%transport%'"]),
+        # Employment / vocational training
+        ("600",  None,
+         ["libletabl ILIKE '%formation professionnelle%'", "libletabl ILIKE '%atfp%'",
+          "libletabl ILIKE '%aneti%'", "libletabl ILIKE '%centre de formation%'"], []),
+        # Environment
+        ("400",  None,
+         ["libletabl ILIKE '%environnement%'", "libletabl ILIKE '%onas%'",
+          "libletabl ILIKE '%anpe%'", "libletabl ILIKE '%pollution%'",
+          "libletabl ILIKE '%dechets%'"], []),
+        # Family / women / children
+        ("YJ0",  None,
+         ["libletabl ILIKE '%famille%'", "libletabl ILIKE '%enfance%'",
+          "libletabl ILIKE '%creche%'", "libletabl ILIKE '%garderie%'",
+          "libletabl ILIKE '%maison d%enfant%'"], []),
+        # Sport federations (catches names not covered by natorg='8')
+        ("W00",  None,
+         ["libletabl ILIKE '%federation tunisienne%sport%'",
+          "libletabl ILIKE '%federation tunisienne de%ball%'",
+          "libletabl ILIKE '%federation tunisienne de football%'",
+          "libletabl ILIKE '%federation tunisienne de basket%'",
+          "libletabl ILIKE '%federation tunisienne de volley%'",
+          "libletabl ILIKE '%federation tunisienne de natation%'",
+          "libletabl ILIKE '%federation tunisienne de tennis%'",
+          "libletabl ILIKE '%federation tunisienne d%athlet%'",
+          "libletabl ILIKE '%federation tunisienne des sports%'",
+          "libletabl ILIKE '%comite national olympique%'",
+          "libletabl ILIKE '%commissariat general au sport%'"], []),
+    ]
+
+    total = 0
+    for ministry, natorg_filter, keywords, exclusions in RULES:
+        cur.execute("SELECT 1 FROM dw.dim_etablissement WHERE codetab = %s", (ministry,))
+        if not cur.fetchone():
+            continue
+
+        if natorg_filter:
+            where = f"natorg = '{natorg_filter}' AND (codtutel IS NULL OR codtutel = '')"
+        else:
+            if not keywords:
+                continue
+            kw_or = " OR ".join(keywords)
+            where = f"natorg != '1' AND (codtutel IS NULL OR codtutel = '') AND ({kw_or})"
+
+        if exclusions:
+            ex_and = " AND ".join(f"NOT ({e})" for e in exclusions)
+            where += f" AND {ex_and}"
+
+        cur.execute(f"UPDATE dw.dim_etablissement SET codtutel = %s WHERE {where}", (ministry,))
+        if cur.rowcount:
+            total += cur.rowcount
+
+    if total:
+        log.info("  dim_etablissement: %d establishments linked to parent ministries via keywords", total)
 
 
 def load_dim_region(cur, path: Path):
@@ -617,9 +859,10 @@ def run(reset: bool = False, clean_dir: Path | None = None, progress_cb=None) ->
             _cb(81, "Loading grade and nature dimensions…")
             load_dim_grade(cur,     _dim_grade);      conn.commit()
             load_dim_nature(cur,    _dim_nature);     conn.commit()
-            _cb(82, "Loading organisme and region dimensions…")
-            load_dim_organisme(cur, _dim_organisme);  conn.commit()
-            load_dim_region(cur,    _dim_region);     conn.commit()
+            _cb(82, "Loading organisme, region, and etablissement dimensions…")
+            load_dim_organisme(cur,    _dim_organisme);         conn.commit()
+            load_dim_region(cur,       _dim_region);            conn.commit()
+            load_dim_etablissement(cur, RAW_ETABLISSEMENT);     conn.commit()
             _cb(83, "Loading time and indemnite dimensions…")
             load_dim_temps(cur,     _dim_time, _dim_time_indem);  conn.commit()
             load_dim_indemnite(cur, _dim_indemnite);  conn.commit()
@@ -652,7 +895,20 @@ def run(reset: bool = False, clean_dir: Path | None = None, progress_cb=None) ->
             n_paie  = load_fact_paie(cur,  _fact_paie,  maps);  conn.commit()
             _cb(93, f"fact_paie loaded — {n_paie:,} rows. Loading fact_indem…")
             n_indem = load_fact_indem(cur, _fact_indem, maps, progress_cb=_cb);  conn.commit()
-            _cb(96, f"DW load complete — {n_paie + n_indem:,} total rows written")
+
+            # Refresh materialized views now that fact tables are up to date.
+            # CONCURRENTLY allows reads during refresh (no exclusive lock).
+            _cb(96, "Refreshing materialized views…")
+            for mv in ["dw.mv_ministry_details", "dw.mv_payroll_by_month",
+                       "dw.mv_grade_distribution", "dw.mv_grade_by_ministry"]:
+                try:
+                    cur.execute(f"REFRESH MATERIALIZED VIEW CONCURRENTLY {mv}")
+                    conn.commit()
+                    log.info("  Refreshed %s", mv)
+                except Exception as mv_err:
+                    conn.rollback()
+                    log.warning("  Could not refresh %s: %s", mv, mv_err)
+            _cb(97, f"DW load complete — {n_paie + n_indem:,} total rows written")
 
         # ── Final row counts ──────────────────────────────────────────────────
         with conn.cursor() as cur:

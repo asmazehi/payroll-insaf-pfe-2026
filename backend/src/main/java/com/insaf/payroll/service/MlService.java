@@ -27,10 +27,11 @@ public class MlService {
         return restTemplate.getForObject(url, Object.class);
     }
 
-    public Object getAnomalies(int limit, String ministry, Integer year) {
+    public Object getAnomalies(int limit, String ministry, Integer year, String lang) {
         UriComponentsBuilder builder = UriComponentsBuilder
                 .fromHttpUrl(mlApiUrl + "/anomalies")
-                .queryParam("limit", limit);
+                .queryParam("limit", limit)
+                .queryParam("lang",  lang != null ? lang : "en");
         if (ministry != null) builder.queryParam("ministry", ministry);
         if (year     != null) builder.queryParam("year",     year);
         return restTemplate.getForObject(builder.toUriString(), Object.class);
@@ -61,6 +62,29 @@ public class MlService {
     public Object chat(Map<String, Object> body) {
         String url = mlApiUrl + "/chat";
         return restTemplate.postForObject(url, body, Object.class);
+    }
+
+    public void streamChat(Map<String, Object> body, jakarta.servlet.ServletOutputStream out) throws Exception {
+        java.net.URL url = new java.net.URL(mlApiUrl + "/chat/stream");
+        java.net.HttpURLConnection conn = (java.net.HttpURLConnection) url.openConnection();
+        conn.setRequestMethod("POST");
+        conn.setDoOutput(true);
+        conn.setRequestProperty("Content-Type", "application/json");
+        conn.setConnectTimeout(10_000);
+        conn.setReadTimeout(180_000);
+
+        byte[] reqBytes = new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsBytes(body);
+        conn.getOutputStream().write(reqBytes);
+        conn.getOutputStream().flush();
+
+        byte[] buf = new byte[512];
+        try (java.io.InputStream is = conn.getInputStream()) {
+            int n;
+            while ((n = is.read(buf)) != -1) {
+                out.write(buf, 0, n);
+                out.flush();
+            }
+        }
     }
 
     public Object getForecastDimensions(String ministry) {

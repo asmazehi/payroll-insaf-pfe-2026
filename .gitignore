@@ -35,3 +35,6 @@ checkpoints/
 *.ckpt
 frontend/dist/
 frontend/node_modules/
+.env
+.claude/
+C*WindowsTemp*

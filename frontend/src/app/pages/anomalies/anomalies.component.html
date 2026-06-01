@@ -11,13 +11,46 @@
         </div>
       </div>
       <div class="page-hero__right" *ngIf="result">
-        <div class="anomaly-stat">
-          <span class="anomaly-stat__val">{{ totalAnomalies | number }}</span>
-          <span class="anomaly-stat__label">{{ 'anomalies.total_flagged' | translate }}</span>
-        </div>
-        <div class="anomaly-stat anomaly-stat--rate">
-          <span class="anomaly-stat__val">{{ anomalyRate }}</span>
-          <span class="anomaly-stat__label">{{ 'anomalies.anomaly_rate' | translate }}</span>
+        <div class="review-summary">
+          <!-- Single stat: unreviewed count -->
+          <div class="anomaly-stat" [ngClass]="unreviewed === 0 ? 'anomaly-stat--done' : 'anomaly-stat--urgent'">
+            <span class="anomaly-stat__val">{{ unreviewed | number }}</span>
+            <span class="anomaly-stat__label">{{ 'anomalies.unreviewed' | translate }}</span>
+          </div>
+
+          <!-- Progress only shown once some reviews exist -->
+          <div class="review-progress-wrap" *ngIf="totalAnomalies - unreviewed > 0">
+            <div class="rp-bar">
+              <div class="rp-bar__fill" [style.width.%]="(totalAnomalies - unreviewed) / totalAnomalies * 100"></div>
+            </div>
+            <div class="rp-pills">
+              <button class="rp-pill rp-pill--ok"  *ngIf="reviewStats.LEGITIMATE   > 0"
+                      (click)="setReviewFilter('LEGITIMATE')"
+                      [class.rp-pill--active]="reviewFilter==='LEGITIMATE'"
+                      title="Show legitimate anomalies">
+                <mat-icon>check_circle</mat-icon>{{ reviewStats.LEGITIMATE }}
+              </button>
+              <button class="rp-pill rp-pill--err"  *ngIf="reviewStats.ERROR        > 0"
+                      (click)="setReviewFilter('ERROR')"
+                      [class.rp-pill--active]="reviewFilter==='ERROR'"
+                      title="Show confirmed errors">
+                <mat-icon>report</mat-icon>{{ reviewStats.ERROR }}
+              </button>
+              <button class="rp-pill rp-pill--inv"  *ngIf="reviewStats.INVESTIGATING> 0"
+                      (click)="setReviewFilter('INVESTIGATING')"
+                      [class.rp-pill--active]="reviewFilter==='INVESTIGATING'"
+                      title="Show investigating">
+                <mat-icon>search</mat-icon>{{ reviewStats.INVESTIGATING }}
+              </button>
+              <span class="rp-total">/ {{ totalAnomalies | number }}</span>
+            </div>
+          </div>
+
+          <!-- When nothing reviewed yet: show a subtle hint -->
+          <div class="rp-hint" *ngIf="totalAnomalies - unreviewed === 0">
+            <mat-icon>info_outline</mat-icon>
+            {{ 'anomalies.review_start_hint' | translate }}
+          </div>
         </div>
       </div>
     </div>
@@ -75,6 +108,72 @@
       </div>
     </div>
 
+    <!-- Metrics explainer ─────────────────────────────────────── -->
+    <div class="metrics-explainer" *ngIf="showMetrics">
+      <div class="me-header">
+        <mat-icon>help_outline</mat-icon>
+        <span>{{ 'anomalies.metrics_title' | translate }}</span>
+        <button class="me-close" (click)="showMetrics=false"><mat-icon>close</mat-icon></button>
+      </div>
+      <div class="me-grid">
+        <div class="me-item">
+          <div class="me-item__name">{{ 'anomalies.m_total' | translate }}</div>
+          <div class="me-item__desc">{{ 'anomalies.m_total_desc' | translate }}</div>
+          <div class="me-item__when">
+            <span class="me-tag me-tag--ok">{{ 'anomalies.m_low_ok' | translate }}</span> {{ 'anomalies.m_total_low' | translate }}
+            <span class="me-tag me-tag--warn">{{ 'anomalies.m_high_warn' | translate }}</span> {{ 'anomalies.m_total_high' | translate }}
+          </div>
+        </div>
+        <div class="me-item">
+          <div class="me-item__name">{{ 'anomalies.m_rate' | translate }}</div>
+          <div class="me-item__desc">{{ 'anomalies.m_rate_desc' | translate }}</div>
+          <div class="me-item__when">
+            <span class="me-tag me-tag--ok">&lt; 3%</span> {{ 'anomalies.m_rate_low' | translate }}
+            <span class="me-tag me-tag--warn">&gt; 5%</span> {{ 'anomalies.m_rate_high' | translate }}
+          </div>
+        </div>
+        <div class="me-item">
+          <div class="me-item__name">{{ 'anomalies.m_zscore' | translate }}</div>
+          <div class="me-item__desc">{{ 'anomalies.m_zscore_desc' | translate }}</div>
+          <div class="me-item__when">
+            <span class="me-tag me-tag--ok">z 3–4</span> {{ 'anomalies.m_zscore_low' | translate }}
+            <span class="me-tag me-tag--warn">z &gt; 6</span> {{ 'anomalies.m_zscore_high' | translate }}
+            <span class="me-tag me-tag--crit">z &gt; 10</span> {{ 'anomalies.m_zscore_crit' | translate }}
+          </div>
+        </div>
+        <div class="me-item">
+          <div class="me-item__name">{{ 'anomalies.m_rolling' | translate }}</div>
+          <div class="me-item__desc">{{ 'anomalies.m_rolling_desc' | translate }}</div>
+          <div class="me-item__when">
+            <span class="me-tag me-tag--ok">{{ 'anomalies.m_low_ok' | translate }}</span> {{ 'anomalies.m_rolling_low' | translate }}
+            <span class="me-tag me-tag--crit">{{ 'anomalies.m_high_warn' | translate }}</span> {{ 'anomalies.m_rolling_high' | translate }}
+          </div>
+        </div>
+        <div class="me-item">
+          <div class="me-item__name">{{ 'anomalies.m_severity' | translate }}</div>
+          <div class="me-item__desc">{{ 'anomalies.m_severity_desc' | translate }}</div>
+          <div class="me-item__when">
+            <span class="me-tag me-tag--ok">{{ 'anomalies.low' | translate }}</span> {{ 'anomalies.m_sev_low' | translate }}
+            <span class="me-tag me-tag--warn">{{ 'anomalies.medium' | translate }}</span> {{ 'anomalies.m_sev_med' | translate }}
+            <span class="me-tag me-tag--crit">{{ 'anomalies.high' | translate }}</span> {{ 'anomalies.m_sev_high' | translate }}
+          </div>
+        </div>
+        <div class="me-item">
+          <div class="me-item__name">{{ 'anomalies.m_unreviewed' | translate }}</div>
+          <div class="me-item__desc">{{ 'anomalies.m_unreviewed_desc' | translate }}</div>
+          <div class="me-item__when">
+            <span class="me-tag me-tag--ok">0</span> {{ 'anomalies.m_unreviewed_zero' | translate }}
+            <span class="me-tag me-tag--crit">&gt; 0</span> {{ 'anomalies.m_unreviewed_pos' | translate }}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="metrics-hint" *ngIf="!showMetrics" (click)="showMetrics=true">
+      <mat-icon>help_outline</mat-icon>
+      <span>{{ 'anomalies.metrics_hint' | translate }}</span>
+    </div>
+
     <!-- Tab strip -->
     <div class="tab-strip">
       <button class="tab-btn" [class.active]="activeTab===0" (click)="activeTab=0">
@@ -114,9 +213,23 @@
               <em>{{ countInView('low') }}</em>
             </button>
           </div>
+          <!-- Hide reviewed toggle -->
+          <button class="fpill fpill--hide-reviewed" [class.active]="hideReviewed" (click)="hideReviewed=!hideReviewed">
+            <mat-icon>{{ hideReviewed ? 'visibility_off' : 'visibility' }}</mat-icon>
+            {{ 'anomalies.hide_reviewed' | translate }}
+          </button>
           <span class="filter-count">{{ filtered.length }} {{ 'anomalies.records_shown' | translate }}</span>
           <span class="sample-note">{{ 'anomalies.sample_note' | translate : { total: totalAnomalies, records: totalSampledRecords, employees: totalSampledEmployees } }}</span>
         </div>
+      </div>
+
+      <!-- Active review filter banner -->
+      <div class="review-filter-active" *ngIf="reviewFilter">
+        <mat-icon>filter_alt</mat-icon>
+        Showing <strong>{{ reviewFilter | titlecase }}</strong> anomalies ({{ filtered.length }})
+        <button class="rfa-clear" (click)="reviewFilter=null">
+          <mat-icon>close</mat-icon> Clear filter
+        </button>
       </div>
 
       <!-- Records table -->
@@ -143,9 +256,19 @@
               </tr>
             </thead>
             <tbody>
-              <tr *ngFor="let r of filtered" (click)="openDetail(r)" class="clickable-row">
+              <tr *ngFor="let r of filtered" (click)="openDetail(r)"
+                  class="clickable-row"
+                  [class.row--reviewed]="r.review_status">
                 <td>
-                  <span class="sev-badge"
+                  <!-- Review status chip replaces severity when reviewed -->
+                  <span *ngIf="r.review_status" class="rev-chip"
+                        [class.rev-chip--ok]="r.review_status==='LEGITIMATE'"
+                        [class.rev-chip--err]="r.review_status==='ERROR'"
+                        [class.rev-chip--inv]="r.review_status==='INVESTIGATING'">
+                    <mat-icon>{{ r.review_status==='LEGITIMATE' ? 'check_circle' : r.review_status==='ERROR' ? 'report' : 'search' }}</mat-icon>
+                    {{ r.review_status | titlecase }}
+                  </span>
+                  <span *ngIf="!r.review_status" class="sev-badge"
                     [class.sev-badge--high]="severity(r)==='high'"
                     [class.sev-badge--medium]="severity(r)==='medium'"
                     [class.sev-badge--low]="severity(r)==='low'">
@@ -415,6 +538,16 @@
               <p class="diag-row-text">{{ selected.explanation }}</p>
             </div>
           </div>
+
+          <!-- Probable cause — shown when API returns a data-driven inference -->
+          <div class="diagnosis-row diagnosis-row--probable" *ngIf="selected.probable_cause">
+            <mat-icon class="diag-row-icon diag-row-icon--probable">psychology</mat-icon>
+            <div>
+              <div class="diag-row-label">{{ 'anomalies.probable_cause' | translate }}</div>
+              <p class="diag-row-text diag-row-text--probable">{{ selected.probable_cause }}</p>
+            </div>
+          </div>
+
           <div class="diagnosis-row diagnosis-row--action">
             <mat-icon class="diag-row-icon diag-row-icon--action">task_alt</mat-icon>
             <div>
@@ -424,6 +557,50 @@
           </div>
         </div>
       </div>
+
+      <!-- ── Review panel ────────────────────────────────────────────── -->
+      <div class="review-panel">
+        <div class="review-panel__header">
+          <mat-icon>how_to_reg</mat-icon>
+          <span>{{ 'anomalies.review_title' | translate }}</span>
+          <span class="review-current" *ngIf="selected.review_status"
+                [ngClass]="'review-badge--' + selected.review_status.toLowerCase()">
+            {{ selected.review_status }}
+          </span>
+          <span class="review-current review-badge--pending" *ngIf="!selected.review_status">
+            {{ 'anomalies.review_pending' | translate }}
+          </span>
+        </div>
+
+        <!-- Show who reviewed and when if already reviewed -->
+        <div class="review-meta" *ngIf="selected.reviewed_by">
+          <mat-icon>person</mat-icon>
+          {{ selected.reviewed_by }}
+          <span *ngIf="selected.reviewed_at">· {{ selected.reviewed_at | date:'MMM d, y HH:mm' }}</span>
+        </div>
+
+        <textarea class="review-notes" [(ngModel)]="reviewNotes"
+                  placeholder="{{ 'anomalies.review_notes_ph' | translate }}" rows="2"></textarea>
+
+        <div class="review-actions">
+          <button class="review-btn review-btn--ok"  (click)="submitReview('LEGITIMATE')"   [disabled]="reviewing"
+                  [class.review-btn--active]="selected.review_status === 'LEGITIMATE'">
+            <mat-icon>check_circle</mat-icon> {{ 'anomalies.review_ok' | translate }}
+          </button>
+          <button class="review-btn review-btn--err"  (click)="submitReview('ERROR')"         [disabled]="reviewing"
+                  [class.review-btn--active]="selected.review_status === 'ERROR'">
+            <mat-icon>report</mat-icon> {{ 'anomalies.review_error' | translate }}
+          </button>
+          <button class="review-btn review-btn--inv"  (click)="submitReview('INVESTIGATING')" [disabled]="reviewing"
+                  [class.review-btn--active]="selected.review_status === 'INVESTIGATING'">
+            <mat-icon>search</mat-icon> {{ 'anomalies.review_investigate' | translate }}
+          </button>
+          <button class="review-btn review-btn--clear" *ngIf="selected.review_status" (click)="clearReview()" [disabled]="reviewing">
+            <mat-icon>undo</mat-icon>
+          </button>
+        </div>
+      </div>
+
     </div>
   </div>
 </div>

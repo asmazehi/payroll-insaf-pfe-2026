@@ -1,0 +1,93 @@
+<div class="page">
+
+  <div class="page-hero">
+    <div class="page-hero__inner">
+      <div class="page-hero__title">
+        <div class="hero-icon"><mat-icon>account_circle</mat-icon></div>
+        <div>
+          <h2>My Profile</h2>
+          <p>Update your password and contact information</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="page-body">
+    <div class="loading-wrap" *ngIf="loading">
+      <mat-spinner diameter="40"></mat-spinner>
+    </div>
+
+    <div class="profile-layout" *ngIf="!loading">
+
+      <!-- Left: identity card (read-only) -->
+      <div class="identity-card">
+        <div class="identity-avatar">{{ initials() }}</div>
+        <div class="identity-name">{{ profile.username }}</div>
+        <div class="identity-email">{{ profile.email }}</div>
+        <div class="identity-badge">{{ profile.role === 'ROLE_ADMIN' ? 'Admin' : 'User' }}</div>
+
+        <div class="identity-meta" *ngIf="profile.profession">
+          <mat-icon>work</mat-icon> {{ profile.profession }}
+        </div>
+        <div class="identity-meta" *ngIf="profile.ministryCode">
+          <mat-icon>business</mat-icon> {{ profile.ministryCode }}
+        </div>
+      </div>
+
+      <!-- Right: editable form -->
+      <div class="profile-form-card">
+
+        <div class="alert-success" *ngIf="success">
+          <mat-icon>check_circle</mat-icon> {{ success }}
+        </div>
+        <div class="alert-error" *ngIf="error">{{ error }}</div>
+
+        <!-- Phone -->
+        <div class="form-section">
+          <h3 class="form-section__title">Contact</h3>
+          <div class="field-group">
+            <label class="field-label">Phone number</label>
+            <input class="field-input" [(ngModel)]="form.phone"
+                   placeholder="+216 XX XXX XXX" autocomplete="tel" />
+          </div>
+        </div>
+
+        <!-- Password -->
+        <div class="form-section">
+          <h3 class="form-section__title">Change password</h3>
+          <p class="form-section__hint">Leave blank to keep your current password.</p>
+
+          <div class="field-group">
+            <label class="field-label">New password <span class="field-hint">(min. 6 characters)</span></label>
+            <div class="pwd-wrap">
+              <input class="field-input" [(ngModel)]="form.newPassword"
+                     [type]="showNewPwd ? 'text' : 'password'"
+                     autocomplete="new-password" placeholder="••••••••" />
+              <button class="pwd-eye" type="button" (click)="showNewPwd = !showNewPwd">
+                <mat-icon>{{ showNewPwd ? 'visibility_off' : 'visibility' }}</mat-icon>
+              </button>
+            </div>
+          </div>
+
+          <div class="field-group">
+            <label class="field-label">Confirm new password</label>
+            <input class="field-input" [(ngModel)]="form.confirmPassword"
+                   type="password" autocomplete="new-password" placeholder="••••••••" />
+            <span class="field-hint field-hint--warn"
+                  *ngIf="form.confirmPassword && form.newPassword !== form.confirmPassword">
+              Passwords do not match
+            </span>
+          </div>
+        </div>
+
+        <div class="form-actions">
+          <button mat-raised-button color="primary" (click)="save()" [disabled]="saving">
+            <mat-icon>save</mat-icon>
+            {{ saving ? 'Saving…' : 'Save changes' }}
+          </button>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>

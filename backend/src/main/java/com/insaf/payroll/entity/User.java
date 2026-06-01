@@ -37,6 +37,9 @@ public class User {
     @Column(nullable = false)
     private boolean enabled = true;
 
+    @Column(name = "password_changed", nullable = false)
+    private boolean passwordChanged = false;
+
     public Long getId()                        { return id; }
     public void setId(Long id)                 { this.id = id; }
     public String getUsername()                { return username; }
@@ -57,4 +60,6 @@ public class User {
     public void setProfilePhoto(String p)      { this.profilePhoto = p; }
     public boolean isEnabled()                 { return enabled; }
     public void setEnabled(boolean e)          { this.enabled = e; }
+    public boolean isPasswordChanged()         { return passwordChanged; }
+    public void setPasswordChanged(boolean p)  { this.passwordChanged = p; }
 }

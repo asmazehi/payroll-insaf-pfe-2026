@@ -17,9 +17,10 @@ export class AuthService {
       tap((res: any) => {
         localStorage.setItem(this.TOKEN_KEY, res.token);
         localStorage.setItem(this.USER_KEY, JSON.stringify({
-          username: res.username,
-          role: res.role,
-          ministryCode: res.ministryCode ?? null
+          username:        res.username,
+          role:            res.role,
+          ministryCode:    res.ministryCode    ?? null,
+          passwordChanged: res.passwordChanged ?? false
         }));
         this.loggedIn$.next(true);
       })
@@ -37,12 +38,25 @@ export class AuthService {
   isLoggedIn(): Observable<boolean>  { return this.loggedIn$.asObservable(); }
   hasToken(): boolean                { return !!localStorage.getItem(this.TOKEN_KEY); }
 
-  getCurrentUser(): { username: string; role: string; ministryCode: string | null } | null {
+  getCurrentUser(): { username: string; role: string; ministryCode: string | null; passwordChanged: boolean } | null {
     const raw = localStorage.getItem(this.USER_KEY);
     return raw ? JSON.parse(raw) : null;
   }
 
   isAdmin(): boolean {
     return this.getCurrentUser()?.role === 'ROLE_ADMIN';
+  }
+
+  needsPasswordChange(): boolean {
+    const u = this.getCurrentUser();
+    return !!u && u.role !== 'ROLE_ADMIN' && !u.passwordChanged;
+  }
+
+  markPasswordChanged(): void {
+    const u = this.getCurrentUser();
+    if (u) {
+      u.passwordChanged = true;
+      localStorage.setItem(this.USER_KEY, JSON.stringify(u));
+    }
   }
 }
