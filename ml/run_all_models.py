@@ -14,7 +14,7 @@ from pathlib import Path
 MODELS_DIR = Path(__file__).resolve().parent / "models"
 
 
-if __name__ == "__main__":
+def main():
     print("\n" + "=" * 60)
     print("INSAF ML Pipeline — Model 1 + Model 4")
     print("=" * 60 + "\n")
@@ -40,3 +40,7 @@ if __name__ == "__main__":
         encoding="utf-8",
     )
     print("\n\nAll models trained. Summary saved to ml/models/all_results.json")
+
+
+if __name__ == "__main__":
+    main()
