@@ -471,7 +471,8 @@ def _assign_ministry_by_keywords(cur) -> None:
             ex_and = " AND ".join(f"NOT ({e})" for e in exclusions)
             where += f" AND {ex_and}"
 
-        cur.execute(f"UPDATE dw.dim_etablissement SET codtutel = %s WHERE {where}", (ministry,))
+        where_escaped = where.replace("%", "%%")
+        cur.execute(f"UPDATE dw.dim_etablissement SET codtutel = %s WHERE {where_escaped}", (ministry,))
         if cur.rowcount:
             total += cur.rowcount
 

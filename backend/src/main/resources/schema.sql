@@ -88,6 +88,9 @@ GROUP BY fp.codetab, dt.year_num, dt.month_num, dt.month_start_date;
 
 CREATE INDEX IF NOT EXISTS idx_mv_ministry_codetab  ON dw.mv_ministry_details (codetab);
 CREATE INDEX IF NOT EXISTS idx_mv_ministry_year     ON dw.mv_ministry_details (codetab, year_num);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_mv_ministry_details_uq    ON dw.mv_ministry_details  (codetab, year_num, month_num);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_mv_payroll_by_month_uq    ON dw.mv_payroll_by_month  (year_num, month_num);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_mv_grade_distribution_uq  ON dw.mv_grade_distribution (grade_code);
 CREATE INDEX IF NOT EXISTS idx_fact_paie_codetab    ON dw.fact_paie (codetab);
 CREATE INDEX IF NOT EXISTS idx_fact_paie_grade_tab  ON dw.fact_paie (codetab, grade_sk) WHERE m_netpay IS NOT NULL;
 

@@ -21,6 +21,7 @@ from __future__ import annotations
 import argparse
 import sys
 import uuid
+from pathlib import Path
 
 from etl.core.logger import get_logger
 from etl.pipeline_paie  import run as run_paie
@@ -36,6 +37,10 @@ def main():
                         help="Skip ETL and go straight to DB load (reuse existing JSONL)")
     parser.add_argument("--retrain-ml", action="store_true",
                         help="Retrain all ML models after loading new data into the DW")
+    parser.add_argument("--limit",      type=int, default=None,
+                        help="Stop each pipeline after N rows (test mode)")
+    parser.add_argument("--out-dir",    type=Path, default=None,
+                        help="Write clean JSONL to this directory instead of data/clean/")
     args = parser.parse_args()
 
     run_id = uuid.uuid4().hex[:8]
@@ -49,7 +54,7 @@ def main():
     if not args.skip_etl:
         log.info("Step 1/3 — DW1 ETL (payroll)...")
         try:
-            report_paie = run_paie(run_id=run_id)
+            report_paie = run_paie(run_id=run_id, limit=args.limit, out_dir=args.out_dir)
             qg = report_paie["quality_gate"]
             if "FAIL" in qg["status"] and not qg["status"].startswith("PASS"):
                 log.error("DW1 quality gate FAILED — aborting. Errors: %s", qg["errors"])
@@ -62,7 +67,7 @@ def main():
 
         log.info("Step 2/3 — DW2 ETL (indemnities)...")
         try:
-            report_indem = run_indem(run_id=run_id)
+            report_indem = run_indem(run_id=run_id, limit=args.limit, out_dir=args.out_dir)
             qg = report_indem["quality_gate"]
             if "FAIL" in qg["status"] and not qg["status"].startswith("PASS"):
                 log.error("DW2 quality gate FAILED — aborting. Errors: %s", qg["errors"])
@@ -78,7 +83,7 @@ def main():
     # ── Step 3: DB load ───────────────────────────────────────────────────────
     log.info("Step 3/3 — Loading into PostgreSQL...")
     try:
-        load_dw(reset=args.reset)
+        load_dw(reset=args.reset, clean_dir=args.out_dir)
     except Exception as exc:
         log.error("DB load failed: %s", exc)
         sys.exit(2)
