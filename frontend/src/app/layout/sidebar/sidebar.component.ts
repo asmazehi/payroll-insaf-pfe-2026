@@ -17,7 +17,7 @@ export class SidebarComponent {
 
   coreNav: NavItem[] = [
     { label: 'nav.overview',  icon: 'grid_view',     route: '/dashboard' },
-    { label: 'nav.reports',   icon: 'bar_chart',     route: '/reports' },
+    { label: 'nav.reports',   icon: 'bar_chart',     route: '/reports',  roles: ['ROLE_ADMIN'] },
     { label: 'nav.forecast',  icon: 'trending_up',   route: '/forecast' },
     { label: 'nav.anomalies', icon: 'warning_amber', route: '/anomalies' },
     { label: 'nav.assistant', icon: 'smart_toy',     route: '/chatbot' },
