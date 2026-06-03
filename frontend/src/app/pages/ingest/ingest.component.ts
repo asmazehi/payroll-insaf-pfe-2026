@@ -1,5 +1,6 @@
 import { Component, ElementRef, NgZone, OnDestroy, ViewChild } from '@angular/core';
 import { HttpClient, HttpEventType, HttpRequest } from '@angular/common/http';
+import { environment } from '../../../environments/environment';
 
 interface PipelineProgress {
   stage: string;
@@ -44,7 +45,7 @@ const API_STAGE_ORDER = ['saved', 'etl_start', 'etl', 'quality_gate', 'dw_dims',
 export class IngestComponent implements OnDestroy {
   @ViewChild('fileInput') fileInputRef!: ElementRef<HTMLInputElement>;
 
-  private readonly ML_API = 'http://localhost:8000';
+  private readonly ML_API = environment.mlUrl;
 
   // Mode: 'upload' or 'path'
   mode: 'upload' | 'path' = 'path';
