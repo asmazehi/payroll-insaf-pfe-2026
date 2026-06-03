@@ -2,6 +2,17 @@
   "buildCommand": "npm run build -- --configuration production",
   "outputDirectory": "dist/frontend",
   "rewrites": [
-    { "source": "/(.*)", "destination": "/index.html" }
+    {
+      "source": "/api/:path*",
+      "destination": "https://insaf-backend.loca.lt/api/:path*"
+    },
+    {
+      "source": "/ml/:path*",
+      "destination": "https://insaf-ml.loca.lt/:path*"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
   ]
 }
