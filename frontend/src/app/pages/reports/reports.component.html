@@ -1,0 +1,37 @@
+<div class="page">
+  <div class="page__header">
+    <div class="page__title-group">
+      <div class="page__eyebrow">
+        <mat-icon>bar_chart</mat-icon>
+        <span>ANALYTIQUE</span>
+      </div>
+      <h1 class="page__title">Tableaux de Bord <span class="accent">Power BI</span></h1>
+      <p class="page__sub">Intelligence salariale interactive — données en temps réel</p>
+    </div>
+    <a class="open-btn" [href]="EMBED_URL" target="_blank" rel="noopener">
+      <mat-icon>open_in_new</mat-icon> Ouvrir dans Power BI
+    </a>
+  </div>
+
+  <div class="pbi-wrapper">
+    <iframe
+      [src]="safeUrl"
+      class="pbi-frame"
+      frameborder="0"
+      allowFullScreen="true"
+      title="Power BI Report">
+    </iframe>
+
+    <!-- Placeholder shown when EMBED_URL is not configured -->
+    <div class="pbi-placeholder" *ngIf="EMBED_URL.includes('YOUR_REPORT_ID')">
+      <div class="placeholder-icon"><mat-icon>bar_chart</mat-icon></div>
+      <h3>{{ 'reports.not_configured' | translate }}</h3>
+      <p>{{ 'reports.not_conf_hint' | translate }}</p>
+      <div class="placeholder-steps">
+        <div class="step"><span>1</span> {{ 'reports.step1' | translate }}</div>
+        <div class="step"><span>2</span> {{ 'reports.step2' | translate }}</div>
+        <div class="step"><span>3</span> {{ 'reports.step3' | translate }}</div>
+      </div>
+    </div>
+  </div>
+</div>
