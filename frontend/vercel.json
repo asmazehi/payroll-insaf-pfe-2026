@@ -1,0 +1,7 @@
+{
+  "buildCommand": "npm run build -- --configuration production",
+  "outputDirectory": "dist/frontend",
+  "rewrites": [
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
+}
