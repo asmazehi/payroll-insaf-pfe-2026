@@ -120,6 +120,8 @@ export class LoginComponent implements OnInit {
         if (status === 429) {
           this.locked = true;
           this.error  = err?.error?.error || 'Account temporarily locked. Try again later.';
+        } else if (status === 0 || status === 503 || status === 502) {
+          this.error = 'Server unreachable. Please try again in a few seconds.';
         } else {
           this.error = 'Invalid username or password.';
         }

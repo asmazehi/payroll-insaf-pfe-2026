@@ -4,11 +4,11 @@
   "rewrites": [
     {
       "source": "/api/:path*",
-      "destination": "https://insaf-backend.loca.lt/api/:path*"
+      "destination": "https://monitors-graduate-sink-receive.trycloudflare.com/api/:path*"
     },
     {
       "source": "/ml/:path*",
-      "destination": "https://insaf-ml.loca.lt/:path*"
+      "destination": "https://instead-broker-provide-forecast.trycloudflare.com/:path*"
     },
     {
       "source": "/(.*)",
