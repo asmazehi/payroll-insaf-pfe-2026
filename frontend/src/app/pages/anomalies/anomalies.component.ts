@@ -81,27 +81,58 @@ export class AnomaliesComponent implements OnInit, OnDestroy {
     return r != null ? r.toFixed(2) + '%' : '—';
   }
 
-  reviewing = false;
-  reviewNotes = '';
-  showMetrics = false;
-  hideReviewed = false;
-  reviewFilter: string | null = null;  // 'LEGITIMATE' | 'ERROR' | 'INVESTIGATING' | null
+  reviewing    = false;
+  dismissing   = false;
+  reviewNotes  = '';
+  showMetrics  = false;
+  hideReviewed = true;
+  reviewFilter: string | null = null;
+  groupByEmployee = false;
+  dismissToast = false;
+
+  // Search
+  searchEmployee = '';
+  searchMinistry = '';
+  searchGrade    = '';
+
+  // Dismissed list
+  dismissedList: any[]    = [];
+  loadingDismissed        = false;
+  showDismissedTab        = false;
+
+  private _rowFor(s: any): any {
+    return this.result?.anomalies?.find((r: any) =>
+      r.employee_sk === s.employee_sk &&
+      r.year_num    === s.year_num    &&
+      r.month_num   === s.month_num);
+  }
 
   submitReview(status: string): void {
     if (!this.selected) return;
     this.reviewing = true;
     this.ml.submitReview(
-      this.selected.employee_sk,
-      this.selected.year_num,
-      this.selected.month_num,
-      status,
-      this.reviewNotes
+      this.selected.employee_sk, this.selected.year_num, this.selected.month_num,
+      status, this.reviewNotes
     ).subscribe({
       next: () => {
-        this.selected.review_status = status;
+        const oldStatus: string | null = this.selected.review_status ?? null;
+        const row = this._rowFor(this.selected);
+        if (row) { row.review_status = status; row.review_notes = this.reviewNotes; }
+        this.selected = { ...this.selected, review_status: status, review_notes: this.reviewNotes };
+
+        // Update counts so pills and the "À examiner" badge reflect immediately
+        if (this.result) {
+          const stats = { ...this.result.review_stats };
+          if (oldStatus && stats[oldStatus] != null) stats[oldStatus] = Math.max(0, stats[oldStatus] - 1);
+          stats[status] = (stats[status] ?? 0) + 1;
+          const wasUnreviewed = !oldStatus;
+          this.result = {
+            ...this.result,
+            review_stats: stats,
+            unreviewed: wasUnreviewed ? Math.max(0, (this.result.unreviewed ?? 0) - 1) : this.result.unreviewed,
+          };
+        }
         this.reviewing = false;
-        this.reviewNotes = '';
-        this.loadAnomalies();
       },
       error: () => { this.reviewing = false; }
     });
@@ -111,9 +142,63 @@ export class AnomaliesComponent implements OnInit, OnDestroy {
     if (!this.selected) return;
     this.ml.removeReview(this.selected.employee_sk, this.selected.year_num, this.selected.month_num)
       .subscribe({
-        next: () => { this.selected.review_status = null; this.loadAnomalies(); },
+        next: () => {
+          const oldStatus: string | null = this.selected.review_status ?? null;
+          const row = this._rowFor(this.selected);
+          if (row) row.review_status = null;
+          this.selected = { ...this.selected, review_status: null };
+
+          // Update counts
+          if (this.result && oldStatus) {
+            const stats = { ...this.result.review_stats };
+            if (stats[oldStatus] != null) stats[oldStatus] = Math.max(0, stats[oldStatus] - 1);
+            this.result = {
+              ...this.result,
+              review_stats: stats,
+              unreviewed: (this.result.unreviewed ?? 0) + 1,
+            };
+          }
+        },
         error: () => {}
       });
+  }
+
+  dismissAnomaly(): void {
+    if (!this.selected) return;
+    this.dismissing = true;
+    this.ml.dismissAnomaly(this.selected.employee_sk, this.selected.year_num, this.selected.month_num)
+      .subscribe({
+        next: () => {
+          // Remove from list — dismissed anomalies are hidden
+          if (this.result?.anomalies) {
+            this.result.anomalies = this.result.anomalies.filter(
+              (r: any) => !(r.employee_sk === this.selected.employee_sk &&
+                            r.year_num    === this.selected.year_num    &&
+                            r.month_num   === this.selected.month_num)
+            );
+          }
+          this.dismissing = false;
+          this.dismissToast = true;
+          setTimeout(() => this.dismissToast = false, 5000);
+          this.closeDetail();
+        },
+        error: () => { this.dismissing = false; }
+      });
+  }
+
+  // ── Group by employee ────────────────────────────────────────────
+
+  get employeeGroups(): { empSk: number; rows: any[] }[] {
+    const rows = this.filtered;
+    const map = new Map<number, any[]>();
+    for (const r of rows) {
+      const key = r.employee_sk;
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push(r);
+    }
+    return Array.from(map.entries())
+      .map(([empSk, rows]) => ({ empSk, rows }))
+      .sort((a, b) => b.rows.length - a.rows.length);
   }
 
   // Whether the CSV has been retrained with the new columns
@@ -128,10 +213,63 @@ export class AnomaliesComponent implements OnInit, OnDestroy {
     let rows: any[] = this.result?.anomalies || [];
     if (this.reviewFilter)  return rows.filter(r => r.review_status === this.reviewFilter);
     if (this.hideReviewed)  rows = rows.filter(r => !r.review_status);
-    if (this.filter === 'high')   return rows.filter(r => this.severity(r) === 'high');
-    if (this.filter === 'medium') return rows.filter(r => this.severity(r) === 'medium');
-    if (this.filter === 'low')    return rows.filter(r => this.severity(r) === 'low');
+    if (this.filter === 'high')   rows = rows.filter(r => this.severity(r) === 'high');
+    if (this.filter === 'medium') rows = rows.filter(r => this.severity(r) === 'medium');
+    if (this.filter === 'low')    rows = rows.filter(r => this.severity(r) === 'low');
+    if (this.searchEmployee.trim()) {
+      const q = this.searchEmployee.trim().toLowerCase();
+      rows = rows.filter(r => String(r.employee_sk).includes(q));
+    }
+    if (this.searchMinistry.trim()) {
+      const q = this.searchMinistry.trim().toLowerCase();
+      rows = rows.filter(r => (r.ministry_code ?? '').toLowerCase().includes(q));
+    }
+    if (this.searchGrade.trim()) {
+      const q = this.searchGrade.trim().toLowerCase();
+      rows = rows.filter(r => (r.grade_code ?? '').toLowerCase().includes(q));
+    }
     return rows;
+  }
+
+  clearSearch(): void {
+    this.searchEmployee = '';
+    this.searchMinistry = '';
+    this.searchGrade    = '';
+  }
+
+  // ── Dismissed tab ────────────────────────────────────────────────
+
+  openDismissedTab(): void {
+    this.showDismissedTab = true;
+    this.loadingDismissed = true;
+    this.ml.getDismissed().subscribe({
+      next: (list: any) => { this.dismissedList = list; this.loadingDismissed = false; },
+      error: () => { this.loadingDismissed = false; }
+    });
+  }
+
+  restoreAnomaly(r: any): void {
+    this.ml.restoreAnomaly(r.employeeSk, r.yearNum, r.monthNum).subscribe({
+      next: () => {
+        this.dismissedList = this.dismissedList.filter(d => d !== r);
+        // Add back to main anomalies list with the review status
+        if (this.result?.anomalies) {
+          this.result.anomalies.push({
+            employee_sk:   r.employeeSk,
+            year_num:      r.yearNum,
+            month_num:     r.monthNum,
+            review_status: r.status,
+          });
+        }
+      },
+      error: () => {}
+    });
+  }
+
+  daysLeft(dismissedAt: string): number {
+    const d = new Date(dismissedAt);
+    const diff = 10 - Math.floor((Date.now() - d.getTime()) / 86400000);
+    return Math.max(0, diff);
   }
 
   setReviewFilter(status: string): void {

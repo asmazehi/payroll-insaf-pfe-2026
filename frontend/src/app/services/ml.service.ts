@@ -42,7 +42,7 @@ export class MlService {
     const user         = this.auth.getCurrentUser();
     const ministry_code = (!user || user.role === 'ROLE_ADMIN') ? null : (user.ministryCode ?? null);
     const token        = localStorage.getItem('insaf_token') ?? '';
-    const body         = JSON.stringify({ question, history, ministry_code, model: 'llama3.2' });
+    const body         = JSON.stringify({ question, history, ministry_code, model: 'llama3.2:1b' });
 
     return new Observable(observer => {
       fetch(`${this.base}/chat/stream`, {
@@ -87,5 +87,19 @@ export class MlService {
   removeReview(employeeSk: number, yearNum: number, monthNum: number): Observable<any> {
     return this.http.delete(`${environment.apiUrl}/anomalies/reviews`,
       { body: { employee_sk: employeeSk, year_num: yearNum, month_num: monthNum } });
+  }
+
+  dismissAnomaly(employeeSk: number, yearNum: number, monthNum: number): Observable<any> {
+    return this.http.post(`${environment.apiUrl}/anomalies/reviews/dismiss`,
+      { employee_sk: employeeSk, year_num: yearNum, month_num: monthNum });
+  }
+
+  restoreAnomaly(employeeSk: number, yearNum: number, monthNum: number): Observable<any> {
+    return this.http.post(`${environment.apiUrl}/anomalies/reviews/restore`,
+      { employee_sk: employeeSk, year_num: yearNum, month_num: monthNum });
+  }
+
+  getDismissed(): Observable<any> {
+    return this.http.get(`${environment.apiUrl}/anomalies/reviews/dismissed`);
   }
 }

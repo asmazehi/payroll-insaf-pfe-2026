@@ -56,6 +56,13 @@
     </div>
   </div>
 
+  <!-- Dismiss confirmation toast -->
+  <div class="dismiss-toast" *ngIf="dismissToast">
+    <mat-icon>archive</mat-icon>
+    Anomaly dismissed — stored for 10 days then permanently removed.
+    <button class="toast-close" (click)="dismissToast=false"><mat-icon>close</mat-icon></button>
+  </div>
+
   <div class="loading-overlay" *ngIf="loading">
     <div class="spinner"></div><span>{{ 'anomalies.loading' | translate }}</span>
   </div>
@@ -176,19 +183,74 @@
 
     <!-- Tab strip -->
     <div class="tab-strip">
-      <button class="tab-btn" [class.active]="activeTab===0" (click)="activeTab=0">
+      <button class="tab-btn" [class.active]="activeTab===0 && !showDismissedTab" (click)="activeTab=0;showDismissedTab=false">
         <mat-icon>list_alt</mat-icon>{{ 'anomalies.tab_records' | translate }}
       </button>
-      <button class="tab-btn" [class.active]="activeTab===1" (click)="activeTab=1">
+      <button class="tab-btn" [class.active]="activeTab===1 && !showDismissedTab" (click)="activeTab=1;showDismissedTab=false">
         <mat-icon>account_balance</mat-icon>{{ 'anomalies.tab_ministry' | translate }}
       </button>
-      <button class="tab-btn" [class.active]="activeTab===2" (click)="activeTab=2">
+      <button class="tab-btn" [class.active]="activeTab===2 && !showDismissedTab" (click)="activeTab=2;showDismissedTab=false">
         <mat-icon>badge</mat-icon>{{ 'anomalies.tab_grade' | translate }}
+      </button>
+      <button class="tab-btn tab-btn--dismissed" [class.active]="showDismissedTab" (click)="openDismissedTab()">
+        <mat-icon>archive</mat-icon>Dismissed
+        <span class="dismissed-badge" *ngIf="dismissedList.length > 0">{{ dismissedList.length }}</span>
       </button>
     </div>
 
+    <!-- ══ Dismissed tab ════════════════════════════════════════════ -->
+    <ng-container *ngIf="showDismissedTab">
+      <div class="chart-card">
+        <div class="section-header">
+          <h3><mat-icon>archive</mat-icon> Dismissed Anomalies</h3>
+          <span class="section-sub">Stored for 10 days — click Restore to bring one back.</span>
+        </div>
+        <div class="loading-inline" *ngIf="loadingDismissed">
+          <div class="spinner-sm"></div><span>Loading...</span>
+        </div>
+        <div *ngIf="!loadingDismissed && dismissedList.length === 0" class="dismissed-empty">
+          <mat-icon>check_circle_outline</mat-icon>
+          No dismissed anomalies.
+        </div>
+        <div class="table-container" *ngIf="!loadingDismissed && dismissedList.length > 0">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Employee SK</th><th>Period</th><th>Status</th><th>Dismissed</th><th>Days left</th><th></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let r of dismissedList">
+                <td><code class="emp-id">{{ r.employeeSk }}</code></td>
+                <td>{{ r.yearNum }}/{{ r.monthNum | number:'2.0-0' }}</td>
+                <td>
+                  <span class="rev-chip"
+                    [class.rev-chip--ok]="r.status==='LEGITIMATE'"
+                    [class.rev-chip--err]="r.status==='ERROR'"
+                    [class.rev-chip--inv]="r.status==='INVESTIGATING'">
+                    {{ r.status | titlecase }}
+                  </span>
+                </td>
+                <td class="text-muted">{{ r.dismissedAt | date:'MMM d, y' }}</td>
+                <td>
+                  <span class="days-left" [class.days-left--urgent]="daysLeft(r.dismissedAt) <= 2">
+                    {{ daysLeft(r.dismissedAt) }}d
+                  </span>
+                </td>
+                <td>
+                  <button class="review-btn review-btn--ok" style="padding:4px 10px;font-size:.78rem" (click)="restoreAnomaly(r)">
+                    <mat-icon>undo</mat-icon> Restore
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </ng-container>
+
     <!-- ══ TAB 0: Records ══════════════════════════════════════════ -->
-    <ng-container *ngIf="activeTab===0">
+    <ng-container *ngIf="activeTab===0 && !showDismissedTab">
 
       <!-- Filter bar -->
       <div class="chart-card" style="padding:14px 24px;margin-bottom:18px">
@@ -218,8 +280,30 @@
             <mat-icon>{{ hideReviewed ? 'visibility_off' : 'visibility' }}</mat-icon>
             {{ 'anomalies.hide_reviewed' | translate }}
           </button>
+          <!-- Group by employee toggle -->
+          <button class="fpill fpill--group" [class.active]="groupByEmployee" (click)="groupByEmployee=!groupByEmployee">
+            <mat-icon>group</mat-icon>
+            Group by Employee
+          </button>
           <span class="filter-count">{{ filtered.length }} {{ 'anomalies.records_shown' | translate }}</span>
-          <span class="sample-note">{{ 'anomalies.sample_note' | translate : { total: totalAnomalies, records: totalSampledRecords, employees: totalSampledEmployees } }}</span>
+        </div>
+        <!-- Search row -->
+        <div class="search-row">
+          <div class="search-field">
+            <mat-icon>badge</mat-icon>
+            <input type="text" [(ngModel)]="searchEmployee" placeholder="Employee ID" class="search-input">
+          </div>
+          <div class="search-field">
+            <mat-icon>account_balance</mat-icon>
+            <input type="text" [(ngModel)]="searchMinistry" placeholder="Ministry code" class="search-input">
+          </div>
+          <div class="search-field">
+            <mat-icon>school</mat-icon>
+            <input type="text" [(ngModel)]="searchGrade" placeholder="Grade code" class="search-input">
+          </div>
+          <button class="fpill" *ngIf="searchEmployee||searchMinistry||searchGrade" (click)="clearSearch()" title="Clear search">
+            <mat-icon>close</mat-icon> Clear
+          </button>
         </div>
       </div>
 
@@ -255,12 +339,13 @@
                 <th>{{ 'anomalies.col_method' | translate }}</th>
               </tr>
             </thead>
-            <tbody>
+
+            <!-- ── Flat view (default) ── -->
+            <tbody *ngIf="!groupByEmployee">
               <tr *ngFor="let r of filtered" (click)="openDetail(r)"
                   class="clickable-row"
                   [class.row--reviewed]="r.review_status">
                 <td>
-                  <!-- Review status chip replaces severity when reviewed -->
                   <span *ngIf="r.review_status" class="rev-chip"
                         [class.rev-chip--ok]="r.review_status==='LEGITIMATE'"
                         [class.rev-chip--err]="r.review_status==='ERROR'"
@@ -310,13 +395,82 @@
                 </td>
               </tr>
             </tbody>
+
+            <!-- ── Grouped by employee view ── -->
+            <tbody *ngIf="groupByEmployee">
+              <ng-container *ngFor="let group of employeeGroups">
+                <!-- Group header row -->
+                <tr class="group-header-row">
+                  <td colspan="7" [attr.colspan]="hasNewCols ? 11 : 9">
+                    <mat-icon>person</mat-icon>
+                    <strong>Employee {{ group.empSk }}</strong>
+                    <span class="group-count">{{ group.rows.length }} anomal{{ group.rows.length === 1 ? 'y' : 'ies' }}</span>
+                    <span class="group-ministry" *ngIf="group.rows[0]?.ministry_code">· {{ group.rows[0].ministry_code }}</span>
+                  </td>
+                </tr>
+                <!-- Employee's anomaly rows -->
+                <tr *ngFor="let r of group.rows" (click)="openDetail(r)"
+                    class="clickable-row group-child-row"
+                    [class.row--reviewed]="r.review_status">
+                  <td>
+                    <span *ngIf="r.review_status" class="rev-chip"
+                          [class.rev-chip--ok]="r.review_status==='LEGITIMATE'"
+                          [class.rev-chip--err]="r.review_status==='ERROR'"
+                          [class.rev-chip--inv]="r.review_status==='INVESTIGATING'">
+                      <mat-icon>{{ r.review_status==='LEGITIMATE' ? 'check_circle' : r.review_status==='ERROR' ? 'report' : 'search' }}</mat-icon>
+                      {{ r.review_status | titlecase }}
+                    </span>
+                    <span *ngIf="!r.review_status" class="sev-badge"
+                      [class.sev-badge--high]="severity(r)==='high'"
+                      [class.sev-badge--medium]="severity(r)==='medium'"
+                      [class.sev-badge--low]="severity(r)==='low'">
+                      <span class="sev-dot"></span>{{ severityLabel(r) | titlecase }}
+                    </span>
+                  </td>
+                  <td><code class="emp-id">{{ r.employee_sk }}</code></td>
+                  <td>{{ r.grade_code || '—' }}</td>
+                  <td class="ministry-cell">{{ r.ministry_code || '—' }}</td>
+                  <td>{{ r.year_num }}/{{ r.month_num | number:'2.0-0' }}</td>
+                  <td><strong>{{ fmt(r.m_netpay) }}</strong></td>
+                  <td class="text-muted">{{ fmt(r.emp_mean) }}</td>
+                  <td>
+                    <span class="z-score-val"
+                      [class.z-high]="abs(r.z_score)>=3.5"
+                      [class.z-med]="abs(r.z_score)>=2.5 && abs(r.z_score)<3.5">
+                      {{ (r.z_score ?? r.anomaly_score) | number:'1.2-2' }}
+                    </span>
+                  </td>
+                  <td *ngIf="hasNewCols">
+                    <span class="z-score-val"
+                      [class.z-high]="r.rolling_z != null && abs(r.rolling_z)>=3.5"
+                      [class.z-med]="r.rolling_z != null && abs(r.rolling_z)>=2.5 && abs(r.rolling_z)<3.5">
+                      {{ r.rolling_z != null ? (r.rolling_z | number:'1.2-2') : '—' }}
+                    </span>
+                  </td>
+                  <td *ngIf="hasNewCols">
+                    <span [class.pct-up]="r.pct_change_vs_prev > 0"
+                          [class.pct-down]="r.pct_change_vs_prev < 0">
+                      {{ fmtPct(r.pct_change_vs_prev) }}
+                    </span>
+                  </td>
+                  <td>
+                    <span class="method-badge"
+                      [class.method-zscore]="r.detection_method === 'Z-score'"
+                      [class.method-both]="r.detection_method?.includes('+')">
+                      {{ r.detection_method || 'Z-score' }}
+                    </span>
+                  </td>
+                </tr>
+              </ng-container>
+            </tbody>
+
           </table>
         </div>
       </div>
     </ng-container>
 
     <!-- ══ TAB 1: By Ministry ══════════════════════════════════════ -->
-    <ng-container *ngIf="activeTab===1">
+    <ng-container *ngIf="activeTab===1 && !showDismissedTab">
       <div class="chart-card">
         <div class="section-header">
           <h3>{{ 'anomalies.tab_ministry' | translate }}</h3>
@@ -362,7 +516,7 @@
     </ng-container>
 
     <!-- ══ TAB 2: By Grade ═════════════════════════════════════════ -->
-    <ng-container *ngIf="activeTab===2">
+    <ng-container *ngIf="activeTab===2 && !showDismissedTab">
       <div class="chart-card">
         <div class="section-header">
           <h3>{{ 'anomalies.tab_grade' | translate }}</h3>
@@ -583,20 +737,32 @@
                   placeholder="{{ 'anomalies.review_notes_ph' | translate }}" rows="2"></textarea>
 
         <div class="review-actions">
-          <button class="review-btn review-btn--ok"  (click)="submitReview('LEGITIMATE')"   [disabled]="reviewing"
+          <button class="review-btn review-btn--ok"  (click)="submitReview('LEGITIMATE')"   [disabled]="reviewing || dismissing"
                   [class.review-btn--active]="selected.review_status === 'LEGITIMATE'">
             <mat-icon>check_circle</mat-icon> {{ 'anomalies.review_ok' | translate }}
           </button>
-          <button class="review-btn review-btn--err"  (click)="submitReview('ERROR')"         [disabled]="reviewing"
+          <button class="review-btn review-btn--err"  (click)="submitReview('ERROR')"         [disabled]="reviewing || dismissing"
                   [class.review-btn--active]="selected.review_status === 'ERROR'">
             <mat-icon>report</mat-icon> {{ 'anomalies.review_error' | translate }}
           </button>
-          <button class="review-btn review-btn--inv"  (click)="submitReview('INVESTIGATING')" [disabled]="reviewing"
+          <button class="review-btn review-btn--inv"  (click)="submitReview('INVESTIGATING')" [disabled]="reviewing || dismissing"
                   [class.review-btn--active]="selected.review_status === 'INVESTIGATING'">
             <mat-icon>search</mat-icon> {{ 'anomalies.review_investigate' | translate }}
           </button>
-          <button class="review-btn review-btn--clear" *ngIf="selected.review_status" (click)="clearReview()" [disabled]="reviewing">
+          <button class="review-btn review-btn--clear" *ngIf="selected.review_status" (click)="clearReview()" [disabled]="reviewing || dismissing">
             <mat-icon>undo</mat-icon>
+          </button>
+        </div>
+
+        <!-- Dismiss section — only shown once the anomaly has been examined -->
+        <div class="dismiss-section" *ngIf="selected.review_status">
+          <div class="dismiss-divider">
+            <span>Satisfied with your review?</span>
+          </div>
+          <button class="review-btn review-btn--dismiss" (click)="dismissAnomaly()" [disabled]="reviewing || dismissing">
+            <mat-icon>archive</mat-icon>
+            Dismiss anomaly
+            <span class="dismiss-hint">Hides it for 10 days, then auto-removed</span>
           </button>
         </div>
       </div>

@@ -141,27 +141,38 @@ def _build_ministry_name_map() -> dict[str, str]:
 
 
 def _load_reviews() -> dict:
-    """Load review data from DB as {(emp_sk, year, month): {status, notes, reviewed_by, reviewed_at}}."""
+    """Load review data from DB. Cached for 60s to avoid a DB hit on every anomaly request."""
+    entry = _cache.get("reviews")
+    cached = entry[1] if entry and time.time() - entry[0] < 60 else None
+    if cached is not None:
+        return cached
     try:
         from etl.core.config import DB_CONFIG
         import psycopg2
         with psycopg2.connect(**DB_CONFIG) as conn:
             with conn.cursor() as cur:
                 cur.execute("""
-                    SELECT employee_sk, year_num, month_num, status, notes, reviewed_by, reviewed_at
+                    SELECT employee_sk, year_num, month_num, status, notes, reviewed_by, reviewed_at, dismissed_at
                     FROM public.anomaly_reviews
                 """)
-                return {
+                result = {
                     (int(r[0]), int(r[1]), int(r[2])): {
-                        "status":      r[3],
-                        "notes":       r[4],
-                        "reviewed_by": r[5],
-                        "reviewed_at": str(r[6]) if r[6] else None,
+                        "status":       r[3],
+                        "notes":        r[4],
+                        "reviewed_by":  r[5],
+                        "reviewed_at":  str(r[6]) if r[6] else None,
+                        "dismissed_at": str(r[7]) if r[7] else None,
                     }
                     for r in cur.fetchall()
                 }
     except Exception:
-        return {}
+        result = {}
+    _cache["reviews"] = (time.time(), result)
+    return result
+
+
+def _invalidate_reviews_cache() -> None:
+    _cache.pop("reviews", None)
 
 
 def _load_anomaly_report():
@@ -436,7 +447,7 @@ def _detect_file_type(path: Path) -> str | None:
 
 class ChatRequest(BaseModel):
     question:      str
-    model:         str = "llama3.2"
+    model:         str = "llama3.2:1b"
     history:       list[dict] = []
     ministry_code: Optional[str] = None  # None = admin (no filter), set = user scope
 
@@ -1279,43 +1290,47 @@ def get_anomalies(
 
     # Anomaly rate = anomalies in period / total records in same period
     # Use mv_ministry_details (pre-aggregated) for fast period record count.
-    # When a ministry is specified, expand it to all sub-codetabs via v_ministry_codetabs.
-    try:
-        from etl.core.config import DB_CONFIG
-        import psycopg2
-        with psycopg2.connect(**DB_CONFIG) as _conn:
-            with _conn.cursor() as _cur:
-                if ministry:
-                    codetabs = _resolve_ministry_codetabs(ministry)
-                    placeholders = ",".join(["%s"] * len(codetabs))
-                    if year:
+    _pr_key = f"period_records:{ministry or ''}:{year or ''}:{filter_min_year}"
+    _pr_cached = _cache_get(_pr_key)
+    if _pr_cached is not None:
+        period_records = _pr_cached
+    else:
+        try:
+            from etl.core.config import DB_CONFIG
+            import psycopg2
+            with psycopg2.connect(**DB_CONFIG) as _conn:
+                with _conn.cursor() as _cur:
+                    if ministry:
+                        codetabs = _resolve_ministry_codetabs(ministry)
+                        placeholders = ",".join(["%s"] * len(codetabs))
+                        if year:
+                            _cur.execute(
+                                f"SELECT COALESCE(SUM(record_count),1) FROM dw.mv_ministry_details "
+                                f"WHERE year_num = %s AND codetab IN ({placeholders})",
+                                (year, *codetabs)
+                            )
+                        else:
+                            _cur.execute(
+                                f"SELECT COALESCE(SUM(record_count),1) FROM dw.mv_ministry_details "
+                                f"WHERE year_num >= %s AND codetab IN ({placeholders})",
+                                (filter_min_year, *codetabs)
+                            )
+                    elif year:
                         _cur.execute(
-                            f"SELECT COALESCE(SUM(record_count),1) FROM dw.mv_ministry_details "
-                            f"WHERE year_num = %s AND codetab IN ({placeholders})",
-                            (year, *codetabs)
+                            "SELECT COALESCE(SUM(record_count),1) FROM dw.mv_ministry_details "
+                            "WHERE year_num = %s", (year,)
                         )
                     else:
                         _cur.execute(
-                            f"SELECT COALESCE(SUM(record_count),1) FROM dw.mv_ministry_details "
-                            f"WHERE year_num >= %s AND codetab IN ({placeholders})",
-                            (filter_min_year, *codetabs)
+                            "SELECT COALESCE(SUM(record_count),1) FROM dw.mv_ministry_details "
+                            "WHERE year_num >= %s", (filter_min_year,)
                         )
-                elif year:
-                    _cur.execute(
-                        "SELECT COALESCE(SUM(record_count),1) FROM dw.mv_ministry_details "
-                        "WHERE year_num = %s", (year,)
-                    )
-                else:
-                    _cur.execute(
-                        "SELECT COALESCE(SUM(record_count),1) FROM dw.mv_ministry_details "
-                        "WHERE year_num >= %s", (filter_min_year,)
-                    )
-                period_records = int(_cur.fetchone()[0])
-    except Exception:
-        # Fallback: estimate from year proportion
-        all_years = int(full_df["year_num"].max()) - int(full_df["year_num"].min()) + 1
-        filtered_years = 1 if year else 2
-        period_records = max(int(total_sampled_records * filtered_years / max(all_years, 1)), 1)
+                    period_records = int(_cur.fetchone()[0])
+            _cache_set(_pr_key, period_records)
+        except Exception:
+            all_years = int(full_df["year_num"].max()) - int(full_df["year_num"].min()) + 1
+            filtered_years = 1 if year else 2
+            period_records = max(int(total_sampled_records * filtered_years / max(all_years, 1)), 1)
 
     anomaly_rate_pct = round(total_filtered / period_records * 100, 2)
 
@@ -1336,33 +1351,41 @@ def get_anomalies(
 
     # Load review statuses — vectorized (no iterrows on 374K rows)
     reviews = _load_reviews()
+    # dismissed keys — excluded from the active list
+    dismissed_keys = {k for k, v in reviews.items() if isinstance(v, dict) and v.get("dismissed_at")}
+
     review_stats = {"LEGITIMATE": 0, "ERROR": 0, "INVESTIGATING": 0}
-    for v in reviews.values():
+    for k, v in reviews.items():
+        if k in dismissed_keys:
+            continue  # don't count dismissed in review stats
         s = v["status"] if isinstance(v, dict) else v
         if s in review_stats:
             review_stats[s] += 1
 
     if not reviews:
-        unreviewed = total_filtered          # fast path: nothing reviewed yet
+        unreviewed = total_filtered
     else:
-        reviewed_keys = set(reviews.keys())
+        active_reviewed_keys = set(reviews.keys()) - dismissed_keys
         keys = set(zip(
             df["employee_sk"].astype(int).tolist(),
             df["year_num"].astype(int).tolist(),
             df["month_num"].astype(int).tolist()
         ))
-        unreviewed = total_filtered - len(keys & reviewed_keys)
+        unreviewed = total_filtered - len(keys & active_reviewed_keys) - len(keys & dismissed_keys)
 
-    # Enrich each record with rule-based anomaly diagnosis (in requested language)
-    records = json.loads(result_df.to_json(orient="records"))
-    for rec in records:
-        rec.update(_classify_anomaly(rec, lang=lang))
+    # Enrich each record; skip dismissed anomalies entirely
+    records = []
+    for rec in json.loads(result_df.to_json(orient="records")):
         key = (int(rec.get("employee_sk", 0)), int(rec.get("year_num", 0)), int(rec.get("month_num", 0)))
+        if key in dismissed_keys:
+            continue  # hidden until restored or auto-purged
+        rec.update(_classify_anomaly(rec, lang=lang))
         rev = reviews.get(key)
         rec["review_status"]  = rev["status"]      if rev else None
         rec["review_notes"]   = rev["notes"]        if rev else None
         rec["reviewed_by"]    = rev["reviewed_by"]  if rev else None
         rec["reviewed_at"]    = rev["reviewed_at"]  if rev else None
+        records.append(rec)
 
     return {
         "total_anomalies_in_report": total_filtered,

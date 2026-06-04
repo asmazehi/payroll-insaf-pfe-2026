@@ -24,6 +24,7 @@ public class AnomalyReview {
 
     @Column(name = "reviewed_by", length = 50) private String reviewedBy;
     @Column(name = "reviewed_at") private Instant reviewedAt = Instant.now();
+    @Column(name = "dismissed_at") private Instant dismissedAt;
 
     public Long getId()          { return id; }
     public Long getEmployeeSk()  { return employeeSk; }
@@ -39,4 +40,6 @@ public class AnomalyReview {
     public String getReviewedBy() { return reviewedBy; }
     public void setReviewedBy(String v) { this.reviewedBy = v; }
     public Instant getReviewedAt() { return reviewedAt; }
+    public Instant getDismissedAt() { return dismissedAt; }
+    public void setDismissedAt(Instant v) { this.dismissedAt = v; }
 }

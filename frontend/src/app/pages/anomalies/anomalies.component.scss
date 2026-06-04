@@ -1,3 +1,78 @@
+/* ── Dismiss toast ────────────────────────────────────────────── */
+.dismiss-toast {
+  display: flex; align-items: center; gap: 10px;
+  margin: 0 32px 16px; padding: 12px 18px;
+  background: #1b2a1b; border: 1px solid #2e7d32;
+  border-radius: 10px; color: #81c784; font-size: .84rem; font-weight: 500;
+  animation: pageIn 200ms ease both;
+  mat-icon { font-size: 18px; width: 18px; height: 18px; color: #66bb6a; }
+  .toast-close {
+    margin-left: auto; background: transparent; border: none;
+    color: #66bb6a; cursor: pointer; padding: 2px;
+    mat-icon { font-size: 16px; width: 16px; height: 16px; }
+  }
+}
+
+/* ── Dismiss section in modal ─────────────────────────────────── */
+.dismiss-section {
+  margin-top: 12px; padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+.dismiss-divider {
+  font-size: .75rem; color: var(--t3); margin-bottom: 8px;
+  text-transform: uppercase; letter-spacing: .06em;
+}
+.review-btn--dismiss {
+  display: flex; align-items: center; gap: 7px;
+  width: 100%; padding: 10px 16px;
+  background: rgba(239,83,80,.08); border: 1px solid rgba(239,83,80,.25);
+  border-radius: 8px; color: #ef5350; cursor: pointer;
+  font-size: .84rem; font-weight: 600; transition: background .15s, border-color .15s;
+  mat-icon { font-size: 18px; width: 18px; height: 18px; }
+  .dismiss-hint {
+    margin-left: auto; font-size: .72rem; font-weight: 400; color: var(--t3);
+  }
+  &:hover:not([disabled]) { background: rgba(239,83,80,.15); border-color: rgba(239,83,80,.5); }
+  &[disabled] { opacity: .5; cursor: not-allowed; }
+}
+
+/* ── Search bar ──────────────────────────────────────────────── */
+.search-row {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border);
+}
+.search-field {
+  display: flex; align-items: center; gap: 6px;
+  background: var(--card-bg2, rgba(255,255,255,.04));
+  border: 1px solid var(--border); border-radius: 8px; padding: 5px 10px;
+  mat-icon { font-size: 15px; width: 15px; height: 15px; color: var(--t3); }
+}
+.search-input {
+  background: transparent; border: none; outline: none;
+  color: var(--t1); font-size: .82rem; width: 130px;
+  &::placeholder { color: var(--t3); }
+}
+
+/* ── Dismissed tab ────────────────────────────────────────────── */
+.tab-btn--dismissed { color: #ef9a9a; }
+.tab-btn--dismissed.active { color: #ef5350; border-bottom-color: #ef5350; }
+.dismissed-badge {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 18px; height: 18px; padding: 0 5px;
+  background: #ef5350; border-radius: 9px;
+  font-size: .68rem; font-weight: 700; color: #fff; margin-left: 5px;
+}
+.dismissed-empty {
+  display: flex; align-items: center; gap: 8px; padding: 32px;
+  color: var(--t3); font-size: .9rem;
+  mat-icon { color: #66bb6a; }
+}
+.days-left {
+  display: inline-block; padding: 2px 8px; border-radius: 10px;
+  background: rgba(255,255,255,.06); font-size: .75rem; font-weight: 700; color: var(--t2);
+  &--urgent { background: rgba(239,83,80,.15); color: #ef5350; }
+}
+
 /* ── Metrics hint toggle ─────────────────────────────────────── */
 .metrics-hint {
   display: inline-flex; align-items: center; gap: 7px;
@@ -594,4 +669,43 @@
   background: var(--brand-glow); border: 1px solid var(--brand);
   display: flex; align-items: center; justify-content: center;
   mat-icon { font-size: 16px; width: 16px; height: 16px; color: var(--gold); }
+}
+
+
+// ── Group by employee ─────────────────────────────────────────────
+.group-header-row td {
+  background: var(--bg-surface);
+  border-top: 2px solid var(--border-hi);
+  padding: 8px 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: .8rem;
+  color: var(--t2);
+  mat-icon { font-size: 16px; width: 16px; height: 16px; color: var(--brand); }
+  strong { color: var(--t1); font-weight: 700; }
+}
+.group-count {
+  background: var(--brand-glow);
+  color: var(--brand);
+  border-radius: 20px;
+  padding: 1px 8px;
+  font-size: .72rem;
+  font-weight: 700;
+}
+.group-ministry { color: var(--t3); font-size: .78rem; }
+.group-child-row td:first-child { padding-left: 28px; }
+
+.fpill--group {
+  display: flex; align-items: center; gap: 5px;
+  padding: 5px 12px;
+  border-radius: 20px;
+  border: 1px solid var(--border);
+  background: transparent;
+  cursor: pointer;
+  font-size: .78rem;
+  color: var(--t2);
+  transition: background .15s, color .15s;
+  mat-icon { font-size: 15px; width: 15px; height: 15px; }
+  &:hover, &.active { background: var(--brand-glow); color: var(--brand); border-color: var(--brand); }
 }

@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 import re
+import time
 from difflib import get_close_matches
 from pathlib import Path
 from typing import Any, Optional
@@ -162,7 +163,7 @@ def _get_db_conn():
     return psycopg2.connect(**DB_CONFIG, connect_timeout=10)
 
 
-def _query(sql: str, params: tuple = (), limit: int = 30) -> list[dict]:
+def _query(sql: str, params: tuple = (), limit: int = 12) -> list[dict]:
     with _get_db_conn() as conn:
         with conn.cursor() as cur:
             cur.execute(sql, params)
@@ -722,29 +723,7 @@ def _detect_and_retrieve(question: str, entities: dict,
         if results:
             return "\n\n".join(results)
 
-    # ── Step 2: LLM extraction (only when regex finds nothing) ──────────────────
-    if _ollama_available(model):
-        llm_parsed = _llm_extract(question, model=model)
-        if llm_parsed:
-            merged = dict(entities)
-            for key in ("years", "months", "grade_code", "ministry_code", "employee_sk", "top_n"):
-                if llm_parsed.get(key):
-                    merged[key] = llm_parsed[key]
-
-            results = []
-            for intent_name in llm_parsed.get("intents", [])[:2]:
-                fn = _INTENT_MAP.get(intent_name)
-                if fn:
-                    try:
-                        result = fn(merged, mc=ministry_code)
-                        if result and not result.startswith("["):
-                            results.append(result)
-                    except Exception as exc:
-                        results.append(f"[{intent_name} error: {exc}]")
-            if results:
-                return "\n\n".join(results)
-
-    # ── Final fallback: general stats ────────────────────────────────────────────
+    # ── Final fallback: general stats (no second LLM call — too slow) ───────────
     try:
         return _intent_general_stats(entities, mc=ministry_code)
     except Exception as exc:
@@ -758,16 +737,16 @@ def _detect_and_retrieve(question: str, entities: dict,
 def _ollama_chat(context: str, question: str, history: list[dict],
                  system_prompt: str, model: str = OLLAMA_MODEL) -> str:
     hist_lines = []
-    for turn in history[-4:]:
+    for turn in history[-2:]:
         role = "User" if turn.get("role") == "user" else "Assistant"
-        hist_lines.append(f"{role}: {str(turn.get('text',''))[:300]}")
+        hist_lines.append(f"{role}: {str(turn.get('text',''))[:200]}")
     hist_str = ("\nPrevious conversation:\n" + "\n".join(hist_lines)) if hist_lines else ""
 
     prompt = _build_prompt(system_prompt, hist_str, context, question)
     r = requests.post(
         f"{OLLAMA_BASE}/api/generate",
         json={"model": model, "prompt": prompt, "stream": False,
-              "options": {"temperature": 0.1, "num_predict": 350, "num_ctx": 2048}},
+              "options": {"temperature": 0.1, "num_predict": 220, "num_ctx": 1024}},
         timeout=120,
     )
     r.raise_for_status()
@@ -812,9 +791,9 @@ def chat_stream(question: str, model: str = OLLAMA_MODEL,
 
     system_prompt = _build_system_prompt(ministry_name)
     hist_lines = []
-    for turn in history[-4:]:
+    for turn in history[-2:]:
         role = "User" if turn.get("role") == "user" else "Assistant"
-        hist_lines.append(f"{role}: {str(turn.get('text',''))[:300]}")
+        hist_lines.append(f"{role}: {str(turn.get('text',''))[:200]}")
     hist_str = ("\nPrevious conversation:\n" + "\n".join(hist_lines)) if hist_lines else ""
     prompt = _build_prompt(system_prompt, hist_str, context, question)
 
@@ -826,7 +805,7 @@ def chat_stream(question: str, model: str = OLLAMA_MODEL,
         r = requests.post(
             f"{OLLAMA_BASE}/api/generate",
             json={"model": model, "prompt": prompt, "stream": True,
-                  "options": {"temperature": 0.1, "num_predict": 350, "num_ctx": 2048}},
+                  "options": {"temperature": 0.1, "num_predict": 220, "num_ctx": 1024}},
             stream=True, timeout=120,
         )
         r.raise_for_status()
@@ -844,15 +823,22 @@ def chat_stream(question: str, model: str = OLLAMA_MODEL,
         yield f"data: {_json.dumps({'token': f'Error: {e}', 'done': True, 'entities': entities})}\n\n"
 
 
+_ollama_cache: dict = {}  # {model: (ts, bool)}
+
 def _ollama_available(model: str = OLLAMA_MODEL) -> bool:
+    """Check Ollama availability, cached for 60s to avoid an HTTP call on every request."""
+    entry = _ollama_cache.get(model)
+    if entry and time.time() - entry[0] < 60:
+        return entry[1]
     try:
-        r = requests.get(f"{OLLAMA_BASE}/api/tags", timeout=3)
-        if r.status_code != 200:
-            return False
-        names = [m["name"].split(":")[0] for m in r.json().get("models", [])]
-        return model.split(":")[0] in names
+        r = requests.get(f"{OLLAMA_BASE}/api/tags", timeout=2)
+        result = r.status_code == 200 and model.split(":")[0] in [
+            m["name"].split(":")[0] for m in r.json().get("models", [])
+        ]
     except Exception:
-        return False
+        result = False
+    _ollama_cache[model] = (time.time(), result)
+    return result
 
 
 # ── Public API ───────────────────────────────────────────────────────────────────

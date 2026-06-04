@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS public.users (
 );
 
 ALTER TABLE public.users ADD COLUMN IF NOT EXISTS ministry_code     VARCHAR(10)  DEFAULT NULL;
+ALTER TABLE public.anomaly_reviews ADD COLUMN IF NOT EXISTS dismissed_at TIMESTAMPTZ DEFAULT NULL;
 ALTER TABLE public.users ADD COLUMN IF NOT EXISTS phone            VARCHAR(30)  DEFAULT NULL;
 ALTER TABLE public.users ADD COLUMN IF NOT EXISTS profession       VARCHAR(100) DEFAULT NULL;
 ALTER TABLE public.users ADD COLUMN IF NOT EXISTS profile_photo    TEXT         DEFAULT NULL;
@@ -116,6 +117,6 @@ CREATE OR REPLACE VIEW dw.v_ministry_codetabs AS
 -- Default admin (password: admin123)
 INSERT INTO public.users (username, email, password, role)
 VALUES ('admin', 'admin@insaf.tn',
-        '$2a$10$N.zmdr9k7uOCQb376NoUnuTJ8iAt6Z5EHsM8lE9lBOsl7iKTVKIUi',
+        '$2b$10$h5umgFwMph3tsNUnuO.iSec.9udxqA.cBEY3HVGztMEeAWo60kimW',
         'ROLE_ADMIN')
 ON CONFLICT (username) DO NOTHING;
