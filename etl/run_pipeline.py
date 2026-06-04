@@ -37,10 +37,14 @@ def main():
                         help="Skip ETL and go straight to DB load (reuse existing JSONL)")
     parser.add_argument("--retrain-ml", action="store_true",
                         help="Retrain all ML models after loading new data into the DW")
-    parser.add_argument("--limit",      type=int, default=None,
+    parser.add_argument("--limit",        type=int,  default=None,
                         help="Stop each pipeline after N rows (test mode)")
-    parser.add_argument("--out-dir",    type=Path, default=None,
+    parser.add_argument("--out-dir",      type=Path, default=None,
                         help="Write clean JSONL to this directory instead of data/clean/")
+    parser.add_argument("--source-paie",  type=Path, default=None,
+                        help="Override paie source file (default: data/raw/paie2015.json)")
+    parser.add_argument("--source-indem", type=Path, default=None,
+                        help="Override indem source file (default: data/raw/ind2015.json)")
     args = parser.parse_args()
 
     run_id = uuid.uuid4().hex[:8]
@@ -54,7 +58,9 @@ def main():
     if not args.skip_etl:
         log.info("Step 1/3 — DW1 ETL (payroll)...")
         try:
-            report_paie = run_paie(run_id=run_id, limit=args.limit, out_dir=args.out_dir)
+            report_paie = run_paie(run_id=run_id, limit=args.limit, out_dir=args.out_dir,
+                                   source=args.source_paie) if args.source_paie else \
+                          run_paie(run_id=run_id, limit=args.limit, out_dir=args.out_dir)
             qg = report_paie["quality_gate"]
             if "FAIL" in qg["status"] and not qg["status"].startswith("PASS"):
                 log.error("DW1 quality gate FAILED — aborting. Errors: %s", qg["errors"])
@@ -67,7 +73,9 @@ def main():
 
         log.info("Step 2/3 — DW2 ETL (indemnities)...")
         try:
-            report_indem = run_indem(run_id=run_id, limit=args.limit, out_dir=args.out_dir)
+            report_indem = run_indem(run_id=run_id, limit=args.limit, out_dir=args.out_dir,
+                                    source=args.source_indem) if args.source_indem else \
+                           run_indem(run_id=run_id, limit=args.limit, out_dir=args.out_dir)
             qg = report_indem["quality_gate"]
             if "FAIL" in qg["status"] and not qg["status"].startswith("PASS"):
                 log.error("DW2 quality gate FAILED — aborting. Errors: %s", qg["errors"])
