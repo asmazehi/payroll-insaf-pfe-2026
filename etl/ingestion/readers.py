@@ -28,6 +28,79 @@ log = logging.getLogger(__name__)
 # Files larger than this use ijson streaming instead of full in-memory load
 _LARGE_FILE_THRESHOLD = 50 * 1024 * 1024  # 50 MB
 
+# ── Year-seek index ───────────────────────────────────────────────────────────
+
+def _load_year_index(source: Path) -> dict | None:
+    """Load paie_year_index.json if it exists next to the source file."""
+    idx_path = source.parent / (source.stem + "_year_index.json")
+    if not idx_path.exists():
+        return None
+    try:
+        return json.loads(idx_path.read_text())
+    except Exception:
+        return None
+
+
+class _YearSeekReader:
+    """
+    Presents paie.json to ijson as if it starts from a given year.
+
+    Splices the original JSON header (columns + items array opening bracket)
+    with the file content starting from `seek_byte`, so ijson sees a
+    syntactically complete Oracle JSON file containing only the data from
+    approximately `year_min` onwards.
+    """
+
+    def __init__(self, path: Path, items_start_byte: int, seek_byte: int):
+        # Read header: everything up to and including the '[' that opens items
+        with open(path, "rb") as f:
+            self._header = f.read(items_start_byte + 1)   # +1 includes the '[' itself
+
+        # Align to an item boundary in the actual file data.
+        # Scan backward/forward from seek_byte to find the nearest ',[' sequence
+        # (end of one item, start of the next) so we don't start mid-record.
+        with open(path, "rb") as f:
+            scan_start = max(items_start_byte + 2, seek_byte - 512)
+            f.seek(scan_start)
+            window = f.read(1024)
+
+        # Find the last ',[' in the window — that's the cleanest item boundary
+        boundary = window.rfind(b",[")
+        if boundary != -1:
+            aligned = scan_start + boundary + 1   # position of '[' of next item
+        else:
+            aligned = seek_byte
+
+        self._f = open(path, "rb")
+        self._f.seek(aligned)
+
+        self._header_pos = 0
+        self._serving_header = True
+
+        log.info("YearSeekReader: items_start=%d  seek=%d  aligned=%d  (skipped %.2f GB)",
+                 items_start_byte, seek_byte, aligned, aligned / 1e9)
+
+    def read(self, n: int = -1) -> bytes:
+        if self._serving_header:
+            chunk = self._header[self._header_pos: self._header_pos + n]
+            self._header_pos += len(chunk)
+            remaining = n - len(chunk)
+            if self._header_pos >= len(self._header):
+                self._serving_header = False
+                if remaining > 0:
+                    chunk += self._f.read(remaining)
+            return chunk
+        return self._f.read(n)
+
+    def close(self) -> None:
+        self._f.close()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_):
+        self.close()
+
 
 class _FixedDecimalReader(io.RawIOBase):
     """
@@ -176,7 +249,7 @@ def _repair_comma_decimals(text: str) -> str:
 
 # ── Oracle-format JSON reader ─────────────────────────────────────────────────
 
-def _stream_json_oracle(path: Path) -> Iterator[dict]:
+def _stream_json_oracle(path: Path, **kwargs) -> Iterator[dict]:
     """
     Handle Oracle export flavours:
       A)  {"columns":[...], "items":[[v,v,...], ...]}    — array-of-arrays
@@ -239,8 +312,29 @@ def _stream_json_oracle(path: Path) -> Iterator[dict]:
 
     log.info("Oracle JSON columns (%d): %s…", len(columns), columns[:5])
 
+    # ── Year-seek optimisation ────────────────────────────────────────────────
+    # If a year index exists and a year_min kwarg was passed by the caller,
+    # skip directly to that year's byte offset instead of scanning from byte 0.
+    year_min = kwargs.get("year_min")
+    seek_reader = None
+    if year_min is not None:
+        idx = _load_year_index(path)
+        if idx:
+            offsets = idx.get("year_offsets", {})
+            items_start = idx["_meta"]["items_start_byte"]
+            seek_byte = offsets.get(str(year_min))
+            if seek_byte:
+                log.info("Year index hit: seeking to ~%.2f GB for year %d (skipping %.2f GB)",
+                         seek_byte / 1e9, year_min, seek_byte / 1e9)
+                seek_reader = _YearSeekReader(path, items_start, seek_byte)
+            else:
+                log.info("Year %d not in index — falling back to full scan", year_min)
+        else:
+            log.debug("No year index found for %s — full scan", path.name)
+
     # Pass 2 — stream items one at a time
-    with _FixedDecimalReader(path) as f:
+    reader = seek_reader if seek_reader else _FixedDecimalReader(path)
+    with reader as f:
         for item in ijson.items(f, items_prefix, use_float=True):
             if isinstance(item, dict):
                 rec = {k.lower(): v for k, v in item.items()}
@@ -301,10 +395,11 @@ def _stream_excel(path: Path) -> Iterator[dict]:
 
 # ── Public API ────────────────────────────────────────────────────────────────
 
-def stream_records(path: Path) -> Iterator[dict]:
+def stream_records(path: Path, **kwargs) -> Iterator[dict]:
     """
     Detect format and stream records one dict at a time.
     Works for all INSAF source files.
+    Pass year_min=<int> to use the byte-offset index for Oracle JSON files.
     """
     path = Path(path)
     if not path.exists():
@@ -314,7 +409,7 @@ def stream_records(path: Path) -> Iterator[dict]:
     log.debug("Detected format '%s' for %s", fmt, path.name)
 
     if fmt == "json_oracle":
-        yield from _stream_json_oracle(path)
+        yield from _stream_json_oracle(path, **kwargs)
     elif fmt == "jsonl":
         yield from _stream_jsonl(path)
     elif fmt in ("json_array", "json_object"):

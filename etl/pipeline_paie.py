@@ -103,7 +103,7 @@ def run(source: Path = RAW_PAIE, run_id: str | None = None,
 
     # ── Stream + clean + map ──────────────────────────────────────────────────
     with open(_fact_paie, "w", encoding="utf-8") as fout:
-        for raw in stream_records(source):
+        for raw in stream_records(source, year_min=year_min):
             stats["total_raw"] += 1
 
             # Filter on pa_type
