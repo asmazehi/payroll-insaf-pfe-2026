@@ -109,8 +109,8 @@ def load_individual_payroll(sample_pct: float = 100.0) -> pd.DataFrame:
             dg.retire_age,
             dn.nature_code,
             dn.nature_label_fr,
-            fp.codetab            AS ministry_code,
-            de.libletabl          AS ministry_name_fr,
+            COALESCE(fp.codetab, do2.codetab) AS ministry_code,
+            COALESCE(de.libletabl, do2.liborgl) AS ministry_name_fr,
             fp.pa_eche,
             fp.pa_sitfam,
             fp.m_netpay,
@@ -124,14 +124,14 @@ def load_individual_payroll(sample_pct: float = 100.0) -> pd.DataFrame:
             fp.m_avkm,
             fp.m_avlog
         FROM dw.fact_paie fp {tablesample}
-        JOIN dw.dim_temps          dt ON dt.time_sk   = fp.time_sk
-        JOIN dw.dim_grade          dg ON dg.grade_sk  = fp.grade_sk
-        JOIN dw.dim_nature         dn ON dn.nature_sk = fp.nature_sk
-        LEFT JOIN dw.dim_etablissement de ON de.codetab = fp.codetab
+        JOIN dw.dim_temps          dt  ON dt.time_sk      = fp.time_sk
+        JOIN dw.dim_grade          dg  ON dg.grade_sk     = fp.grade_sk
+        JOIN dw.dim_nature         dn  ON dn.nature_sk    = fp.nature_sk
+        LEFT JOIN dw.dim_organisme do2 ON do2.organisme_sk = fp.organisme_sk
+        LEFT JOIN dw.dim_etablissement de ON de.codetab   = fp.codetab
         WHERE fp.employee_sk <> 0
           AND fp.grade_sk    <> 0
           AND fp.nature_sk   <> 0
-          AND fp.codetab IS NOT NULL
           AND dt.year_num    >  0
           AND fp.m_netpay   IS NOT NULL
           AND fp.m_salbrut  IS NOT NULL

@@ -534,25 +534,48 @@ async def stream_progress(run_id: str):
 
 # ── Background pipeline runner ────────────────────────────────────────────────
 
+def _check_disk(run_id: str, stage: str, min_gb: float = 8.0) -> None:
+    """Abort the pipeline if free disk space is below min_gb."""
+    import shutil as _shutil
+    free = _shutil.disk_usage("C:\\").free / 1024 ** 3
+    if free < min_gb:
+        msg = (f"DISK FULL ABORT at [{stage}] — only {free:.1f} GB free "
+               f"(minimum {min_gb} GB required). Free up space and retry.")
+        _prog(run_id, "error", -1, msg)
+        raise RuntimeError(msg)
+    if free < min_gb + 4:
+        _prog(run_id, "etl", -1, f"⚠ Low disk: {free:.1f} GB free", warn=True)
+
+
 def _run_pipeline_sync(run_id: str, dest: Path, resolved_type: str,
                        clean_dir: Path, reset: bool, retrain: bool,
-                       limit: int | None = None) -> None:
+                       limit: int | None = None,
+                       year_min: int | None = None,
+                       year_max: int | None = None) -> None:
     """Blocking ETL + DW load — runs in a thread pool."""
     try:
         def cb(pct: int, msg: str, **kw):
             _prog(run_id, "etl", pct, msg, **kw)
 
-        _prog(run_id, "etl_start", 12,
-              f"Starting ETL pipeline…{' (test mode: first {:,} rows)'.format(limit) if limit else ''}")
+        year_note = f" · years {year_min}–{year_max}" if year_min else ""
+        limit_note = f" · test limit: first {limit:,} rows" if limit else ""
+        _prog(run_id, "etl_start", 12, f"Starting ETL pipeline…{year_note}{limit_note}")
+
+        _check_disk(run_id, "etl_start")
 
         if resolved_type == "paie":
             from etl.pipeline_paie import run as run_paie
-            etl_report = run_paie(source=dest, run_id=run_id, out_dir=clean_dir,
-                                  progress_cb=cb, limit=limit)
+            kwargs = dict(source=dest, run_id=run_id, out_dir=clean_dir,
+                          progress_cb=cb, limit=limit)
+            if year_min is not None: kwargs["year_min"] = year_min
+            if year_max is not None: kwargs["year_max"] = year_max
+            etl_report = run_paie(**kwargs)
         else:
             from etl.pipeline_indem import run as run_indem
             etl_report = run_indem(source=dest, run_id=run_id, out_dir=clean_dir,
                                    progress_cb=cb, limit=limit)
+
+        _check_disk(run_id, "before_dw_load")
 
         qg = etl_report.get("quality_gate", {})
         _prog(run_id, "quality_gate", 75, "Quality gate checks…", qg_status=qg.get("status"))
@@ -579,7 +602,9 @@ def _run_pipeline_sync(run_id: str, dest: Path, resolved_type: str,
                 run_ml()
                 ml_status = "retrained_ok"
             except Exception as ml_err:
+                import traceback as _tb
                 ml_status = f"failed: {ml_err}"
+                log.error("ML retrain failed:\n%s", _tb.format_exc())
 
         _etl_job_update(run_id, "PASS", rows_written, qg.get("status", "PASS"), None)
         _prog(run_id, "done", 100, "Pipeline complete!",
@@ -641,6 +666,8 @@ async def ingest_from_path(
     reset: bool              = Query(False),
     limit: Optional[int]     = Query(None, ge=1,
                                      description="Stop after N written rows (test mode)"),
+    year_min: Optional[int]  = Query(None, description="Only process records from this year onwards"),
+    year_max: Optional[int]  = Query(None, description="Only process records up to this year"),
     uploaded_by: Optional[str] = Query(None),
 ):
     """
@@ -674,15 +701,16 @@ async def ingest_from_path(
     clean_dir.mkdir(parents=True, exist_ok=True)
 
     size_mb = source.stat().st_size // 1_048_576
+    year_note = f" · years {year_min}–{year_max}" if year_min else ""
     limit_note = f" · test limit: first {limit:,} rows" if limit else ""
-    _prog(run_id, "saved", 8, f"File found ({size_mb} MB){limit_note} — starting pipeline…")
+    _prog(run_id, "saved", 8, f"File found ({size_mb} MB){year_note}{limit_note} — starting pipeline…")
 
     loop = asyncio.get_event_loop()
     background_tasks.add_task(
         loop.run_in_executor,
         _pipeline_executor,
         _run_pipeline_sync,
-        run_id, source, resolved_type, clean_dir, reset, retrain, limit,
+        run_id, source, resolved_type, clean_dir, reset, retrain, limit, year_min, year_max,
     )
 
     return JSONResponse(content={

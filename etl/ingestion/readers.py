@@ -56,18 +56,18 @@ class _YearSeekReader:
         with open(path, "rb") as f:
             self._header = f.read(items_start_byte + 1)   # +1 includes the '[' itself
 
-        # Align to an item boundary in the actual file data.
-        # Scan backward/forward from seek_byte to find the nearest ',[' sequence
-        # (end of one item, start of the next) so we don't start mid-record.
+        # Align to an item boundary: scan a 64 KB window around seek_byte
+        # looking for '],[' (array-of-arrays) or '},{' (dict items).
+        # Rows are typically 5-10 KB so 64 KB guarantees we'll find a boundary.
+        WINDOW = 65536
         with open(path, "rb") as f:
-            scan_start = max(items_start_byte + 2, seek_byte - 512)
+            scan_start = max(items_start_byte + 2, seek_byte - WINDOW // 2)
             f.seek(scan_start)
-            window = f.read(1024)
+            window = f.read(WINDOW)
 
-        # Find the last ',[' in the window — that's the cleanest item boundary
-        boundary = window.rfind(b",[")
+        boundary = self._find_item_boundary(window)
         if boundary != -1:
-            aligned = scan_start + boundary + 1   # position of '[' of next item
+            aligned = scan_start + boundary
         else:
             aligned = seek_byte
 
@@ -79,6 +79,23 @@ class _YearSeekReader:
 
         log.info("YearSeekReader: items_start=%d  seek=%d  aligned=%d  (skipped %.2f GB)",
                  items_start_byte, seek_byte, aligned, aligned / 1e9)
+
+    @staticmethod
+    def _find_item_boundary(window: bytes) -> int:
+        """Return the position of the '{' or '[' that starts the next item.
+        Tries all known Oracle JSON separator patterns, most specific first."""
+        for sep, offset in [
+            (b"}\r\n,{", 4),   # dict items with CRLF  → land on {
+            (b"}\n,{",  3),    # dict items with LF    → land on {
+            (b"},{",    2),    # dict items no newline → land on {
+            (b"]\r\n,[", 4),   # array items with CRLF → land on [
+            (b"]\n,[",  3),    # array items with LF  → land on [
+            (b"],[",    2),    # array items no newline→ land on [
+        ]:
+            pos = window.rfind(sep)
+            if pos != -1:
+                return pos + offset   # position of opening { or [
+        return -1
 
     def read(self, n: int = -1) -> bytes:
         if self._serving_header:
@@ -313,8 +330,6 @@ def _stream_json_oracle(path: Path, **kwargs) -> Iterator[dict]:
     log.info("Oracle JSON columns (%d): %s…", len(columns), columns[:5])
 
     # ── Year-seek optimisation ────────────────────────────────────────────────
-    # If a year index exists and a year_min kwarg was passed by the caller,
-    # skip directly to that year's byte offset instead of scanning from byte 0.
     year_min = kwargs.get("year_min")
     seek_reader = None
     if year_min is not None:
@@ -324,13 +339,11 @@ def _stream_json_oracle(path: Path, **kwargs) -> Iterator[dict]:
             items_start = idx["_meta"]["items_start_byte"]
             seek_byte = offsets.get(str(year_min))
             if seek_byte:
-                log.info("Year index hit: seeking to ~%.2f GB for year %d (skipping %.2f GB)",
-                         seek_byte / 1e9, year_min, seek_byte / 1e9)
+                log.info("Year index hit: seeking to ~%.2f GB for year %d",
+                         seek_byte / 1e9, year_min)
                 seek_reader = _YearSeekReader(path, items_start, seek_byte)
             else:
-                log.info("Year %d not in index — falling back to full scan", year_min)
-        else:
-            log.debug("No year index found for %s — full scan", path.name)
+                log.info("Year %d not in index — full scan", year_min)
 
     # Pass 2 — stream items one at a time
     reader = seek_reader if seek_reader else _FixedDecimalReader(path)

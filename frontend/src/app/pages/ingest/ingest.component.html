@@ -146,6 +146,27 @@
           </div>
         </div>
 
+        <!-- Year filter -->
+        <div class="test-mode-row">
+          <label class="toggle-wrap">
+            <div class="toggle" [class.toggle--on]="yearFilter" (click)="yearFilter=!yearFilter">
+              <div class="toggle-thumb"></div>
+            </div>
+            <span class="toggle-label">
+              <mat-icon>date_range</mat-icon>
+              Filter by year
+            </span>
+          </label>
+          <div class="limit-input-wrap" *ngIf="yearFilter" style="gap:8px">
+            <input class="limit-input" type="number" [(ngModel)]="yearMin" placeholder="From" min="2015" max="2026" [disabled]="uploading" style="width:80px">
+            <span class="limit-unit">–</span>
+            <input class="limit-input" type="number" [(ngModel)]="yearMax" placeholder="To" min="2015" max="2026" [disabled]="uploading" style="width:80px">
+          </div>
+        </div>
+        <p class="test-mode-hint" *ngIf="yearFilter && yearMin" style="color:#64b5f6">
+          Only records from <strong>{{ yearMin }}</strong><span *ngIf="yearMax"> to <strong>{{ yearMax }}</strong></span> will be processed. Keeps JSONL small and avoids filling the disk.
+        </p>
+
         <!-- Test mode -->
         <div class="test-mode-row">
           <label class="toggle-wrap">

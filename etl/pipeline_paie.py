@@ -102,9 +102,16 @@ def run(source: Path = RAW_PAIE, run_id: str | None = None,
     }
 
     # ── Stream + clean + map ──────────────────────────────────────────────────
+    _SCAN_REPORT_EVERY = 500_000   # emit a progress ping every N raw records
     with open(_fact_paie, "w", encoding="utf-8") as fout:
         for raw in stream_records(source, year_min=year_min):
             stats["total_raw"] += 1
+
+            # Periodic scan progress — keeps the UI alive during the pre-year scan
+            if stats["total_raw"] % _SCAN_REPORT_EVERY == 0 and progress_cb:
+                written = stats.get("written", 0)
+                scanned_m = stats["total_raw"] // 1_000_000
+                progress_cb(18, f"Scanning… {scanned_m}M records read, {written:,} matching so far")
 
             # Filter on pa_type
             if str(raw.get("pa_type") or raw.get("PA_TYPE") or "").strip() != PAIE_TYPE_FILTER:

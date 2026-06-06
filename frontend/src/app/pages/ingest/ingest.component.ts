@@ -64,6 +64,11 @@ export class IngestComponent implements OnDestroy {
   testMode  = false;
   testLimit = 50000;
 
+  // Year filter (path mode only — avoids writing 40GB JSONL for the full file)
+  yearFilter = false;
+  yearMin: number | null = null;
+  yearMax: number | null = null;
+
   // Pipeline state
   uploading = false;
   uploadPct  = 0;
@@ -189,7 +194,8 @@ export class IngestComponent implements OnDestroy {
   private _runFromPath() {
     const typeParam  = this.fileType !== 'auto' ? `&file_type=${this.fileType}` : '';
     const limitParam = this.testMode ? `&limit=${this.testLimit}` : '';
-    const url = `${this.ML_API}/ingest-path?file_path=${encodeURIComponent(this.serverPath.trim())}&retrain=${this.retrain}${typeParam}${limitParam}`;
+    const yearParams = (this.yearFilter && this.yearMin) ? `&year_min=${this.yearMin}${this.yearMax ? '&year_max=' + this.yearMax : ''}` : '';
+    const url = `${this.ML_API}/ingest-path?file_path=${encodeURIComponent(this.serverPath.trim())}&retrain=${this.retrain}${typeParam}${limitParam}${yearParams}`;
 
     this.http.post<any>(url, null).subscribe({
       next: (resp) => {
@@ -213,8 +219,9 @@ export class IngestComponent implements OnDestroy {
 
     const typeParam  = this.fileType !== 'auto' ? `&file_type=${this.fileType}` : '';
     const limitParam = this.testMode ? `&limit=${this.testLimit}` : '';
+    const yearParams = (this.yearFilter && this.yearMin) ? `&year_min=${this.yearMin}${this.yearMax ? '&year_max=' + this.yearMax : ''}` : '';
     const req = new HttpRequest('POST',
-      `${this.ML_API}/upload?retrain=${this.retrain}${typeParam}${limitParam}`,
+      `${this.ML_API}/upload?retrain=${this.retrain}${typeParam}${limitParam}${yearParams}`,
       body, { reportProgress: true }
     );
 
