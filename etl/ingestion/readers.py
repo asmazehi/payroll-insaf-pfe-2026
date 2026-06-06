@@ -71,14 +71,18 @@ class _YearSeekReader:
         else:
             aligned = seek_byte
 
-        self._f = open(path, "rb")
-        self._f.seek(aligned)
-
-        self._header_pos = 0
-        self._serving_header = True
+        self._aligned = aligned
+        self._f = None   # not used for reading — caller uses _FixedDecimalReader
 
         log.info("YearSeekReader: items_start=%d  seek=%d  aligned=%d  (skipped %.2f GB)",
                  items_start_byte, seek_byte, aligned, aligned / 1e9)
+
+    def close(self):
+        if self._f:
+            self._f.close()
+
+    def __enter__(self): return self
+    def __exit__(self, *_): self.close()
 
     @staticmethod
     def _find_item_boundary(window: bytes) -> int:
@@ -96,27 +100,6 @@ class _YearSeekReader:
             if pos != -1:
                 return pos + offset   # position of opening { or [
         return -1
-
-    def read(self, n: int = -1) -> bytes:
-        if self._serving_header:
-            chunk = self._header[self._header_pos: self._header_pos + n]
-            self._header_pos += len(chunk)
-            remaining = n - len(chunk)
-            if self._header_pos >= len(self._header):
-                self._serving_header = False
-                if remaining > 0:
-                    chunk += self._f.read(remaining)
-            return chunk
-        return self._f.read(n)
-
-    def close(self) -> None:
-        self._f.close()
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, *_):
-        self.close()
 
 
 class _FixedDecimalReader(io.RawIOBase):
@@ -136,10 +119,12 @@ class _FixedDecimalReader(io.RawIOBase):
     _MARGIN = 50       # > max possible match length (":\s*-?\d+,\d" ≈ 25 bytes)
     _PAT    = re.compile(rb'(:\s*-?\d+),(\d)')
 
-    def __init__(self, path: Path):
+    def __init__(self, path: Path, seek_byte: int = 0, prepend: bytes = b""):
         self._fp  = open(path, "rb")
-        self._out = bytearray()   # fixed bytes ready to emit
-        self._raw = bytearray()   # raw bytes pending regex (includes overlap)
+        if seek_byte:
+            self._fp.seek(seek_byte)
+        self._out = bytearray(prepend)  # start with header bytes if any
+        self._raw = bytearray()
         self._eof = False
 
     def __enter__(self):
@@ -341,7 +326,14 @@ def _stream_json_oracle(path: Path, **kwargs) -> Iterator[dict]:
             if seek_byte:
                 log.info("Year index hit: seeking to ~%.2f GB for year %d",
                          seek_byte / 1e9, year_min)
-                seek_reader = _YearSeekReader(path, items_start, seek_byte)
+                # Build the aligned position using _YearSeekReader's boundary detection
+                _yr = _YearSeekReader(path, items_start, seek_byte)
+                aligned = _yr._aligned
+                header  = _yr._header
+                _yr.close()
+                # Use _FixedDecimalReader (with margin buffering) so decimal
+                # commas split across chunk boundaries are repaired correctly
+                seek_reader = _FixedDecimalReader(path, seek_byte=aligned, prepend=header)
             else:
                 log.info("Year %d not in index — full scan", year_min)
 

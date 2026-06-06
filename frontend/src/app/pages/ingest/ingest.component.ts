@@ -60,7 +60,8 @@ export class IngestComponent implements OnDestroy {
 
   // Shared options
   fileType: 'auto' | 'paie' | 'indem' = 'auto';
-  retrain   = false;
+  retrain      = false;
+  fullRetrain  = false;
   testMode  = false;
   testLimit = 50000;
 
@@ -195,7 +196,8 @@ export class IngestComponent implements OnDestroy {
     const typeParam  = this.fileType !== 'auto' ? `&file_type=${this.fileType}` : '';
     const limitParam = this.testMode ? `&limit=${this.testLimit}` : '';
     const yearParams = (this.yearFilter && this.yearMin) ? `&year_min=${this.yearMin}${this.yearMax ? '&year_max=' + this.yearMax : ''}` : '';
-    const url = `${this.ML_API}/ingest-path?file_path=${encodeURIComponent(this.serverPath.trim())}&retrain=${this.retrain}${typeParam}${limitParam}${yearParams}`;
+    const fullRetainParam = this.fullRetrain ? `&full_retrain=true` : '';
+    const url = `${this.ML_API}/ingest-path?file_path=${encodeURIComponent(this.serverPath.trim())}&retrain=${this.retrain}${typeParam}${limitParam}${yearParams}${fullRetainParam}`;
 
     this.http.post<any>(url, null).subscribe({
       next: (resp) => {

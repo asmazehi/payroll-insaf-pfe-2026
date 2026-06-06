@@ -134,7 +134,7 @@
           <div class="option-group">
             <label class="opt-label">{{ 'ingest.after_upload' | translate }}</label>
             <label class="toggle-wrap">
-              <div class="toggle" [class.toggle--on]="retrain" (click)="retrain=!retrain">
+              <div class="toggle" [class.toggle--on]="retrain" (click)="retrain=!retrain; fullRetrain=false">
                 <div class="toggle-thumb"></div>
               </div>
               <span class="toggle-label">
@@ -142,7 +142,19 @@
                 {{ 'ingest.retrain' | translate }}
               </span>
             </label>
-            <p class="toggle-hint" *ngIf="retrain">{{ 'ingest.retrain_hint' | translate }}</p>
+            <p class="toggle-hint" *ngIf="retrain && !fullRetrain">Score new anomalies only (~2 min) — reuses existing model</p>
+
+            <!-- Full retrain — only shown when ML is ON -->
+            <label class="toggle-wrap" *ngIf="retrain" style="margin-top:8px;opacity:0.85">
+              <div class="toggle" [class.toggle--on]="fullRetrain" (click)="fullRetrain=!fullRetrain">
+                <div class="toggle-thumb"></div>
+              </div>
+              <span class="toggle-label" style="font-size:.8rem">
+                <mat-icon style="font-size:16px;width:16px;height:16px">restart_alt</mat-icon>
+                Full retrain from scratch
+              </span>
+            </label>
+            <p class="toggle-hint" *ngIf="fullRetrain" style="color:#ef9a9a">Rebuilds entire model on all data (~30 min). Only needed when you change features or detect model drift.</p>
           </div>
         </div>
 

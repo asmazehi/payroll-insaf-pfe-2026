@@ -551,7 +551,8 @@ def _run_pipeline_sync(run_id: str, dest: Path, resolved_type: str,
                        clean_dir: Path, reset: bool, retrain: bool,
                        limit: int | None = None,
                        year_min: int | None = None,
-                       year_max: int | None = None) -> None:
+                       year_max: int | None = None,
+                       full_retrain: bool = False) -> None:
     """Blocking ETL + DW load — runs in a thread pool."""
     try:
         def cb(pct: int, msg: str, **kw):
@@ -596,13 +597,25 @@ def _run_pipeline_sync(run_id: str, dest: Path, resolved_type: str,
 
         ml_status = "not_requested"
         if retrain:
-            _prog(run_id, "ml", 97, "Retraining ML models…")
             try:
-                from ml.run_all_models import main as run_ml
-                run_ml()
-                ml_status = "retrained_ok"
-            except Exception as ml_err:
+                from ml.model_anomaly import _models_exist, score_incremental, train_anomaly_model
+                from ml.model_forecast import train_payroll_forecast
                 import traceback as _tb
+
+                if full_retrain or not _models_exist():
+                    # Full rebuild — triggered explicitly or first-ever run
+                    _prog(run_id, "ml", 96, "Full model retrain (this takes ~30 min)…")
+                    from ml.run_all_models import main as run_ml
+                    run_ml()
+                    ml_status = "full_retrain_ok"
+                else:
+                    # Incremental: score only new periods, reuse existing model
+                    _prog(run_id, "ml", 96, "Scoring new anomalies (incremental)…")
+                    n_new = score_incremental()
+                    _prog(run_id, "ml", 98, "Updating forecast model…")
+                    train_payroll_forecast()
+                    ml_status = f"incremental_ok: {n_new} new anomalies scored"
+            except Exception as ml_err:
                 ml_status = f"failed: {ml_err}"
                 log.error("ML retrain failed:\n%s", _tb.format_exc())
 
@@ -662,7 +675,8 @@ async def ingest_from_path(
     file_path: str           = Query(..., description="Absolute path to the file on the server"),
     file_type: Optional[str] = Query(None, enum=["paie", "indem"],
                                      description="'paie' or 'indem' — omit to auto-detect"),
-    retrain: bool            = Query(False),
+    retrain: bool            = Query(False, description="Score new anomalies with existing model (incremental)"),
+    full_retrain: bool       = Query(False, description="Full model rebuild from scratch (slow, use rarely)"),
     reset: bool              = Query(False),
     limit: Optional[int]     = Query(None, ge=1,
                                      description="Stop after N written rows (test mode)"),
@@ -710,7 +724,7 @@ async def ingest_from_path(
         loop.run_in_executor,
         _pipeline_executor,
         _run_pipeline_sync,
-        run_id, source, resolved_type, clean_dir, reset, retrain, limit, year_min, year_max,
+        run_id, source, resolved_type, clean_dir, reset, retrain, limit, year_min, year_max, full_retrain,
     )
 
     return JSONResponse(content={
