@@ -10,4 +10,4 @@ FROM eclipse-temurin:21-jre-alpine
 WORKDIR /app
 COPY --from=build /app/target/payroll-1.0.0.jar app.jar
 EXPOSE 8081
-ENTRYPOINT ["java", "-jar", "/app.jar"]
+CMD ["java", "-Xmx512m", "-Xms256m", "-XX:+UseContainerSupport", "-jar", "/app/app.jar"]

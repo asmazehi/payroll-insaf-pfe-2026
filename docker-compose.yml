@@ -39,7 +39,7 @@ services:
       DB_USER: ${DB_USER}
       DB_PASS: ${DB_PASS}
       JWT_SECRET: ${JWT_SECRET}
-      ML_API_URL: ${ML_API_URL}
+      ML_API_URL: http://ml:8000
       MAIL_USER: ${MAIL_USER}
       MAIL_PASS: ${MAIL_PASS}
     ports:

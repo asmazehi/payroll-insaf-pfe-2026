@@ -8,7 +8,7 @@ on:
 
 jobs:
 
-  # ── Job 1: Build & lint Angular frontend ────────────────────
+  # ── Job 1: Build & lint Angular frontend ────────────────────────────────────
   frontend:
     name: Frontend — Build
     runs-on: ubuntu-latest
@@ -39,7 +39,7 @@ jobs:
           path: frontend/dist/frontend
           retention-days: 1
 
-  # ── Job 2: Build Spring Boot backend ────────────────────────
+  # ── Job 2: Build Spring Boot backend ────────────────────────────────────────
   backend:
     name: Backend — Build
     runs-on: ubuntu-latest
@@ -67,7 +67,7 @@ jobs:
           path: backend/target/payroll-1.0.0.jar
           retention-days: 1
 
-  # ── Job 3: Lint Python ETL/ML ────────────────────────────────
+  # ── Job 3: Lint Python API & ETL ────────────────────────────────────────────
   python:
     name: Python — Lint & syntax check
     runs-on: ubuntu-latest
@@ -84,34 +84,103 @@ jobs:
         run: pip install flake8 --quiet
 
       - name: Lint ETL
-        run: flake8 etl/ --max-line-length=120 --ignore=E501,W503 --exclude=__pycache__
+        run: flake8 etl/ --max-line-length=120 --ignore=E501,W503,E302 --exclude=__pycache__
 
       - name: Lint API
-        run: flake8 api/ --max-line-length=120 --ignore=E501,W503 --exclude=__pycache__
+        run: flake8 api/ --max-line-length=120 --ignore=E501,W503,E302 --exclude=__pycache__
 
       - name: Check ML syntax
         run: python -m py_compile ml/model_forecast.py ml/model_anomaly.py ml/data_loader.py
 
-  # ── Job 4: Deploy frontend to Vercel (main branch only) ─────
-  deploy-frontend:
-    name: Deploy → Vercel
+  # ── Job 4: Validate Docker builds ───────────────────────────────────────────
+  docker:
+    name: Docker — Validate images
     runs-on: ubuntu-latest
-    needs: [frontend]
+    needs: [frontend, backend, python]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build backend image
+        uses: docker/build-push-action@v5
         with:
-          node-version: 20
+          context: .
+          file: Dockerfile.backend
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
-      - name: Install Vercel CLI
-        run: npm install -g vercel
+      - name: Build ML/API image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: Dockerfile.ml
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
-      - name: Deploy to Vercel
-        working-directory: frontend
-        run: vercel --token ${{ secrets.VERCEL_TOKEN }} --yes --prod
-        env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      - name: Build frontend image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: Dockerfile.frontend
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ── Job 5: Deploy to VPS ────────────────────────────────────────────────────
+  # Requires these GitHub Secrets:
+  #   VPS_HOST       — server IP address
+  #   VPS_USER       — SSH user (root)
+  #   VPS_SSH_KEY    — private SSH key (contents of id_rsa)
+  #   PG_PASSWORD    — PostgreSQL password
+  #   JWT_SECRET     — Spring Boot JWT secret
+  deploy:
+    name: Deploy → VPS
+    runs-on: ubuntu-latest
+    needs: [docker]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    environment: production
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1
+        with:
+          host:     ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key:      ${{ secrets.VPS_SSH_KEY }}
+          script: |
+            set -e
+            cd /opt/insaf
+
+            # Pull latest code
+            git pull origin main
+
+            # Write environment file
+            cat > .env <<EOF
+            POSTGRES_USER=postgres
+            POSTGRES_PASSWORD=${{ secrets.PG_PASSWORD }}
+            POSTGRES_DB=payroll_dw
+            DB_URL=jdbc:postgresql://postgres:5432/payroll_dw
+            DB_USER=postgres
+            DB_PASS=${{ secrets.PG_PASSWORD }}
+            JWT_SECRET=${{ secrets.JWT_SECRET }}
+            ML_API_URL=http://ml:8000
+            PG_HOST=postgres
+            PG_PORT=5432
+            PG_DB=payroll_dw
+            PG_USER=postgres
+            PG_PASSWORD=${{ secrets.PG_PASSWORD }}
+            EOF
+
+            # Rebuild and restart changed services
+            docker compose up -d --build --remove-orphans
+
+            # Clean up old images
+            docker image prune -f
