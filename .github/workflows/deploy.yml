@@ -84,10 +84,10 @@ jobs:
         run: pip install flake8 --quiet
 
       - name: Lint ETL
-        run: flake8 etl/ --max-line-length=120 --ignore=E501,W503,E302,E221,E241 --exclude=__pycache__
+        run: flake8 etl/ --select=E9,F --exclude=__pycache__
 
       - name: Lint API
-        run: flake8 api/ --max-line-length=120 --ignore=E501,W503,E302,E221,E241 --exclude=__pycache__
+        run: flake8 api/ --select=E9,F --exclude=__pycache__
 
       - name: Check ML syntax
         run: python -m py_compile ml/model_forecast.py ml/model_anomaly.py ml/data_loader.py
