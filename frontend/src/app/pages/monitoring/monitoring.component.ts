@@ -12,14 +12,14 @@ export class MonitoringComponent {
 
   tabs = [
     {
-      label: 'Docker Containers',
+      label: 'Containers',
       icon: 'memory',
-      url: `${this.GRAFANA_BASE}/d/docker/docker-containers?orgId=1&refresh=10s&kiosk`
+      url: `${this.GRAFANA_BASE}/d/1e64d971-f906-44c1-a51e-6bd1ce90de3a/insaf-platform-ae282ac-e2809d-containers?orgId=1&refresh=10s&kiosk`
     },
     {
       label: 'Prometheus',
       icon: 'analytics',
-      url: `${this.GRAFANA_BASE}/?orgId=1&kiosk`
+      url: `${this.GRAFANA_BASE}/explore?orgId=1&kiosk`
     }
   ];
 
