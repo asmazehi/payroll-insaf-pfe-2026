@@ -1,0 +1,56 @@
+{
+  "title": "INSAF Platform — Containers",
+  "uid": "insaf-containers",
+  "version": 1,
+  "refresh": "10s",
+  "time": { "from": "now-30m", "to": "now" },
+  "panels": [
+    {
+      "id": 1, "type": "stat", "gridPos": { "x": 0, "y": 0, "w": 6, "h": 4 },
+      "title": "Running Containers",
+      "options": { "colorMode": "background", "graphMode": "none" },
+      "fieldConfig": { "defaults": { "color": { "mode": "fixed", "fixedColor": "green" }, "unit": "short" } },
+      "targets": [{ "expr": "count(container_memory_usage_bytes{name=~\".+\"})", "refId": "A" }],
+      "datasource": { "type": "prometheus", "uid": "prometheus" }
+    },
+    {
+      "id": 2, "type": "stat", "gridPos": { "x": 6, "y": 0, "w": 6, "h": 4 },
+      "title": "Total Memory Used",
+      "options": { "colorMode": "background", "graphMode": "none" },
+      "fieldConfig": { "defaults": { "color": { "mode": "fixed", "fixedColor": "blue" }, "unit": "bytes" } },
+      "targets": [{ "expr": "sum(container_memory_usage_bytes{name=~\".+\"})", "refId": "A" }],
+      "datasource": { "type": "prometheus", "uid": "prometheus" }
+    },
+    {
+      "id": 3, "type": "stat", "gridPos": { "x": 12, "y": 0, "w": 6, "h": 4 },
+      "title": "Total CPU Cores Used",
+      "options": { "colorMode": "background", "graphMode": "none" },
+      "fieldConfig": { "defaults": { "color": { "mode": "fixed", "fixedColor": "orange" }, "unit": "short", "decimals": 3 } },
+      "targets": [{ "expr": "sum(rate(container_cpu_usage_seconds_total{name=~\".+\"}[1m]))", "refId": "A" }],
+      "datasource": { "type": "prometheus", "uid": "prometheus" }
+    },
+    {
+      "id": 4, "type": "timeseries", "gridPos": { "x": 0, "y": 4, "w": 24, "h": 8 },
+      "title": "Memory Usage per Container",
+      "fieldConfig": { "defaults": { "unit": "bytes", "custom": { "lineWidth": 2 } } },
+      "targets": [{ "expr": "container_memory_usage_bytes{name=~\".+\"}", "legendFormat": "{{name}}", "refId": "A" }],
+      "datasource": { "type": "prometheus", "uid": "prometheus" }
+    },
+    {
+      "id": 5, "type": "timeseries", "gridPos": { "x": 0, "y": 12, "w": 24, "h": 8 },
+      "title": "CPU Usage per Container",
+      "fieldConfig": { "defaults": { "unit": "short", "decimals": 4, "custom": { "lineWidth": 2 } } },
+      "targets": [{ "expr": "rate(container_cpu_usage_seconds_total{name=~\".+\"}[1m])", "legendFormat": "{{name}}", "refId": "A" }],
+      "datasource": { "type": "prometheus", "uid": "prometheus" }
+    },
+    {
+      "id": 6, "type": "bargauge", "gridPos": { "x": 0, "y": 20, "w": 24, "h": 6 },
+      "title": "Memory per Container (current)",
+      "options": { "orientation": "horizontal", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "fieldConfig": { "defaults": { "unit": "bytes", "color": { "mode": "palette-classic" }, "min": 0 } },
+      "targets": [{ "expr": "container_memory_usage_bytes{name=~\".+\"}", "legendFormat": "{{name}}", "refId": "A" }],
+      "datasource": { "type": "prometheus", "uid": "prometheus" }
+    }
+  ],
+  "schemaVersion": 36
+}
