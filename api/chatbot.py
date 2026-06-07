@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -29,7 +30,7 @@ from psycopg2 import pool as pg_pool
 import requests
 
 # ── LLM config ─────────────────────────────────────────────────────────────────
-OLLAMA_BASE  = "http://localhost:11434"
+OLLAMA_BASE  = os.getenv("OLLAMA_HOST", "http://localhost:11434")
 OLLAMA_MODEL = "llama3.2:1b"
 
 _MODELS_DIR = Path(__file__).resolve().parent.parent / "ml" / "models"

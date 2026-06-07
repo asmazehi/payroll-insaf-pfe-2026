@@ -66,6 +66,7 @@ services:
       PG_DB: ${PG_DB}
       PG_USER: ${PG_USER}
       PG_PASSWORD: ${PG_PASSWORD}
+      OLLAMA_HOST: http://host.docker.internal:11434
     ports:
       - "8000:8000"
     volumes:
