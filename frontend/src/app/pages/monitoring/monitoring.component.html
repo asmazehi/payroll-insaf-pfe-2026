@@ -13,22 +13,7 @@
     </a>
   </div>
 
-  <div class="tab-bar">
-    <button *ngFor="let tab of tabs; let i = index"
-            class="tab-btn" [class.tab-btn--active]="activeTab === i"
-            (click)="setTab(i)">
-      <mat-icon>{{ tab.icon }}</mat-icon>
-      {{ tab.labelKey | translate }}
-    </button>
-  </div>
-
   <div class="grafana-wrapper">
-    <iframe *ngFor="let url of safeUrls; let i = index"
-            [src]="url"
-            [hidden]="activeTab !== i"
-            class="grafana-frame"
-            frameborder="0"
-            title="Grafana">
-    </iframe>
+    <iframe [src]="safeUrl" class="grafana-frame" frameborder="0" title="Grafana"></iframe>
   </div>
 </div>
