@@ -1,0 +1,11 @@
+apiVersion: 1
+
+providers:
+  - name: 'INSAF'
+    orgId: 1
+    folder: 'INSAF Platform'
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    options:
+      path: /etc/grafana/provisioning/dashboards
