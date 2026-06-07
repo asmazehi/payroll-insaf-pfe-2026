@@ -14,6 +14,10 @@
     "tickets":    "Support",
     "reports":    "Rapports"
   },
+  "monitoring": {
+    "containers": "Conteneurs",
+    "prometheus": "Métriques brutes"
+  },
   "topbar": { "live": "En direct" },
   "lang": { "en": "EN", "fr": "FR", "ar": "AR" },
   "common": {

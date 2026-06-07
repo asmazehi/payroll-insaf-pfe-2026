@@ -18,7 +18,7 @@
             class="tab-btn" [class.tab-btn--active]="activeTab === i"
             (click)="setTab(i)">
       <mat-icon>{{ tab.icon }}</mat-icon>
-      {{ tab.label }}
+      {{ tab.labelKey | translate }}
     </button>
   </div>
 

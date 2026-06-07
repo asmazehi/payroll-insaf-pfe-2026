@@ -1,7 +1,7 @@
 {
   "title": "INSAF Platform — Containers",
   "uid": "insaf-containers",
-  "version": 1,
+  "version": 2,
   "refresh": "10s",
   "time": { "from": "now-30m", "to": "now" },
   "panels": [
@@ -30,17 +30,39 @@
       "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" }
     },
     {
-      "id": 4, "type": "timeseries", "gridPos": { "x": 0, "y": 4, "w": 24, "h": 8 },
+      "id": 7, "type": "stat", "gridPos": { "x": 18, "y": 0, "w": 6, "h": 4 },
+      "title": "Network In (total)",
+      "options": { "colorMode": "background", "graphMode": "none" },
+      "fieldConfig": { "defaults": { "color": { "mode": "fixed", "fixedColor": "purple" }, "unit": "bytes" } },
+      "targets": [{ "expr": "sum(container_network_receive_bytes_total{name=~\".+\"})", "refId": "A" }],
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" }
+    },
+    {
+      "id": 4, "type": "timeseries", "gridPos": { "x": 0, "y": 4, "w": 12, "h": 8 },
       "title": "Memory Usage per Container",
       "fieldConfig": { "defaults": { "unit": "bytes", "custom": { "lineWidth": 2 } } },
       "targets": [{ "expr": "container_memory_usage_bytes{name=~\".+\"}", "legendFormat": "{{name}}", "refId": "A" }],
       "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" }
     },
     {
-      "id": 5, "type": "timeseries", "gridPos": { "x": 0, "y": 12, "w": 24, "h": 8 },
+      "id": 5, "type": "timeseries", "gridPos": { "x": 12, "y": 4, "w": 12, "h": 8 },
       "title": "CPU Usage per Container",
-      "fieldConfig": { "defaults": { "unit": "short", "decimals": 4, "custom": { "lineWidth": 2 } } },
+      "fieldConfig": { "defaults": { "unit": "percentunit", "decimals": 2, "custom": { "lineWidth": 2 } } },
       "targets": [{ "expr": "rate(container_cpu_usage_seconds_total{name=~\".+\"}[1m])", "legendFormat": "{{name}}", "refId": "A" }],
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" }
+    },
+    {
+      "id": 8, "type": "timeseries", "gridPos": { "x": 0, "y": 12, "w": 12, "h": 8 },
+      "title": "Network Received per Container",
+      "fieldConfig": { "defaults": { "unit": "Bps", "custom": { "lineWidth": 2 } } },
+      "targets": [{ "expr": "rate(container_network_receive_bytes_total{name=~\".+\"}[1m])", "legendFormat": "{{name}}", "refId": "A" }],
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" }
+    },
+    {
+      "id": 9, "type": "timeseries", "gridPos": { "x": 12, "y": 12, "w": 12, "h": 8 },
+      "title": "Network Sent per Container",
+      "fieldConfig": { "defaults": { "unit": "Bps", "custom": { "lineWidth": 2 } } },
+      "targets": [{ "expr": "rate(container_network_transmit_bytes_total{name=~\".+\"}[1m])", "legendFormat": "{{name}}", "refId": "A" }],
       "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" }
     },
     {

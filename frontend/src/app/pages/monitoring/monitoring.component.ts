@@ -9,17 +9,18 @@ import { environment } from '../../../environments/environment';
 })
 export class MonitoringComponent {
   readonly GRAFANA_BASE = environment.production ? '/grafana' : 'http://localhost:3000';
+  readonly PROMETHEUS_BASE = environment.production ? '/prometheus' : 'http://localhost:9090';
 
   tabs = [
     {
-      label: 'Containers',
+      labelKey: 'monitoring.containers',
       icon: 'memory',
       url: `${this.GRAFANA_BASE}/d/1e64d971-f906-44c1-a51e-6bd1ce90de3a/insaf-platform-ae282ac-e2809d-containers?orgId=1&refresh=10s&kiosk`
     },
     {
-      label: 'Prometheus',
+      labelKey: 'monitoring.prometheus',
       icon: 'analytics',
-      url: `${this.GRAFANA_BASE}/explore?orgId=1&kiosk`
+      url: `${this.PROMETHEUS_BASE}/graph`
     }
   ];
 
@@ -32,7 +33,5 @@ export class MonitoringComponent {
     );
   }
 
-  setTab(i: number): void {
-    this.activeTab = i;
-  }
+  setTab(i: number): void { this.activeTab = i; }
 }

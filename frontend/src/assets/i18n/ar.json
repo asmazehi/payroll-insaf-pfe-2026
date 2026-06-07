@@ -14,6 +14,10 @@
     "tickets":    "الدعم",
     "reports":    "التقارير"
   },
+  "monitoring": {
+    "containers": "الحاويات",
+    "prometheus": "مقاييس خام"
+  },
   "topbar": { "live": "مباشر" },
   "lang": { "en": "EN", "fr": "FR", "ar": "AR" },
   "common": {
