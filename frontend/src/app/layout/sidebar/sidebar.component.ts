@@ -28,9 +28,10 @@ export class SidebarComponent {
   ];
 
   adminNav: NavItem[] = [
-    { label: 'nav.users',    icon: 'manage_accounts',  route: '/users',   roles: ['ROLE_ADMIN'] },
-    { label: 'nav.profile',  icon: 'account_circle',   route: '/profile', roles: ['ROLE_USER']  },
-    { label: 'nav.tickets',  icon: 'support_agent',    route: '/tickets' },
+    { label: 'nav.users',      icon: 'manage_accounts',  route: '/users',      roles: ['ROLE_ADMIN'] },
+    { label: 'nav.monitoring', icon: 'monitor_heart',    route: '/monitoring', roles: ['ROLE_ADMIN'] },
+    { label: 'nav.profile',    icon: 'account_circle',   route: '/profile',    roles: ['ROLE_USER']  },
+    { label: 'nav.tickets',    icon: 'support_agent',    route: '/tickets' },
   ];
 
   constructor(public auth: AuthService) {}

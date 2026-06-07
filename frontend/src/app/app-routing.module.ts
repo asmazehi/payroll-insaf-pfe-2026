@@ -11,7 +11,8 @@ import { ReportsComponent }   from './pages/reports/reports.component';
 import { IngestComponent }    from './pages/ingest/ingest.component';
 import { UsersComponent }     from './pages/users/users.component';
 import { TicketsComponent }   from './pages/tickets/tickets.component';
-import { ProfileComponent }   from './pages/profile/profile.component';
+import { ProfileComponent }    from './pages/profile/profile.component';
+import { MonitoringComponent } from './pages/monitoring/monitoring.component';
 
 const routes: Routes = [
   { path: 'login',     component: LoginComponent },
@@ -23,7 +24,8 @@ const routes: Routes = [
   { path: 'ingest',    component: IngestComponent,    canActivate: [AuthGuard, RoleGuard], data: { roles: ['ROLE_ADMIN'] } },
   { path: 'users',     component: UsersComponent,     canActivate: [AuthGuard, RoleGuard], data: { roles: ['ROLE_ADMIN'] } },
   { path: 'tickets',   component: TicketsComponent,   canActivate: [AuthGuard] },
-  { path: 'profile',   component: ProfileComponent,   canActivate: [AuthGuard] },
+  { path: 'profile',     component: ProfileComponent,    canActivate: [AuthGuard] },
+  { path: 'monitoring',  component: MonitoringComponent, canActivate: [AuthGuard, RoleGuard], data: { roles: ['ROLE_ADMIN'] } },
   { path: '',          redirectTo: 'dashboard',        pathMatch: 'full' },
   { path: '**',        redirectTo: 'dashboard' },
 ];

@@ -36,6 +36,7 @@ import { IngestComponent }    from './pages/ingest/ingest.component';
 import { UsersComponent }     from './pages/users/users.component';
 import { TicketsComponent }   from './pages/tickets/tickets.component';
 import { ProfileComponent }   from './pages/profile/profile.component';
+import { MonitoringComponent } from './pages/monitoring/monitoring.component';
 import { NavbarComponent }    from './layout/navbar/navbar.component';
 import { SidebarComponent }   from './layout/sidebar/sidebar.component';
 import { JwtInterceptor }     from './interceptors/jwt.interceptor';
@@ -45,7 +46,7 @@ import { JwtInterceptor }     from './interceptors/jwt.interceptor';
     AppComponent, LoginComponent, DashboardComponent,
     ForecastComponent, AnomaliesComponent, ChatbotComponent,
     ReportsComponent, IngestComponent, UsersComponent, TicketsComponent,
-    ProfileComponent, NavbarComponent, SidebarComponent
+    ProfileComponent, MonitoringComponent, NavbarComponent, SidebarComponent
   ],
   imports: [
     BrowserModule, BrowserAnimationsModule,

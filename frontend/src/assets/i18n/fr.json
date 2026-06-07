@@ -9,6 +9,7 @@
     "ingest":     "Ingestion des données",
     "admin":      "Administration",
     "users":      "Utilisateurs",
+    "monitoring": "Supervision",
     "profile":    "Mon Profil",
     "tickets":    "Support",
     "reports":    "Rapports"

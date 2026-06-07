@@ -9,6 +9,7 @@
     "ingest":     "Data Ingest",
     "admin":      "Admin",
     "users":      "Users",
+    "monitoring": "Supervision",
     "profile":    "My Profile",
     "tickets":    "Support",
     "reports":    "Reports"
