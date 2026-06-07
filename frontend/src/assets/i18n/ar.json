@@ -314,7 +314,7 @@
   },
   "chatbot": {
     "name":        "المساعد الذكي INSAF",
-    "subtitle":    "LLaMA 3.2 + RAG · بيانات الرواتب · 16 نية",
+    "subtitle":    "LLaMA 3.2 + RAG · بيانات الرواتب المباشرة",
     "clear":       "مسح المحادثة",
     "status_live": "مباشر",
     "greeting":    "كيف يمكنني مساعدتك اليوم؟",

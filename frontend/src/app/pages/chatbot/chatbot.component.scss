@@ -414,3 +414,44 @@
 
 /* ── Hints grid (wider) ─────────────────────────────────────────── */
 .hints-grid { grid-template-columns: repeat(2, 1fr); max-width: 680px; }
+
+/* ── Data preview card ─────────────────────────────────────────── */
+.data-card {
+  border: 1px solid rgba(var(--brand-rgb), .25);
+  border-radius: 8px;
+  margin-bottom: 10px;
+  overflow: hidden;
+  background: rgba(var(--brand-rgb), .04);
+
+  &__toggle {
+    display: flex; align-items: center; gap: 6px;
+    width: 100%; padding: 8px 12px;
+    background: none; border: none; cursor: pointer;
+    font-size: .78rem; color: var(--brand); font-weight: 500;
+    text-align: left;
+
+    mat-icon { font-size: 16px; width: 16px; height: 16px; }
+    .chevron { margin-left: auto; }
+    &:hover { background: rgba(var(--brand-rgb), .08); }
+  }
+
+  &__body {
+    padding: 8px 12px 10px;
+    font-size: .75rem; color: var(--t2);
+    overflow-x: auto;
+  }
+}
+
+.preview-title {
+  font-size: .75rem; font-weight: 600; color: var(--t1);
+  margin-bottom: 6px;
+}
+
+.preview-table {
+  border-collapse: collapse; width: 100%; font-size: .72rem;
+  td {
+    padding: 3px 8px; border: 1px solid var(--border);
+    white-space: nowrap;
+  }
+  tr:nth-child(odd) td { background: rgba(var(--brand-rgb), .04); }
+}

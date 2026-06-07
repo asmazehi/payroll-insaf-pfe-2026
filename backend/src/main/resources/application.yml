@@ -46,7 +46,7 @@ app:
     from-name: INSAF Payroll Platform
 
   ml:
-    api-url: ${ML_API_URL:http://localhost:8000}
+    api-url: ${ML_API_URL:http://127.0.0.1:8000}
 
 logging:
   level:

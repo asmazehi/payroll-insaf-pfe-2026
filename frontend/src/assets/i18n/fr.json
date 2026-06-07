@@ -314,7 +314,7 @@
   },
   "chatbot": {
     "name":        "Assistant IA INSAF",
-    "subtitle":    "LLaMA 3.2 + RAG · Données en direct · 16 intentions",
+    "subtitle":    "LLaMA 3.2 + RAG · Données en direct",
     "clear":       "Vider le chat",
     "status_live": "En direct",
     "greeting":    "Comment puis-je vous aider ?",

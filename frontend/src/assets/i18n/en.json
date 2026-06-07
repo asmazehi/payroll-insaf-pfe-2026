@@ -314,7 +314,7 @@
   },
   "chatbot": {
     "name":        "INSAF AI Assistant",
-    "subtitle":    "LLaMA 3.2 + RAG · Live payroll data · 16 intents",
+    "subtitle":    "LLaMA 3.2 + RAG · Live payroll data",
     "clear":       "Clear chat",
     "status_live": "Live",
     "greeting":    "How can I help you today?",

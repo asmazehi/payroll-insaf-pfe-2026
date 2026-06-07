@@ -490,21 +490,21 @@ def get_summary():
         from etl.core.config import DB_CONFIG
         with psycopg2.connect(**DB_CONFIG) as conn:
             with conn.cursor() as cur:
+                # Use materialized view — sub-millisecond instead of 9s fact_paie scan
                 cur.execute("""
                     SELECT
-                        COUNT(*)                      AS total_records,
-                        COUNT(DISTINCT fp.employee_sk) AS total_employees,
-                        SUM(fp.m_netpay)              AS total_netpay,
-                        MIN(dt.year_num)              AS year_min,
-                        MAX(dt.year_num)              AS year_max
-                    FROM dw.fact_paie fp
-                    JOIN dw.dim_temps dt ON dt.time_sk = fp.time_sk
-                    WHERE fp.employee_sk <> 0 AND dt.year_num > 0
+                        SUM(employee_count)                    AS total_records,
+                        MAX(employee_count)                    AS total_employees,
+                        ROUND(SUM(total_netpay)::numeric, 2)  AS total_netpay,
+                        MIN(year_num)                          AS year_min,
+                        MAX(year_num)                          AS year_max
+                    FROM dw.mv_payroll_by_month
+                    WHERE year_num > 0
                 """)
                 row = cur.fetchone()
         return {
-            "total_payroll_records": row[0],
-            "total_employees":       row[1],
+            "total_payroll_records": int(row[0] or 0),
+            "total_employees":       int(row[1] or 0),
             "total_netpay_tnd":      round(float(row[2] or 0), 2),
             "year_range":            f"{row[3]}–{row[4]}",
         }

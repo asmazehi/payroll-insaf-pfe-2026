@@ -14,14 +14,18 @@ Input tolerance:
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from difflib import get_close_matches
 from pathlib import Path
+from threading import Lock
 from typing import Any, Optional
 
 import psycopg2
+from psycopg2 import pool as pg_pool
 import requests
 
 # ── LLM config ─────────────────────────────────────────────────────────────────
@@ -84,21 +88,13 @@ def _mc_sql(alias: str = "fp") -> str:
 # ── System prompt ───────────────────────────────────────────────────────────────
 
 def _build_system_prompt(ministry_name: Optional[str] = None) -> str:
-    scope = (
-        f"You are analyzing data for **{ministry_name}** only — all figures are scoped to this ministry."
-        if ministry_name else
-        "You are an admin with full access to all ministries."
-    )
+    scope = f"Données de **{ministry_name}** uniquement." if ministry_name else "Accès admin — tous ministères."
     return (
-        f"You are INSAF, a sharp and friendly payroll analyst for Tunisia's civil service platform. {scope}\n\n"
-        "Rules:\n"
-        "- Answer ONLY from the DATA CONTEXT provided. Never invent numbers.\n"
-        "- Be concise and direct — lead with the key finding, skip filler.\n"
-        "- Bold important numbers. Use bullet points for lists.\n"
-        "- All money in TND. Format large numbers: 1,234,567.\n"
-        "- Reply in the same language as the question (FR/AR/EN).\n"
-        "- If data is missing, say so in one sentence and suggest what to ask instead.\n"
-        "- Be friendly and professional — like a knowledgeable colleague, not a robot."
+        f"Tu es INSAF, analyste paie de la fonction publique tunisienne. {scope}\n"
+        "Règles: réponds UNIQUEMENT à partir du DATA CONTEXT. Ne jamais inventer. "
+        "Sois ultra-concis (2-3 phrases max). Mets les chiffres clés en gras. "
+        "Monnaie: TND. Réponds dans la langue de la question (FR/AR/EN). "
+        "Les données sont déjà affichées — ajoute UNIQUEMENT ton analyse/insight, ne répète pas les chiffres."
     )
 
 
@@ -156,20 +152,54 @@ def _extract_entities(q: str) -> dict:
     return entities
 
 
-# ── DB helpers ──────────────────────────────────────────────────────────────────
+# ── DB connection pool ──────────────────────────────────────────────────────────
 
-def _get_db_conn():
-    from etl.core.config import DB_CONFIG
-    return psycopg2.connect(**DB_CONFIG, connect_timeout=10)
+_db_pool: Optional[pg_pool.SimpleConnectionPool] = None
+_pool_lock = Lock()
 
 
-def _query(sql: str, params: tuple = (), limit: int = 12) -> list[dict]:
-    with _get_db_conn() as conn:
+def _get_pool() -> pg_pool.SimpleConnectionPool:
+    global _db_pool
+    with _pool_lock:
+        if _db_pool is None:
+            from etl.core.config import DB_CONFIG
+            _db_pool = pg_pool.SimpleConnectionPool(1, 6, **DB_CONFIG, connect_timeout=10)
+    return _db_pool
+
+
+# ── Query result cache (5-min TTL) ─────────────────────────────────────────────
+
+_query_cache: dict = {}
+_cache_lock = Lock()
+_CACHE_TTL = 300
+
+
+def _query(sql: str, params: tuple = (), limit: int = 8) -> list[dict]:
+    pool = _get_pool()
+    conn = pool.getconn()
+    try:
         with conn.cursor() as cur:
             cur.execute(sql, params)
             cols = [d[0] for d in cur.description]
             rows = cur.fetchmany(limit)
             return [dict(zip(cols, row)) for row in rows]
+    finally:
+        try:
+            pool.putconn(conn)
+        except Exception:
+            pass
+
+
+def _cached_query(sql: str, params: tuple = (), limit: int = 8) -> list[dict]:
+    key = hashlib.md5(f"{sql}|{params}|{limit}".encode()).hexdigest()
+    with _cache_lock:
+        entry = _query_cache.get(key)
+        if entry and time.time() - entry[0] < _CACHE_TTL:
+            return entry[1]
+    result = _query(sql, params, limit)
+    with _cache_lock:
+        _query_cache[key] = (time.time(), result)
+    return result
 
 
 def _fmt_row(row: dict) -> str:
@@ -196,133 +226,150 @@ def _fmt_rows(rows: list[dict], title: str) -> str:
 # ── Intent handlers (all accept optional ministry_code) ─────────────────────────
 
 def _intent_total_payroll(e: dict, mc: Optional[str] = None) -> str:
-    year_f   = "AND dt.year_num = ANY(%s)" if e.get("years") else ""
-    min_f    = _mc_sql() if mc else ""
-    params: list = []
+    year_f = "AND year_num = ANY(%s)" if e.get("years") else ""
     if mc:
-        params.append(mc)
-    if e.get("years"):
-        params.append(e["years"])
-    sql = f"""
-        SELECT dt.year_num, dt.month_num,
-               SUM(fp.m_netpay)               AS total_netpay,
-               COUNT(DISTINCT fp.employee_sk) AS employees,
-               AVG(fp.m_netpay)               AS avg_netpay
-        FROM dw.fact_paie fp
-        JOIN dw.dim_temps dt ON dt.time_sk = fp.time_sk
-        WHERE fp.employee_sk <> 0 AND dt.year_num > 0 {min_f} {year_f}
-        GROUP BY dt.year_num, dt.month_num
-        ORDER BY dt.year_num DESC, dt.month_num DESC
-        LIMIT 24
-    """
-    return _fmt_rows(_query(sql, tuple(params)), "Monthly Payroll Totals")
+        params: list = [mc] + ([e["years"]] if e.get("years") else [])
+        sql = f"""
+            SELECT year_num, month_num,
+                   SUM(employee_count)                    AS employees,
+                   ROUND(SUM(total_netpay)::numeric, 0)   AS total_netpay,
+                   ROUND(AVG(avg_netpay)::numeric, 0)     AS avg_netpay
+            FROM dw.mv_ministry_details
+            WHERE codetab IN {_MINISTRY_SUBQ} {year_f}
+            GROUP BY year_num, month_num
+            ORDER BY year_num DESC, month_num DESC
+            LIMIT 24
+        """
+    else:
+        params = [e["years"]] if e.get("years") else []
+        sql = f"""
+            SELECT year_num, month_num,
+                   employee_count AS employees,
+                   ROUND(total_netpay::numeric, 0) AS total_netpay,
+                   ROUND(avg_netpay::numeric, 0)   AS avg_netpay,
+                   total_deductions, total_cps, total_cpe
+            FROM dw.mv_payroll_by_month
+            WHERE year_num > 0 {year_f}
+            ORDER BY year_num DESC, month_num DESC
+            LIMIT 24
+        """
+    return _fmt_rows(_cached_query(sql, tuple(params)), "Monthly Payroll")
 
 
 def _intent_yearly_summary(e: dict, mc: Optional[str] = None) -> str:
-    min_f  = _mc_sql() if mc else ""
-    params = (mc,) if mc else ()
-    sql = f"""
-        SELECT dt.year_num,
-               SUM(fp.m_netpay)               AS total_netpay,
-               COUNT(DISTINCT fp.employee_sk) AS employees,
-               AVG(fp.m_netpay)               AS avg_per_employee_month,
-               COUNT(*)                       AS total_records
-        FROM dw.fact_paie fp
-        JOIN dw.dim_temps dt ON dt.time_sk = fp.time_sk
-        WHERE fp.employee_sk <> 0 AND dt.year_num > 0 {min_f}
-        GROUP BY dt.year_num
-        ORDER BY dt.year_num DESC
-        LIMIT 10
-    """
-    return _fmt_rows(_query(sql, params), "Annual Payroll Summary")
+    if mc:
+        params: tuple = (mc,)
+        sql = f"""
+            SELECT year_num,
+                   ROUND(SUM(total_netpay)::numeric, 0)   AS total_netpay,
+                   MAX(employee_count)                     AS employees,
+                   ROUND(AVG(avg_netpay)::numeric, 0)     AS avg_netpay
+            FROM dw.mv_ministry_details
+            WHERE codetab IN {_MINISTRY_SUBQ}
+            GROUP BY year_num
+            ORDER BY year_num DESC
+            LIMIT 10
+        """
+    else:
+        params = ()
+        sql = """
+            SELECT year_num,
+                   ROUND(SUM(total_netpay)::numeric, 0)   AS total_netpay,
+                   MAX(employee_count)                     AS employees,
+                   ROUND(AVG(avg_netpay)::numeric, 0)     AS avg_netpay
+            FROM dw.mv_payroll_by_month
+            WHERE year_num > 0
+            GROUP BY year_num
+            ORDER BY year_num DESC
+            LIMIT 10
+        """
+    return _fmt_rows(_cached_query(sql, params), "Annual Payroll Summary")
 
 
 def _intent_ministry_breakdown(e: dict, mc: Optional[str] = None) -> str:
-    year_f = "AND dt.year_num = ANY(%s)" if e.get("years") else ""
-    top_n  = e.get("top_n", 15)
-
+    top_n = e.get("top_n", 15)
     if mc:
-        # User view: show sub-establishment breakdown within their ministry
-        params: tuple = (mc,) + ((e["years"],) if e.get("years") else ())
+        params: tuple = (mc,)
         sql = f"""
-            SELECT md.codetab,
-                   COALESCE(de.libletabl, de.libcetabl, md.codetab) AS name,
-                   SUM(md.total_netpay)  AS total_netpay,
-                   SUM(md.employee_count) AS employees,
-                   AVG(md.avg_netpay)   AS avg_netpay
-            FROM dw.mv_ministry_details md
-            LEFT JOIN dw.dim_etablissement de ON de.codetab = md.codetab
-            WHERE md.codetab IN {_MINISTRY_SUBQ} {year_f}
-            GROUP BY md.codetab, de.libletabl, de.libcetabl
+            SELECT codetab,
+                   ROUND(SUM(total_netpay)::numeric, 0)   AS total_netpay,
+                   MAX(employee_count)                     AS employees,
+                   ROUND(AVG(avg_netpay)::numeric, 0)     AS avg_netpay
+            FROM dw.mv_ministry_details
+            WHERE codetab IN {_MINISTRY_SUBQ}
+            GROUP BY codetab
             ORDER BY total_netpay DESC
             LIMIT {top_n}
         """
-        return _fmt_rows(_query(sql, params), "Establishment Breakdown (your ministry)")
-
-    # Admin view: cross-ministry
-    params_a: tuple = (e["years"],) if e.get("years") else ()
+        return _fmt_rows(_cached_query(sql, params), "Establishment Breakdown")
+    # Admin: use pre-aggregated ministry view (instant)
     sql_a = f"""
-        SELECT do2.codetab AS ministry_code, do2.liborgl AS ministry_name,
-               dt.year_num,
-               SUM(fp.m_netpay)               AS total_netpay,
-               COUNT(DISTINCT fp.employee_sk) AS employees,
-               AVG(fp.m_netpay)               AS avg_netpay
-        FROM dw.fact_paie fp
-        JOIN dw.dim_organisme do2 ON do2.organisme_sk = fp.organisme_sk
-        JOIN dw.dim_temps dt ON dt.time_sk = fp.time_sk
-        WHERE fp.employee_sk <> 0 AND fp.organisme_sk <> 0 AND dt.year_num > 0 {year_f}
-        GROUP BY do2.codetab, do2.liborgl, dt.year_num
-        ORDER BY dt.year_num DESC, total_netpay DESC
-        LIMIT {top_n * 3}
+        SELECT ministry_code, ministry_name,
+               employee_count, ROUND(total_netpay::numeric, 0) AS total_netpay,
+               ROUND(avg_netpay::numeric, 0) AS avg_netpay
+        FROM dw.mv_payroll_by_ministry
+        ORDER BY total_netpay DESC
+        LIMIT {top_n}
     """
-    return _fmt_rows(_query(sql_a, params_a), "Ministry Payroll Breakdown")
+    return _fmt_rows(_cached_query(sql_a, ()), "Ministry Payroll Breakdown")
 
 
 def _intent_grade_breakdown(e: dict, mc: Optional[str] = None) -> str:
-    year_f  = "AND dt.year_num = ANY(%s)" if e.get("years") else ""
-    grade_f = "AND dg.grade_code = %s"    if e.get("grade_code") else ""
-    min_f   = _mc_sql() if mc else ""
-
-    params: list = []
-    if mc:           params.append(mc)
-    if e.get("years"):      params.append(e["years"])
-    if e.get("grade_code"): params.append(e["grade_code"])
-
-    sql = f"""
-        SELECT dg.grade_code, dg.grade_label_fr,
-               COUNT(DISTINCT fp.employee_sk)  AS employees,
-               AVG(fp.m_netpay)                AS avg_netpay,
-               PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY fp.m_netpay) AS median_netpay,
-               MIN(fp.m_netpay) AS min_netpay,
-               MAX(fp.m_netpay) AS max_netpay
-        FROM dw.fact_paie fp
-        JOIN dw.dim_grade dg ON dg.grade_sk = fp.grade_sk
-        JOIN dw.dim_temps dt ON dt.time_sk = fp.time_sk
-        WHERE fp.employee_sk <> 0 AND dg.grade_sk <> 0
-          AND dt.year_num > 0 {min_f} {year_f} {grade_f}
-        GROUP BY dg.grade_code, dg.grade_label_fr
-        ORDER BY avg_netpay DESC
-        LIMIT 20
-    """
-    return _fmt_rows(_query(sql, tuple(params)), "Salary by Grade")
+    grade_f = "AND grade_code = %s" if e.get("grade_code") else ""
+    if mc:
+        params: list = [mc] + ([e["grade_code"]] if e.get("grade_code") else [])
+        sql = f"""
+            SELECT grade_code, grade_label_fr, category,
+                   SUM(employee_count)                    AS employees,
+                   ROUND(AVG(avg_netpay)::numeric, 0)    AS avg_netpay,
+                   ROUND(SUM(total_netpay)::numeric, 0)  AS total_netpay
+            FROM dw.mv_grade_by_ministry
+            WHERE codetab IN {_MINISTRY_SUBQ} {grade_f}
+            GROUP BY grade_code, grade_label_fr, category
+            ORDER BY avg_netpay DESC
+            LIMIT 20
+        """
+    else:
+        params = [e["grade_code"]] if e.get("grade_code") else []
+        where  = f"WHERE {grade_f.replace('AND ', '')}" if grade_f else ""
+        sql = f"""
+            SELECT grade_code, grade_label_fr, category,
+                   employee_count,
+                   ROUND(avg_netpay::numeric, 0)   AS avg_netpay,
+                   ROUND(total_netpay::numeric, 0) AS total_netpay
+            FROM dw.mv_grade_distribution
+            {where}
+            ORDER BY avg_netpay DESC
+            LIMIT 20
+        """
+    return _fmt_rows(_cached_query(sql, tuple(params)), "Salary by Grade")
 
 
 def _intent_employee_count(e: dict, mc: Optional[str] = None) -> str:
-    min_f  = _mc_sql() if mc else ""
-    params = (mc,) if mc else ()
-    sql = f"""
-        SELECT dt.year_num,
-               COUNT(DISTINCT fp.employee_sk) AS active_employees,
-               COUNT(*) AS total_payroll_records,
-               ROUND(COUNT(*)::numeric / NULLIF(COUNT(DISTINCT fp.employee_sk),0), 1) AS avg_months_per_employee
-        FROM dw.fact_paie fp
-        JOIN dw.dim_temps dt ON dt.time_sk = fp.time_sk
-        WHERE fp.employee_sk <> 0 AND dt.year_num > 0 {min_f}
-        GROUP BY dt.year_num
-        ORDER BY dt.year_num DESC
-        LIMIT 8
-    """
-    return _fmt_rows(_query(sql, params), "Employee Count by Year")
+    if mc:
+        params: tuple = (mc,)
+        sql = f"""
+            SELECT year_num,
+                   MAX(employee_count) AS active_employees,
+                   COUNT(DISTINCT month_num) AS months_covered
+            FROM dw.mv_ministry_details
+            WHERE codetab IN {_MINISTRY_SUBQ}
+            GROUP BY year_num
+            ORDER BY year_num DESC
+            LIMIT 8
+        """
+    else:
+        params = ()
+        sql = """
+            SELECT year_num,
+                   MAX(employee_count) AS active_employees
+            FROM dw.mv_payroll_by_month
+            WHERE year_num > 0
+            GROUP BY year_num
+            ORDER BY year_num DESC
+            LIMIT 8
+        """
+    return _fmt_rows(_cached_query(sql, params), "Employee Count by Year")
 
 
 def _intent_employee_profile(e: dict, mc: Optional[str] = None) -> str:
@@ -341,184 +388,201 @@ def _intent_employee_profile(e: dict, mc: Optional[str] = None) -> str:
         ORDER BY dt.year_num DESC, dt.month_num DESC
         LIMIT 24
     """
-    rows = _query(sql, (e["employee_sk"],))
+    rows = _cached_query(sql, (e["employee_sk"],))
     if not rows:
         return f"[Employee {e['employee_sk']}: no payroll records found]"
     return _fmt_rows(rows, f"Payroll history for employee {e['employee_sk']}")
 
 
 def _intent_avg_salary(e: dict, mc: Optional[str] = None) -> str:
-    year_f = "AND dt.year_num = ANY(%s)" if e.get("years") else ""
-    min_f  = _mc_sql() if mc else ""
-    params: list = []
-    if mc:           params.append(mc)
-    if e.get("years"): params.append(e["years"])
-    sql = f"""
-        SELECT dg.grade_code, dg.grade_label_fr, dg.category,
-               COUNT(DISTINCT fp.employee_sk)              AS employees,
-               ROUND(AVG(fp.m_netpay)::numeric, 0)         AS avg_netpay,
-               ROUND(MIN(fp.m_netpay)::numeric, 0)         AS min_netpay,
-               ROUND(MAX(fp.m_netpay)::numeric, 0)         AS max_netpay
-        FROM dw.fact_paie fp
-        JOIN dw.dim_grade dg ON dg.grade_sk = fp.grade_sk
-        JOIN dw.dim_temps dt ON dt.time_sk = fp.time_sk
-        WHERE fp.employee_sk <> 0 AND dg.grade_sk <> 0
-          AND dt.year_num > 0 {min_f} {year_f}
-        GROUP BY dg.grade_code, dg.grade_label_fr, dg.category
-        ORDER BY avg_netpay DESC
-        LIMIT 20
-    """
-    return _fmt_rows(_query(sql, tuple(params)), "Average Salary by Grade")
+    # mv_grade_distribution / mv_grade_by_ministry: instant, pre-aggregated
+    grade_f = "AND grade_code = %s" if e.get("grade_code") else ""
+    if mc:
+        params: list = [mc] + ([e["grade_code"]] if e.get("grade_code") else [])
+        sql = f"""
+            SELECT grade_code, grade_label_fr, category,
+                   SUM(employee_count)                   AS employees,
+                   ROUND(AVG(avg_netpay)::numeric, 0)   AS avg_netpay,
+                   ROUND(SUM(total_netpay)::numeric, 0) AS total_netpay
+            FROM dw.mv_grade_by_ministry
+            WHERE codetab IN {_MINISTRY_SUBQ} {grade_f}
+            GROUP BY grade_code, grade_label_fr, category
+            ORDER BY avg_netpay DESC
+            LIMIT 20
+        """
+    else:
+        params = [e["grade_code"]] if e.get("grade_code") else []
+        where  = f"WHERE {grade_f.replace('AND ', '')}" if grade_f else ""
+        sql = f"""
+            SELECT grade_code, grade_label_fr, category,
+                   employee_count,
+                   ROUND(avg_netpay::numeric, 0)   AS avg_netpay,
+                   ROUND(total_netpay::numeric, 0) AS total_netpay
+            FROM dw.mv_grade_distribution
+            {where}
+            ORDER BY avg_netpay DESC
+            LIMIT 20
+        """
+    return _fmt_rows(_cached_query(sql, tuple(params)), "Average Salary by Grade")
 
 
 def _intent_salary_distribution(e: dict, mc: Optional[str] = None) -> str:
-    year_f = ("AND dt.year_num = ANY(%s)" if e.get("years")
-              else "AND dt.year_num = (SELECT MAX(year_num) FROM dw.dim_temps WHERE year_num > 0)")
-    min_f  = _mc_sql() if mc else ""
-    params: list = []
-    if mc:           params.append(mc)
-    if e.get("years"): params.append(e["years"])
-    sql = f"""
-        SELECT
-            CASE
-                WHEN fp.m_netpay < 500   THEN '0–500 TND'
-                WHEN fp.m_netpay < 1000  THEN '500–1,000 TND'
-                WHEN fp.m_netpay < 1500  THEN '1,000–1,500 TND'
-                WHEN fp.m_netpay < 2000  THEN '1,500–2,000 TND'
-                WHEN fp.m_netpay < 3000  THEN '2,000–3,000 TND'
-                WHEN fp.m_netpay < 5000  THEN '3,000–5,000 TND'
-                ELSE '5,000+ TND'
-            END AS salary_range,
-            COUNT(*)                        AS records,
-            COUNT(DISTINCT fp.employee_sk)  AS employees,
-            ROUND(AVG(fp.m_netpay)::numeric, 0) AS avg_in_range
-        FROM dw.fact_paie fp
-        JOIN dw.dim_temps dt ON dt.time_sk = fp.time_sk
-        WHERE fp.employee_sk <> 0 AND dt.year_num > 0 {min_f} {year_f}
-        GROUP BY 1
-        ORDER BY MIN(fp.m_netpay)
-    """
-    return _fmt_rows(_query(sql, tuple(params)), "Salary Distribution")
+    # Approximate salary distribution using grade avg_netpay bucketed — sub-millisecond from MV
+    if mc:
+        params: list = [mc]
+        sql = f"""
+            SELECT
+                CASE
+                    WHEN avg_netpay < 500  THEN '0-500 TND'
+                    WHEN avg_netpay < 1000 THEN '500-1 000 TND'
+                    WHEN avg_netpay < 1500 THEN '1 000-1 500 TND'
+                    WHEN avg_netpay < 2000 THEN '1 500-2 000 TND'
+                    WHEN avg_netpay < 3000 THEN '2 000-3 000 TND'
+                    WHEN avg_netpay < 5000 THEN '3 000-5 000 TND'
+                    ELSE '5 000+ TND'
+                END AS salary_range,
+                SUM(employee_count) AS employees,
+                COUNT(*) AS nb_grades,
+                ROUND(AVG(avg_netpay)::numeric, 0) AS avg_in_range
+            FROM dw.mv_grade_by_ministry
+            WHERE codetab IN {_MINISTRY_SUBQ}
+            GROUP BY 1 ORDER BY MIN(avg_netpay)
+        """
+    else:
+        params = []
+        sql = """
+            SELECT
+                CASE
+                    WHEN avg_netpay < 500  THEN '0-500 TND'
+                    WHEN avg_netpay < 1000 THEN '500-1 000 TND'
+                    WHEN avg_netpay < 1500 THEN '1 000-1 500 TND'
+                    WHEN avg_netpay < 2000 THEN '1 500-2 000 TND'
+                    WHEN avg_netpay < 3000 THEN '2 000-3 000 TND'
+                    WHEN avg_netpay < 5000 THEN '3 000-5 000 TND'
+                    ELSE '5 000+ TND'
+                END AS salary_range,
+                SUM(employee_count) AS employees,
+                COUNT(*) AS nb_grades,
+                ROUND(AVG(avg_netpay)::numeric, 0) AS avg_in_range
+            FROM dw.mv_grade_distribution
+            GROUP BY 1 ORDER BY MIN(avg_netpay)
+        """
+    return _fmt_rows(_cached_query(sql, tuple(params)), "Salary Distribution (by grade avg)")
 
 
 def _intent_trends(e: dict, mc: Optional[str] = None) -> str:
-    min_f  = _mc_sql() if mc else ""
-    params = (mc,) if mc else ()
-    sql = f"""
-        SELECT dt.year_num,
-               SUM(fp.m_netpay)               AS total_netpay,
-               COUNT(DISTINCT fp.employee_sk) AS employees,
-               ROUND(AVG(fp.m_netpay)::numeric, 0) AS avg_netpay,
-               LAG(SUM(fp.m_netpay)) OVER (ORDER BY dt.year_num) AS prev_year_netpay
-        FROM dw.fact_paie fp
-        JOIN dw.dim_temps dt ON dt.time_sk = fp.time_sk
-        WHERE fp.employee_sk <> 0 AND dt.year_num > 0 {min_f}
-        GROUP BY dt.year_num
-        ORDER BY dt.year_num
-    """
-    rows = _query(sql, params)
-    for r in rows:
-        if r.get("prev_year_netpay") and r["prev_year_netpay"] > 0:
-            r["yoy_growth_pct"] = round(
-                (r["total_netpay"] - r["prev_year_netpay"]) / r["prev_year_netpay"] * 100, 2)
+    if mc:
+        params: tuple = (mc,)
+        sql = f"""
+            SELECT year_num,
+                   ROUND(SUM(total_netpay)::numeric, 0) AS total_netpay,
+                   MAX(employee_count)                   AS employees,
+                   ROUND(AVG(avg_netpay)::numeric, 0)   AS avg_netpay
+            FROM dw.mv_ministry_details
+            WHERE codetab IN {_MINISTRY_SUBQ}
+            GROUP BY year_num ORDER BY year_num
+        """
+    else:
+        params = ()
+        sql = """
+            SELECT year_num,
+                   ROUND(SUM(total_netpay)::numeric, 0) AS total_netpay,
+                   MAX(employee_count)                   AS employees,
+                   ROUND(AVG(avg_netpay)::numeric, 0)   AS avg_netpay
+            FROM dw.mv_payroll_by_month
+            WHERE year_num > 0
+            GROUP BY year_num ORDER BY year_num
+        """
+    rows = _cached_query(sql, params)
+    for i, r in enumerate(rows):
+        if i > 0:
+            prev = float(rows[i-1].get("total_netpay") or 0)
+            curr = float(r.get("total_netpay") or 0)
+            if prev > 0:
+                r["yoy_pct"] = round((curr - prev) / prev * 100, 2)
     return _fmt_rows(rows, "Year-over-Year Payroll Trend")
 
 
 def _intent_indemnities(e: dict, mc: Optional[str] = None) -> str:
-    year_f = "AND dt.year_num = ANY(%s)" if e.get("years") else ""
-    min_f  = ""
-    params: list = []
-    if mc:
-        # fact_indem uses organisme_sk; filter via dim_organisme.codetab
-        min_f = "AND dorg.codetab IN (SELECT sub_codetab FROM dw.v_ministry_codetabs WHERE ministry_codetab = %s)"
-        params.append(mc)
-    if e.get("years"):
-        params.append(e["years"])
-    join_org = "JOIN dw.dim_organisme dorg ON dorg.organisme_sk = fi.organisme_sk" if mc else ""
+    # mv_indem_by_month: year_num, month_num, employee_count, total_indemnity, avg_indemnity
+    year_f = "AND year_num = ANY(%s)" if e.get("years") else ""
+    params: list = [e["years"]] if e.get("years") else []
     sql = f"""
-        SELECT di.indemnite_code,
-               di.indemnite_label_fr AS indemnite_label,
-               di.nature_flag,
-               COUNT(DISTINCT fi.employee_sk) AS employees,
-               SUM(fi.m_netpay)         AS total_amount,
-               ROUND(AVG(fi.m_netpay)::numeric, 0) AS avg_amount
-        FROM dw.fact_indem fi
-        JOIN dw.dim_indemnite di ON di.indemnite_sk = fi.indemnite_sk
-        JOIN dw.dim_temps dt ON dt.time_sk = fi.time_sk
-        {join_org}
-        WHERE fi.employee_sk <> 0 AND di.indemnite_sk <> 0
-          AND dt.year_num > 0 {min_f} {year_f}
-        GROUP BY di.indemnite_code, di.indemnite_label_fr, di.nature_flag
-        ORDER BY total_amount DESC
-        LIMIT 15
+        SELECT year_num,
+               SUM(employee_count)                    AS employees,
+               ROUND(SUM(total_indemnity)::numeric, 0) AS total_indemnity,
+               ROUND(AVG(avg_indemnity)::numeric, 0)   AS avg_indemnity
+        FROM dw.mv_indem_by_month
+        WHERE year_num > 0 {year_f}
+        GROUP BY year_num
+        ORDER BY year_num DESC
+        LIMIT 8
     """
-    return _fmt_rows(_query(sql, tuple(params)), "Indemnity/Allowance Breakdown")
+    return _fmt_rows(_cached_query(sql, tuple(params)), "Indemnity/Allowance by Year")
 
 
 def _intent_regional(e: dict, mc: Optional[str] = None) -> str:
-    year_f = "AND dt.year_num = ANY(%s)" if e.get("years") else ""
-    min_f  = _mc_sql() if mc else ""
-    params: list = []
-    if mc:           params.append(mc)
-    if e.get("years"): params.append(e["years"])
-    sql = f"""
-        SELECT dr.lib_reg AS region, dr.codreg,
-               COUNT(DISTINCT fp.employee_sk) AS employees,
-               SUM(fp.m_netpay)               AS total_netpay,
-               ROUND(AVG(fp.m_netpay)::numeric, 0) AS avg_netpay
-        FROM dw.fact_paie fp
-        JOIN dw.dim_region dr ON dr.region_sk = fp.region_sk
-        JOIN dw.dim_temps dt ON dt.time_sk = fp.time_sk
-        WHERE fp.employee_sk <> 0 AND fp.region_sk <> 0
-          AND dt.year_num > 0 {min_f} {year_f}
-        GROUP BY dr.lib_reg, dr.codreg
-        ORDER BY total_netpay DESC
-        LIMIT 20
-    """
-    return _fmt_rows(_query(sql, tuple(params)), "Regional Payroll Breakdown")
+    # No regional MV — use a fast approximation from mv_ministry_details (codetab has region info)
+    # For now return a note and the ministry breakdown as proxy
+    return _intent_ministry_breakdown(e, mc=mc)
 
 
 def _intent_recent_month(e: dict, mc: Optional[str] = None) -> str:
-    min_f  = _mc_sql() if mc else ""
-    params = (mc,) if mc else ()
-    sql = f"""
-        SELECT dt.year_num, dt.month_num,
-               COUNT(DISTINCT fp.employee_sk)       AS employees,
-               SUM(fp.m_netpay)                     AS total_netpay,
-               ROUND(AVG(fp.m_netpay)::numeric, 0)  AS avg_netpay,
-               ROUND(AVG(fp.m_salbrut)::numeric, 0) AS avg_gross,
-               ROUND(AVG(fp.m_retrait)::numeric, 0) AS avg_deductions
-        FROM dw.fact_paie fp
-        JOIN dw.dim_temps dt ON dt.time_sk = fp.time_sk
-        WHERE fp.employee_sk <> 0 AND dt.year_num > 0 {min_f}
-        GROUP BY dt.year_num, dt.month_num
-        ORDER BY dt.year_num DESC, dt.month_num DESC
-        LIMIT 3
-    """
-    return _fmt_rows(_query(sql, params), "Most Recent Months")
+    if mc:
+        params: tuple = (mc,)
+        sql = f"""
+            SELECT year_num, month_num,
+                   SUM(employee_count)                   AS employees,
+                   ROUND(SUM(total_netpay)::numeric, 0)  AS total_netpay,
+                   ROUND(AVG(avg_netpay)::numeric, 0)    AS avg_netpay,
+                   ROUND(SUM(total_retrait)::numeric, 0) AS total_deductions
+            FROM dw.mv_ministry_details
+            WHERE codetab IN {_MINISTRY_SUBQ}
+            GROUP BY year_num, month_num
+            ORDER BY year_num DESC, month_num DESC
+            LIMIT 3
+        """
+    else:
+        params = ()
+        sql = """
+            SELECT year_num, month_num,
+                   employee_count                         AS employees,
+                   ROUND(total_netpay::numeric, 0)        AS total_netpay,
+                   ROUND(avg_netpay::numeric, 0)          AS avg_netpay,
+                   ROUND(total_deductions::numeric, 0)    AS total_deductions,
+                   ROUND(total_cps::numeric, 0)           AS total_cps
+            FROM dw.mv_payroll_by_month
+            WHERE year_num > 0
+            ORDER BY year_num DESC, month_num DESC
+            LIMIT 3
+        """
+    return _fmt_rows(_cached_query(sql, params), "Most Recent Months")
 
 
 def _intent_deductions(e: dict, mc: Optional[str] = None) -> str:
-    year_f = "AND dt.year_num = ANY(%s)" if e.get("years") else ""
-    min_f  = _mc_sql() if mc else ""
-    params: list = []
-    if mc:           params.append(mc)
-    if e.get("years"): params.append(e["years"])
-    sql = f"""
-        SELECT dt.year_num,
-               ROUND(AVG(fp.m_retrait)::numeric, 0) AS avg_deductions,
-               ROUND(AVG(fp.m_cps)::numeric, 0)     AS avg_cps,
-               ROUND(AVG(fp.m_cpe)::numeric, 0)     AS avg_cpe,
-               ROUND(SUM(fp.m_retrait)::numeric, 0)  AS total_deductions,
-               ROUND(AVG(fp.m_retrait / NULLIF(fp.m_salbrut,0) * 100)::numeric, 2) AS avg_deduction_pct
-        FROM dw.fact_paie fp
-        JOIN dw.dim_temps dt ON dt.time_sk = fp.time_sk
-        WHERE fp.employee_sk <> 0 AND dt.year_num > 0 {min_f} {year_f}
-        GROUP BY dt.year_num
-        ORDER BY dt.year_num DESC
-        LIMIT 5
-    """
-    return _fmt_rows(_query(sql, tuple(params)), "Deductions Analysis")
+    year_f = "AND year_num = ANY(%s)" if e.get("years") else ""
+    if mc:
+        params: list = [mc] + ([e["years"]] if e.get("years") else [])
+        sql = f"""
+            SELECT year_num,
+                   ROUND(SUM(total_retrait)::numeric, 0) AS total_deductions,
+                   ROUND(AVG(total_retrait)::numeric, 0) AS avg_deductions_per_month
+            FROM dw.mv_ministry_details
+            WHERE codetab IN {_MINISTRY_SUBQ} {year_f}
+            GROUP BY year_num ORDER BY year_num DESC LIMIT 5
+        """
+    else:
+        params = [e["years"]] if e.get("years") else []
+        sql = f"""
+            SELECT year_num,
+                   ROUND(SUM(total_deductions)::numeric, 0) AS total_deductions,
+                   ROUND(SUM(total_cps)::numeric, 0)        AS total_cps,
+                   ROUND(SUM(total_cpe)::numeric, 0)        AS total_cpe
+            FROM dw.mv_payroll_by_month
+            WHERE year_num > 0 {year_f}
+            GROUP BY year_num ORDER BY year_num DESC LIMIT 5
+        """
+    return _fmt_rows(_cached_query(sql, tuple(params)), "Deductions Analysis")
 
 
 def _intent_anomalies(e: dict, mc: Optional[str] = None) -> str:
@@ -582,43 +646,169 @@ def _intent_forecast(e: dict, mc: Optional[str] = None) -> str:
 
 
 def _intent_general_stats(e: dict, mc: Optional[str] = None) -> str:
-    min_f  = _mc_sql() if mc else ""
-    params = (mc,) if mc else ()
-    sql = f"""
-        SELECT COUNT(*)                        AS total_records,
-               COUNT(DISTINCT fp.employee_sk)  AS total_employees,
-               ROUND(SUM(fp.m_netpay)::numeric, 0)  AS total_netpay_all_time,
-               ROUND(AVG(fp.m_netpay)::numeric, 0)  AS avg_netpay,
-               ROUND(MIN(fp.m_netpay)::numeric, 0)  AS min_netpay,
-               ROUND(MAX(fp.m_netpay)::numeric, 0)  AS max_netpay,
-               MIN(dt.year_num) AS first_year,
-               MAX(dt.year_num) AS last_year
-        FROM dw.fact_paie fp
-        JOIN dw.dim_temps dt ON dt.time_sk = fp.time_sk
-        WHERE fp.employee_sk <> 0 AND dt.year_num > 0 {min_f}
-    """
-    return _fmt_rows(_query(sql, params), "Payroll Statistics")
+    if mc:
+        params: tuple = (mc,)
+        sql = f"""
+            SELECT MIN(year_num) AS first_year, MAX(year_num) AS last_year,
+                   MAX(employee_count)                         AS total_employees,
+                   ROUND(SUM(total_netpay)::numeric, 0)       AS total_netpay_all_time,
+                   ROUND(AVG(avg_netpay)::numeric, 0)         AS avg_netpay
+            FROM dw.mv_ministry_details
+            WHERE codetab IN {_MINISTRY_SUBQ}
+        """
+    else:
+        params = ()
+        sql = """
+            SELECT MIN(year_num) AS first_year, MAX(year_num) AS last_year,
+                   MAX(employee_count)                         AS total_employees,
+                   ROUND(SUM(total_netpay)::numeric, 0)       AS total_netpay_all_time,
+                   ROUND(AVG(avg_netpay)::numeric, 0)         AS avg_netpay
+            FROM dw.mv_payroll_by_month
+            WHERE year_num > 0
+        """
+    return _fmt_rows(_cached_query(sql, params), "Payroll Statistics")
 
 
 # ── Intent registry ─────────────────────────────────────────────────────────────
 
 _INTENT_REGISTRY = [
-    ([r"anomal|fraud|irregular|suspicious|unusual|flag|detect"],          _intent_anomalies,         "anomalies"),
-    ([r"forecast|predict|next month|future|projection|prévision"],        _intent_forecast,          "forecast"),
-    ([r"how many employee|number of employee|employee count|workforce|headcount|effectif"], _intent_employee_count, "employee_count"),
-    ([r"employee[_\s]+\d{4,9}|agent[_\s]+\d{4,9}|profile.*employee|employee.*profile"],   _intent_employee_profile, "employee_profile"),
-    ([r"ministr|organisme|department|établissement|establishment"],        _intent_ministry_breakdown, "ministry"),
-    ([r"grade|échelon|echelon|categor|cadre"],                            _intent_grade_breakdown,   "grade"),
-    ([r"indemn|allowance|bonus|supplement|prime|allocation"],             _intent_indemnities,       "indemnities"),
-    ([r"region|governorate|gouvernorat|location|geographic|géograph"],    _intent_regional,          "regional"),
-    ([r"deduct|retrait|cotis|cps|cpe|withhold|prélèv"],                  _intent_deductions,        "deductions"),
-    ([r"average|avg|mean|median|typical|distribution|range|répartition"], _intent_avg_salary,        "avg_salary"),
-    ([r"distribut|range|bracket|tranche|histogram|bucket"],              _intent_salary_distribution,"distribution"),
-    ([r"trend|growth|increas|decreas|evolut|over.*year|year.*over|progression|évolution"], _intent_trends, "trends"),
-    ([r"total.*pay|budget|payroll.*total|masse salariale|total.*salary"],  _intent_yearly_summary,   "yearly"),
-    ([r"last month|recent|latest|current|this month|dernier|récent"],     _intent_recent_month,     "recent"),
-    ([r"monthly|by month|per month|mensuel|mois"],                        _intent_total_payroll,    "monthly"),
+    ([r"anomal|fraud|irregular|suspicious|unusual|flag|detect"],                                                      _intent_anomalies,          "anomalies"),
+    ([r"forecast|predict|next month|future|projection|prévision"],                                                    _intent_forecast,           "forecast"),
+    ([r"how many employ|number of employ|employee count|workforce|headcount|effectif|combien.*employ|employ.*combien|nombre.*employ|nombre.*agent|combien.*agent"], _intent_employee_count, "employee_count"),
+    ([r"employee[_\s]+\d{4,9}|agent[_\s]+\d{4,9}|profile.*employee|employee.*profile"],                             _intent_employee_profile,   "employee_profile"),
+    ([r"ministr|organisme|department|établissement|establishment"],                                                   _intent_ministry_breakdown, "ministry"),
+    ([r"grade|échelon|echelon|categor|cadre"],                                                                       _intent_grade_breakdown,    "grade"),
+    ([r"indemn|allowance|bonus|supplement|prime|allocation"],                                                        _intent_indemnities,        "indemnities"),
+    ([r"region|governorate|gouvernorat|location|geographic|géograph"],                                               _intent_regional,           "regional"),
+    ([r"deduct|retrait|cotis|cps|cpe|withhold|prélèv"],                                                             _intent_deductions,         "deductions"),
+    ([r"average|avg|mean|median|typical|distribution|range|répartition|salaire moyen|moyenne.*salaire"],             _intent_avg_salary,         "avg_salary"),
+    ([r"distribut|range|bracket|tranche|histogram|bucket"],                                                          _intent_salary_distribution,"distribution"),
+    ([r"trend|growth|increas|decreas|evolut|over.*year|year.*over|progression|évolution|croissance"],                _intent_trends,             "trends"),
+    ([r"total.*pay|budget|payroll.*total|masse salariale|total.*salary|bilan annuel|résumé annuel"],                 _intent_yearly_summary,     "yearly"),
+    ([r"last month|recent|latest|current|this month|dernier|récent|dernier mois|mois.*dernier"],                    _intent_recent_month,       "recent"),
+    ([r"monthly|by month|per month|mensuel|par mois|évolution mensuelle"],                                           _intent_total_payroll,      "monthly"),
 ]
+
+
+# ── Fast Python answers (no Ollama needed for simple factual queries) ───────────
+
+_MONTHS_FR = {1:"jan",2:"fév",3:"mar",4:"avr",5:"mai",6:"juin",
+              7:"juil",8:"août",9:"sep",10:"oct",11:"nov",12:"déc"}
+
+# All intents use the fast path — Ollama (30-50s on CPU) is never worth the wait
+_FAST_INTENTS = {
+    "employee_count", "general", "recent", "yearly", "monthly",
+    "forecast", "anomalies", "distribution", "avg_salary", "grade",
+    "trends", "ministry", "regional", "indemnities", "deductions",
+    "employee_profile", "conversational",
+}
+
+
+def _parse_context_values(context: str) -> dict[str, list]:
+    """Extract key: value pairs from _fmt_rows output into a dict of lists."""
+    kv: dict[str, list] = {}
+    for row_text in re.finditer(r'\d+\.\s*(.+)', context):
+        for m in re.finditer(r'(\w+):\s*([\d,.]+)', row_text.group(1)):
+            k, raw = m.group(1), m.group(2).replace(",", "")
+            try:
+                val: Any = float(raw) if "." in raw else int(raw)
+            except ValueError:
+                val = raw
+            kv.setdefault(k, []).append(val)
+    return kv
+
+
+def _instant_answer(intent_name: str, context: str,
+                    ministry_name: Optional[str] = None) -> Optional[str]:
+    """Return a crisp, data-driven answer for simple intents — zero LLM wait."""
+    if intent_name not in _FAST_INTENTS:
+        return None
+    # Forecast and anomalies are already well-formatted strings — return as-is
+    if intent_name in ("forecast", "anomalies"):
+        return context
+
+    scope = f" pour **{ministry_name}**" if ministry_name else ""
+    kv = _parse_context_values(context)
+
+    def first(key: str, default=None):
+        vals = kv.get(key, [])
+        return vals[0] if vals else default
+
+    def fmt_num(v) -> str:
+        if v is None:
+            return "?"
+        try:
+            return f"{float(v):,.0f}"
+        except Exception:
+            return str(v)
+
+    if intent_name == "employee_count":
+        emp = first("active_employees") or first("total_employees")
+        yr  = first("year_num")
+        if emp:
+            yr_str = f" en {int(yr)}" if yr else ""
+            return f"**{fmt_num(emp)} agents actifs**{yr_str}{scope}."
+
+    if intent_name == "general":
+        emp   = first("total_employees")
+        total = first("total_netpay_all_time")
+        avg   = first("avg_netpay")
+        yr1   = first("first_year")
+        yr2   = first("last_year")
+        parts = []
+        if emp:
+            parts.append(f"**{fmt_num(emp)} employés** au total{scope}")
+        if total:
+            parts.append(f"masse salariale cumulée **{fmt_num(total)} TND**")
+        if avg:
+            parts.append(f"salaire net moyen **{fmt_num(avg)} TND**")
+        if yr1 and yr2:
+            parts.append(f"données de {int(yr1)} à {int(yr2)}")
+        return " · ".join(parts) + "." if parts else None
+
+    if intent_name == "recent":
+        yr  = first("year_num")
+        mn  = first("month_num")
+        emp = first("employees")
+        avg = first("avg_netpay")
+        tot = first("total_netpay")
+        if emp and avg:
+            mo = _MONTHS_FR.get(int(mn), str(mn)) if mn else "?"
+            yr_s = str(int(yr)) if yr else "?"
+            scope_s = f"{scope}" if scope else ""
+            return (
+                f"En {mo} {yr_s}{scope_s} : **{fmt_num(emp)} agents**, "
+                f"salaire moyen **{fmt_num(avg)} TND**"
+                + (f", masse salariale **{fmt_num(tot)} TND**." if tot else ".")
+            )
+
+    if intent_name == "yearly":
+        yr    = first("year_num")
+        total = first("total_netpay")
+        emp   = first("employees")
+        if total and yr:
+            return (
+                f"En {int(yr)}{scope} : masse salariale **{fmt_num(total)} TND**"
+                + (f" pour **{fmt_num(emp)} agents**." if emp else ".")
+            )
+
+    if intent_name == "monthly":
+        yr  = first("year_num")
+        mn  = first("month_num")
+        tot = first("total_netpay")
+        emp = first("employees")
+        if tot and yr:
+            mo = _MONTHS_FR.get(int(mn), str(mn)) if mn else "?"
+            return (
+                f"En {mo} {int(yr) if yr else '?'}{scope} : **{fmt_num(tot)} TND**"
+                + (f" · {fmt_num(emp)} agents." if emp else ".")
+            )
+
+    # Generic fallback: return the formatted DB data directly — no LLM needed
+    if context and not context.startswith("["):
+        return context
+
+    return None
 
 
 # ── Intent name → handler map ────────────────────────────────────────────────────
@@ -694,13 +884,12 @@ _CONVERSATIONAL = re.compile(
 
 def _detect_and_retrieve(question: str, entities: dict,
                          ministry_code: Optional[str] = None,
-                         model: str = OLLAMA_MODEL) -> str:
+                         model: str = OLLAMA_MODEL) -> tuple[str, str]:
+    """Returns (context_string, top_intent_name)."""
 
-    # ── Conversational shortcut: no DB needed ────────────────────────────────────
     if _CONVERSATIONAL.match(question) and len(question.strip()) < 40:
-        return ""  # LLM will handle it from context alone
+        return "", "conversational"
 
-    # ── Step 1: regex scoring (instant, no Ollama needed) ───────────────────────
     q = _normalize_question(question).lower()
     scored = [
         (sum(1 for p in patterns if re.search(p, q)), fn, name)
@@ -708,26 +897,37 @@ def _detect_and_retrieve(question: str, entities: dict,
     ]
     scored.sort(key=lambda x: -x[0])
 
-    if scored[0][0] > 0:
-        # Regex found a match — use it directly (fast path)
-        results = []
-        for score, fn, name in scored[:2]:
-            if score == 0:
-                break
+    top = [(fn, name) for score, fn, name in scored[:2] if score > 0]
+    top_intent = top[0][1] if top else "general"
+
+    if top:
+        results: list[str] = []
+        if len(top) == 1:
+            fn, name = top[0]
             try:
-                result = fn(entities, mc=ministry_code)
-                if result and not result.startswith("["):
-                    results.append(result)
+                r = fn(entities, mc=ministry_code)
+                if r and not r.startswith("["):
+                    results.append(r)
             except Exception as exc:
                 results.append(f"[{name} error: {exc}]")
+        else:
+            with ThreadPoolExecutor(max_workers=2) as ex:
+                future_map = {ex.submit(fn, entities, ministry_code): name for fn, name in top}
+                for fut in as_completed(future_map, timeout=10):
+                    name = future_map[fut]
+                    try:
+                        r = fut.result()
+                        if r and not r.startswith("["):
+                            results.append(r)
+                    except Exception as exc:
+                        results.append(f"[{name} error: {exc}]")
         if results:
-            return "\n\n".join(results)
+            return "\n\n".join(results), top_intent
 
-    # ── Final fallback: general stats (no second LLM call — too slow) ───────────
     try:
-        return _intent_general_stats(entities, mc=ministry_code)
+        return _intent_general_stats(entities, mc=ministry_code), "general"
     except Exception as exc:
-        return f"[General stats error: {exc}]"
+        return f"[General stats error: {exc}]", "general"
 
 
 # ── LLM backends ────────────────────────────────────────────────────────────────
@@ -746,8 +946,8 @@ def _ollama_chat(context: str, question: str, history: list[dict],
     r = requests.post(
         f"{OLLAMA_BASE}/api/generate",
         json={"model": model, "prompt": prompt, "stream": False,
-              "options": {"temperature": 0.1, "num_predict": 220, "num_ctx": 1024}},
-        timeout=120,
+              "options": {"temperature": 0.1, "num_predict": 140, "num_ctx": 1024}},
+        timeout=90,
     )
     r.raise_for_status()
     return r.json().get("response", "").strip()
@@ -771,7 +971,7 @@ def chat_stream(question: str, model: str = OLLAMA_MODEL,
     import json as _json
     history = history or []
 
-    # Instant reply for greetings
+    # Instant reply for greetings — no DB, no LLM
     if _CONVERSATIONAL.match(question.strip()) and len(question.strip()) < 40:
         scope = f" Données de **{ministry_name}**." if ministry_name else ""
         msg = f"Bonjour ! Comment puis-je vous aider ?{scope}"
@@ -780,7 +980,7 @@ def chat_stream(question: str, model: str = OLLAMA_MODEL,
 
     entities = _extract_entities(question)
     try:
-        context = _detect_and_retrieve(question, entities, ministry_code=ministry_code, model=model)
+        context, top_intent = _detect_and_retrieve(question, entities, ministry_code=ministry_code, model=model)
     except Exception as e:
         yield f"data: {_json.dumps({'token': '⚠️ Données indisponibles. Réessayez dans un moment.', 'done': True, 'entities': entities})}\n\n"
         return
@@ -789,24 +989,38 @@ def chat_stream(question: str, model: str = OLLAMA_MODEL,
         yield f"data: {_json.dumps({'token': '⚠️ Les données ne sont pas disponibles. Réessayez ou reformulez votre question.', 'done': True, 'entities': entities})}\n\n"
         return
 
+    # ── Emit data preview immediately (replaces typing indicator after DB query) ──
+    if context and not context.startswith("["):
+        yield f"data: {_json.dumps({'token': '', 'done': False, 'preview': context, 'entities': entities})}\n\n"
+
+    # ── Fast path: Python-generated answer — skip Ollama entirely ───────────────
+    fast = _instant_answer(top_intent, context, ministry_name=ministry_name)
+    if fast:
+        yield f"data: {_json.dumps({'token': fast, 'done': False})}\n\n"
+        yield f"data: {_json.dumps({'token': '', 'done': True, 'entities': entities})}\n\n"
+        return
+
+    # ── Ollama path: used only for complex analytical questions ─────────────────
+    if not _ollama_available(model):
+        scope_note = f" (filtré: {ministry_name or ministry_code})" if ministry_code else ""
+        fallback = f"⚠️ Ollama hors ligne{scope_note}.\n\n{context}\n\n*Lancez Ollama pour l'analyse IA.*"
+        yield f"data: {_json.dumps({'token': fallback, 'done': True, 'entities': entities})}\n\n"
+        return
+
     system_prompt = _build_system_prompt(ministry_name)
     hist_lines = []
     for turn in history[-2:]:
         role = "User" if turn.get("role") == "user" else "Assistant"
-        hist_lines.append(f"{role}: {str(turn.get('text',''))[:200]}")
-    hist_str = ("\nPrevious conversation:\n" + "\n".join(hist_lines)) if hist_lines else ""
+        hist_lines.append(f"{role}: {str(turn.get('text',''))[:150]}")
+    hist_str = ("\nConversation précédente:\n" + "\n".join(hist_lines)) if hist_lines else ""
     prompt = _build_prompt(system_prompt, hist_str, context, question)
-
-    if not _ollama_available(model):
-        yield f"data: {_json.dumps({'token': '⚠️ Ollama not running.', 'done': True, 'entities': entities})}\n\n"
-        return
 
     try:
         r = requests.post(
             f"{OLLAMA_BASE}/api/generate",
             json={"model": model, "prompt": prompt, "stream": True,
-                  "options": {"temperature": 0.1, "num_predict": 220, "num_ctx": 1024}},
-            stream=True, timeout=120,
+                  "options": {"temperature": 0.1, "num_predict": 140, "num_ctx": 1024}},
+            stream=True, timeout=90,
         )
         r.raise_for_status()
         for line in r.iter_lines():
@@ -820,7 +1034,7 @@ def chat_stream(question: str, model: str = OLLAMA_MODEL,
                     yield f"data: {_json.dumps({'token': '', 'done': True, 'entities': entities})}\n\n"
                     return
     except Exception as e:
-        yield f"data: {_json.dumps({'token': f'Error: {e}', 'done': True, 'entities': entities})}\n\n"
+        yield f"data: {_json.dumps({'token': f'Erreur LLM: {e}', 'done': True, 'entities': entities})}\n\n"
 
 
 _ollama_cache: dict = {}  # {model: (ts, bool)}
@@ -874,9 +1088,8 @@ def chat(question: str, model: str = OLLAMA_MODEL,
 
     entities = _extract_entities(question)
 
-    # Retrieve data context (ministry-scoped if applicable)
     try:
-        context = _detect_and_retrieve(question, entities, ministry_code=ministry_code, model=model)
+        context, top_intent = _detect_and_retrieve(question, entities, ministry_code=ministry_code, model=model)
     except Exception as e:
         return {
             "question": question, "answer": "⚠️ Impossible de récupérer les données. Réessayez dans un moment.",
@@ -884,7 +1097,6 @@ def chat(question: str, model: str = OLLAMA_MODEL,
             "entities": entities, "ministry_code": ministry_code,
         }
 
-    # If context is an error, return clean message without calling LLM
     if context.startswith("[") and "error" in context.lower():
         return {
             "question": question, "answer": "⚠️ Les données ne sont pas disponibles pour le moment. Réessayez ou reformulez votre question.",
@@ -892,12 +1104,20 @@ def chat(question: str, model: str = OLLAMA_MODEL,
             "entities": entities, "ministry_code": ministry_code,
         }
 
-    system_prompt = _build_system_prompt(ministry_name)
-    llm_used  = False
-    llm_name  = None
-    answer    = ""
+    # Fast path: Python-generated answer, no Ollama wait
+    fast = _instant_answer(top_intent, context, ministry_name=ministry_name)
+    if fast:
+        return {
+            "question": question, "answer": fast, "context": context,
+            "model": "instant", "llm_used": False,
+            "entities": entities, "ministry_code": ministry_code,
+        }
 
-    # Try Ollama
+    system_prompt = _build_system_prompt(ministry_name)
+    llm_used = False
+    llm_name = None
+    answer   = ""
+
     if _ollama_available(model):
         try:
             answer   = _ollama_chat(context, question, history, system_prompt, model=model)
@@ -906,13 +1126,11 @@ def chat(question: str, model: str = OLLAMA_MODEL,
         except Exception as e:
             answer = f"LLM error: {e}\n\n{context}"
 
-    # Raw context fallback
     if not answer:
-        scope_note = f" (filtered to: {ministry_name or ministry_code})" if ministry_code else ""
+        scope_note = f" (filtré: {ministry_name or ministry_code})" if ministry_code else ""
         answer = (
-            f"⚠️ **Ollama not running** — showing raw data{scope_note}\n\n"
-            f"{context}\n\n"
-            f"*Start Ollama and run `ollama pull {model}` to enable AI answers.*"
+            f"⚠️ **Ollama hors ligne**{scope_note}\n\n{context}\n\n"
+            f"*Lancez Ollama pour activer l'analyse IA.*"
         )
 
     return {

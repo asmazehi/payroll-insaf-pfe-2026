@@ -42,7 +42,6 @@
         <div class="bot-avatar"><mat-icon>smart_toy</mat-icon></div>
         <div>
           <div class="chat-header__name">{{ 'chatbot.name' | translate }}</div>
-          <div class="chat-header__sub">{{ 'chatbot.subtitle' | translate }}</div>
         </div>
       </div>
       <div class="chat-header__right">
@@ -96,7 +95,18 @@
           </div>
 
           <div class="msg-bubble msg-bubble--bot" *ngIf="!m.isTyping">
-            <div class="msg-markdown" [innerHTML]="m.html || m.text"></div>
+
+            <!-- Instant data preview card (shown before Ollama analysis arrives) -->
+            <div class="data-card" *ngIf="m.preview">
+              <button class="data-card__toggle" (click)="togglePreview(m)">
+                <mat-icon>table_chart</mat-icon>
+                <span>Données récupérées</span>
+                <mat-icon class="chevron">{{ m.previewOpen ? 'expand_less' : 'expand_more' }}</mat-icon>
+              </button>
+              <div class="data-card__body" *ngIf="m.previewOpen" [innerHTML]="m.previewHtml"></div>
+            </div>
+
+            <div class="msg-markdown" [innerHTML]="m.html || m.text" *ngIf="m.text"></div>
             <div class="msg-footer">
               <span class="msg-time">{{ fmtTime(m.timestamp) }}</span>
               <span class="elapsed" *ngIf="m.elapsed">{{ m.elapsed }}s</span>

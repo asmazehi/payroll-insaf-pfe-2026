@@ -15,6 +15,9 @@ interface Message {
   llm_used?: boolean;
   entities?: any;
   elapsed?: number;
+  preview?: string;
+  previewHtml?: SafeHtml;
+  previewOpen?: boolean;
 }
 
 interface ChatSession {
@@ -242,26 +245,34 @@ export class ChatbotComponent implements OnInit, OnDestroy, AfterViewChecked {
     let   botMsg: Message | null = null;
 
     this.ml.chatStream(q, history).subscribe({
-      next: (chunk) => {
-        // First token: replace typing indicator with a real bot message
-        if (!botMsg) {
+      next: (chunk: any) => {
+        // Create bot message bubble on first meaningful event (preview or token)
+        if (!botMsg && (chunk.token || chunk.preview)) {
           botMsg = {
             id: this.uid(), role: 'bot', text: '',
             html: this.renderMarkdown(''), timestamp: new Date(),
-            isTyping: false,
+            isTyping: false, previewOpen: false,
           };
           const idx = this.messages.indexOf(typingMsg);
           if (idx >= 0) this.messages[idx] = botMsg;
           this.loading = false;
         }
 
-        if (chunk.token) {
+        // Data preview arrived before Ollama — show it immediately
+        if (chunk.preview && botMsg) {
+          botMsg.preview     = chunk.preview;
+          botMsg.previewHtml = this.renderPreview(chunk.preview);
+          botMsg.previewOpen = false;
+          this.shouldScroll  = true;
+        }
+
+        if (chunk.token && botMsg) {
           botMsg.text += chunk.token;
           botMsg.html  = this.renderMarkdown(botMsg.text);
           this.shouldScroll = true;
         }
 
-        if (chunk.done) {
+        if (chunk.done && botMsg) {
           botMsg.elapsed  = Math.round((Date.now() - t0) / 100) / 10;
           botMsg.entities = chunk.entities;
           botMsg.llm_used = true;
@@ -318,6 +329,29 @@ export class ChatbotComponent implements OnInit, OnDestroy, AfterViewChecked {
     if (e.grade_code)     p.push(`Grade: ${e.grade_code}`);
     if (e.ministry_code)  p.push(`Min: ${e.ministry_code}`);
     return p.join(' · ');
+  }
+
+  togglePreview(m: Message): void { m.previewOpen = !m.previewOpen; }
+
+  renderPreview(text: string): SafeHtml {
+    const escaped = text
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+    // Turn numbered rows into table rows
+    const rows = escaped.split('\n').filter(l => l.trim());
+    let html = '';
+    for (const row of rows) {
+      if (row.startsWith('  ') && row.match(/^\s+\d+\./)) {
+        // Data row: "  1. key: val | key: val"
+        const cells = row.replace(/^\s+\d+\.\s*/, '').split(' | ')
+          .map(c => `<td>${c.trim()}</td>`).join('');
+        html += `<tr>${cells}</tr>`;
+      } else {
+        html += `<div class="preview-title">${row.trim()}</div>`;
+      }
+    }
+    const wrapped = html.includes('<tr>') ? `<table class="preview-table">${html}</table>` : html;
+    return this.sanitizer.bypassSecurityTrustHtml(wrapped);
   }
 
   renderMarkdown(text: string): SafeHtml {
