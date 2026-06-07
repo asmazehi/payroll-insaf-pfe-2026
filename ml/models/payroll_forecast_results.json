@@ -13,221 +13,221 @@
       "rmse": 0.0
     },
     "rf": {
-      "mape": 4.9977,
-      "smape": 5.1324,
-      "mase": 1.3089,
+      "mape": 5.0937,
+      "smape": 5.2331,
+      "mase": 1.3339,
       "da": 54.5,
-      "mae": 26564396.71,
-      "rmse": 27271587.44
+      "mae": 27072209.21,
+      "rmse": 27740731.33
     },
     "xgb": {
-      "mape": 6.275,
-      "smape": 6.4866,
-      "mase": 1.6414,
-      "da": 81.8,
-      "mae": 33313922.88,
-      "rmse": 33987936.67
+      "mape": 6.4972,
+      "smape": 6.724,
+      "mase": 1.6992,
+      "da": 72.7,
+      "mae": 34486757.35,
+      "rmse": 35154702.28
     },
     "sarima": {
-      "mape": 4.9576,
-      "smape": 5.0948,
+      "mape": 4.9582,
+      "smape": 5.0954,
       "mase": 1.2953,
       "da": 54.5,
-      "mae": 26287683.26,
-      "rmse": 27375584.38
+      "mae": 26290555.54,
+      "rmse": 27378749.54
     },
     "prophet": {
-      "mape": 5.0783,
-      "smape": 5.2227,
-      "mase": 1.3273,
+      "mape": 5.0302,
+      "smape": 5.1722,
+      "mase": 1.3147,
       "da": 54.5,
-      "mae": 26937859.53,
-      "rmse": 28100845.96
+      "mae": 26682948.45,
+      "rmse": 27873926.55
     },
     "tft": {
-      "mape": 7.4075,
-      "smape": 7.7055,
-      "mase": 1.9396,
+      "mape": 5.7449,
+      "smape": 5.9422,
+      "mase": 1.5067,
       "da": 54.5,
-      "mae": 39365922.88,
-      "rmse": 40264540.53
+      "mae": 30579952.01,
+      "rmse": 32890751.77
     }
   },
   "forecast_6m": [
     {
       "date": "2026-05",
-      "predicted_netpay": 507440553.35
+      "predicted_netpay": 507424835.55
     },
     {
       "date": "2026-06",
-      "predicted_netpay": 510555940.47
+      "predicted_netpay": 510540607.17
     },
     {
       "date": "2026-07",
-      "predicted_netpay": 498136434.92
+      "predicted_netpay": 498122017.85
     },
     {
       "date": "2026-08",
-      "predicted_netpay": 496071316.32
+      "predicted_netpay": 496050351.58
     },
     {
       "date": "2026-09",
-      "predicted_netpay": 496673621.36
+      "predicted_netpay": 496658452.51
     },
     {
       "date": "2026-10",
-      "predicted_netpay": 489939578.97
+      "predicted_netpay": 489924623.19
     }
   ],
   "feature_importances": [
     {
       "feature": "rolling_mean_12",
-      "importance": 0.207286,
+      "importance": 0.217823,
       "model": "rf"
     },
     {
       "feature": "lag_8",
-      "importance": 0.180183,
+      "importance": 0.177237,
       "model": "rf"
     },
     {
       "feature": "year_norm",
-      "importance": 0.157023,
+      "importance": 0.162214,
       "model": "rf"
     },
     {
       "feature": "year_num",
-      "importance": 0.132734,
-      "model": "rf"
-    },
-    {
-      "feature": "rolling_mean_6",
-      "importance": 0.063236,
+      "importance": 0.1123,
       "model": "rf"
     },
     {
       "feature": "lag_1",
-      "importance": 0.058033,
+      "importance": 0.062897,
       "model": "rf"
     },
     {
-      "feature": "lag_12",
-      "importance": 0.033168,
+      "feature": "rolling_mean_6",
+      "importance": 0.058421,
       "model": "rf"
     },
     {
       "feature": "rolling_mean_3",
-      "importance": 0.032942,
+      "importance": 0.046282,
       "model": "rf"
     },
     {
       "feature": "lag_9",
-      "importance": 0.03003,
+      "importance": 0.038043,
       "model": "rf"
     },
     {
-      "feature": "lag_10",
-      "importance": 0.027098,
+      "feature": "lag_12",
+      "importance": 0.032902,
       "model": "rf"
     },
     {
       "feature": "lag_11",
-      "importance": 0.020079,
+      "importance": 0.017304,
+      "model": "rf"
+    },
+    {
+      "feature": "lag_10",
+      "importance": 0.016143,
+      "model": "rf"
+    },
+    {
+      "feature": "lag_7",
+      "importance": 0.011151,
       "model": "rf"
     },
     {
       "feature": "lag_2",
-      "importance": 0.013343,
+      "importance": 0.008524,
       "model": "rf"
     },
     {
-      "feature": "lag_7",
-      "importance": 0.010869,
+      "feature": "lag_6",
+      "importance": 0.0069,
       "model": "rf"
     },
     {
       "feature": "lag_4",
-      "importance": 0.007192,
-      "model": "rf"
-    },
-    {
-      "feature": "yoy_growth",
-      "importance": 0.006959,
+      "importance": 0.006804,
       "model": "rf"
     },
     {
       "feature": "rolling_mean_12",
-      "importance": 0.549694,
+      "importance": 0.541203,
       "model": "xgb"
     },
     {
       "feature": "rolling_mean_3",
-      "importance": 0.166965,
+      "importance": 0.162539,
       "model": "xgb"
     },
     {
       "feature": "lag_8",
-      "importance": 0.134571,
-      "model": "xgb"
-    },
-    {
-      "feature": "year_norm",
-      "importance": 0.059925,
+      "importance": 0.118963,
       "model": "xgb"
     },
     {
       "feature": "year_num",
-      "importance": 0.050629,
+      "importance": 0.089547,
+      "model": "xgb"
+    },
+    {
+      "feature": "year_norm",
+      "importance": 0.053255,
       "model": "xgb"
     },
     {
       "feature": "lag_1",
-      "importance": 0.010499,
+      "importance": 0.009652,
       "model": "xgb"
     },
     {
       "feature": "lag_12",
-      "importance": 0.005586,
+      "importance": 0.004675,
       "model": "xgb"
     },
     {
       "feature": "lag_9",
-      "importance": 0.004127,
+      "importance": 0.004225,
       "model": "xgb"
     },
     {
       "feature": "lag_7",
-      "importance": 0.003833,
+      "importance": 0.00324,
       "model": "xgb"
     },
     {
       "feature": "lag_11",
-      "importance": 0.003507,
+      "importance": 0.003199,
       "model": "xgb"
     },
     {
       "feature": "rolling_mean_6",
-      "importance": 0.002449,
-      "model": "xgb"
-    },
-    {
-      "feature": "mom_delta",
-      "importance": 0.001409,
+      "importance": 0.001986,
       "model": "xgb"
     },
     {
       "feature": "month_num",
-      "importance": 0.00136,
+      "importance": 0.001531,
+      "model": "xgb"
+    },
+    {
+      "feature": "mom_delta",
+      "importance": 0.001273,
       "model": "xgb"
     },
     {
       "feature": "lag_10",
-      "importance": 0.001107,
+      "importance": 0.000905,
       "model": "xgb"
     },
     {
-      "feature": "month_sin",
-      "importance": 0.000756,
+      "feature": "lag_2",
+      "importance": 0.000675,
       "model": "xgb"
     }
   ]
