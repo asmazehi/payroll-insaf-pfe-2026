@@ -23,6 +23,7 @@ import json
 import uuid
 from calendar import monthrange
 from datetime import datetime, timezone
+from typing import Callable
 from pathlib import Path
 
 from etl.core.config import (

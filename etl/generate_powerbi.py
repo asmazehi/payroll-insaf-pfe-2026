@@ -315,7 +315,7 @@ def generate() -> None:
     print(f"File: {PBIT_PATH}")
     print(f"\n  {len(TABLES)} tables")
     print(f"  {len(RELATIONSHIPS)} relationships (6 active for fact_paie, 1 active for fact_indem->dim_indemnite,")
-    print(f"   6 inactive for fact_indem->shared dims — use USERELATIONSHIP() in DAX to activate)")
+    print("   6 inactive for fact_indem->shared dims — use USERELATIONSHIP() in DAX to activate)")
     print(f"  {len(MEASURES)} DAX measures")
 
 
