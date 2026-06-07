@@ -15,7 +15,7 @@ export class MonitoringComponent {
     {
       labelKey: 'monitoring.containers',
       icon: 'memory',
-      url: `${this.GRAFANA_BASE}/d/1e64d971-f906-44c1-a51e-6bd1ce90de3a/insaf-platform-ae282ac-e2809d-containers?orgId=1&refresh=10s&kiosk`
+      url: `${this.GRAFANA_BASE}/d/de697fd8-5441-4233-a24e-ffd6e9af7883/insaf-platform-ae282ac-e2809d-containers?orgId=1&refresh=10s&kiosk`
     },
     {
       labelKey: 'monitoring.prometheus',
