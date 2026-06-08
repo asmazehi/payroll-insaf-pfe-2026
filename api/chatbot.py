@@ -19,6 +19,7 @@ import json
 import os
 import re
 import time
+import unicodedata
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from difflib import get_close_matches
 from pathlib import Path
@@ -132,7 +133,9 @@ def _extract_entities(q: str) -> dict:
             if num not in entities["months"]:
                 entities["months"].append(num)
 
-    m = re.search(r'\b(?:min(?:istry)?|ministry|ministère|ministr)[_\s\-]*([0-9A-Z]{2,6})\b', q, re.I)
+    # Ministry code must contain at least one digit (e.g. H00, S00, W00)
+    # to avoid matching French words like "par", "les", "des" after "ministère"
+    m = re.search(r'\b(?:min(?:istry)?|ministry|ministère|ministr)[_\s\-]*([A-Z][0-9][0-9A-Z]{0,4})\b', q, re.I)
     if m:
         entities["ministry_code"] = m.group(1).upper()
 
@@ -677,7 +680,7 @@ _INTENT_REGISTRY = [
     ([r"forecast|predict|next month|future|projection|prévision"],                                                    _intent_forecast,           "forecast"),
     ([r"how many employ|number of employ|employee count|workforce|headcount|effectif|combien.*employ|employ.*combien|nombre.*employ|nombre.*agent|combien.*agent"], _intent_employee_count, "employee_count"),
     ([r"employee[_\s]+\d{4,9}|agent[_\s]+\d{4,9}|profile.*employee|employee.*profile"],                             _intent_employee_profile,   "employee_profile"),
-    ([r"ministr|organisme|department|établissement|establishment"],                                                   _intent_ministry_breakdown, "ministry"),
+    ([r"ministr|ministere|organisme|department|etablissement|establishment"],                                        _intent_ministry_breakdown, "ministry"),
     ([r"grade|échelon|echelon|categor|cadre"],                                                                       _intent_grade_breakdown,    "grade"),
     ([r"indemn|allowance|bonus|supplement|prime|allocation"],                                                        _intent_indemnities,        "indemnities"),
     ([r"region|governorate|gouvernorat|location|geographic|géograph"],                                               _intent_regional,           "regional"),
@@ -892,8 +895,10 @@ def _detect_and_retrieve(question: str, entities: dict,
         return "", "conversational"
 
     q = _normalize_question(question).lower()
+    # Strip accents so patterns like "ministr" match "ministère" after normalization
+    q_ascii = unicodedata.normalize('NFD', q).encode('ascii', 'ignore').decode('ascii')
     scored = [
-        (sum(1 for p in patterns if re.search(p, q)), fn, name)
+        (sum(1 for p in patterns if re.search(p, q_ascii)), fn, name)
         for patterns, fn, name in _INTENT_REGISTRY
     ]
     scored.sort(key=lambda x: -x[0])

@@ -1,10 +1,11 @@
 import { Component, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
 import { MlService } from '../../services/ml.service';
+import { AuthService } from '../../services/auth.service';
 import { TranslateService } from '@ngx-translate/core';
 import { EN_MINISTRIES, EN_GRADES } from './en-labels';
 import { Chart, ChartData, ChartConfiguration } from 'chart.js';
-import { forkJoin, Subscription } from 'rxjs';
+import { forkJoin, of, Subscription } from 'rxjs';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import zoomPlugin from 'chartjs-plugin-zoom';
@@ -36,6 +37,9 @@ export class ForecastComponent implements OnInit, OnDestroy {
   result:       any   = null;
   dimensions:   any   = null;
   filteredData: any[] = [];
+
+  isAdminUser    = false;
+  userMinistry   = '';
 
   selectedMinistry = '';
   selectedGrade    = '';
@@ -203,9 +207,14 @@ export class ForecastComponent implements OnInit, OnDestroy {
     private translate: TranslateService,
     private cdr:       ChangeDetectorRef,
     private route:     ActivatedRoute,
+    private auth:      AuthService,
   ) {}
 
   ngOnInit(): void {
+    const user = this.auth.getCurrentUser();
+    this.isAdminUser  = user?.role === 'ROLE_ADMIN';
+    this.userMinistry = (!this.isAdminUser && user?.ministryCode) ? user.ministryCode : '';
+
     // Rebuild charts whenever language changes
     this.langSub = this.translate.onLangChange.subscribe(() => {
       if (this.result) this.buildMainChart();
@@ -215,14 +224,24 @@ export class ForecastComponent implements OnInit, OnDestroy {
     });
 
     forkJoin({
-      forecast:   this.ml.getForecast(this.nMonths),
-      dimensions: this.ml.getForecastDimensions(),
+      forecast:    this.ml.getForecast(this.nMonths),
+      dimensions:  this.ml.getForecastDimensions(),
+      historical:  this.userMinistry ? this.ml.getForecastHistorical(this.userMinistry) : of(null),
+      grades:      this.userMinistry ? this.ml.getForecastGrades(this.userMinistry)     : of(null),
     }).subscribe({
-      next: ({ forecast, dimensions }) => {
+      next: ({ forecast, dimensions, historical, grades }) => {
         this.result     = forecast;
         this.dimensions = dimensions;
         this.loading    = false;
-        this.buildMainChart();
+        if (this.userMinistry) {
+          this.selectedMinistry = this.userMinistry;
+          this.filteredData     = (historical as any)?.data || [];
+          this.availableGrades  = (grades as any)?.grades  || [];
+          this.buildFilteredChart();
+          this.buildMainChart();
+        } else {
+          this.buildMainChart();
+        }
       },
       error: () => {
         this.error   = this.translate.instant('forecast.ml_unavailable');
@@ -255,9 +274,28 @@ export class ForecastComponent implements OnInit, OnDestroy {
   }
 
   buildMainChart(): void {
-    const all  = this.result?.historical || [];
+    // For non-admin users locked to a ministry, use ministry-filtered historical data
+    const useFiltered = !!this.userMinistry && this.filteredData.length > 0;
+    const all  = useFiltered ? this.filteredData : (this.result?.historical || []);
     const hist = this.showAllHistory ? all : all.slice(-48);
-    const fore  = this.result?.forecast || [];
+    const globalFore  = this.result?.forecast || [];
+
+    // Scale forecast by ministry share so the dashed line stays contextually relevant
+    let fore = globalFore;
+    if (useFiltered && globalFore.length && all.length) {
+      const filteredAvg = all.reduce((s: number, r: any) => s + r.actual_netpay, 0) / all.length;
+      const globalHist  = this.result?.historical || [];
+      const globalAvg   = globalHist.length
+        ? globalHist.reduce((s: number, r: any) => s + r.actual_netpay, 0) / globalHist.length
+        : 1;
+      const ratio = globalAvg > 0 ? filteredAvg / globalAvg : 1;
+      fore = globalFore.map((r: any) => ({
+        ...r,
+        predicted_netpay: r.predicted_netpay * ratio,
+        upper: r.upper * ratio,
+        lower: r.lower * ratio,
+      }));
+    }
 
     const histLabels = hist.map((r: any) => r.date);
     const foreLabels = fore.map((r: any) => r.date);
@@ -329,22 +367,63 @@ export class ForecastComponent implements OnInit, OnDestroy {
       ? this.ministryName(this.selectedMinistry)
       : this.gradeLabel(this.selectedGrade);
 
+    const globalFore  = this.result?.forecast || [];
+    const globalAvg   = (this.result?.historical || []).reduce((s: number, r: any) => s + r.actual_netpay, 0)
+                        / Math.max(1, (this.result?.historical || []).length);
+    const ministryAvg = data.reduce((s: number, r: any) => s + r.actual_netpay, 0) / data.length;
+    const ratio       = globalAvg > 0 ? ministryAvg / globalAvg : 1;
+    const fore        = globalFore.map((r: any) => ({
+      ...r,
+      predicted_netpay: r.predicted_netpay * ratio,
+      upper: r.upper * ratio,
+      lower: r.lower * ratio,
+    }));
+
+    const histLabels = data.map((r: any) => r.date);
+    const foreLabels = fore.map((r: any) => r.date);
+    const pad  = (arr: any[], n: number) => [...Array(n).fill(null), ...arr];
+    const padH = (arr: any[], n: number) => [...arr, ...Array(n).fill(null)];
+    const FORE_COLOR = '#f59e0b';
+
     this.filteredChartData = {
-      labels: data.map((r: any) => r.date),
-      datasets: [{
-        label: `${filterLabel} — ${this.translate.instant('forecast.chart_filtered')}`,
-        data: data.map((r: any) => r.actual_netpay),
-        borderColor: '#8B5CF6',
-        backgroundColor: (ctx: any) => {
-          const c = ctx.chart.ctx;
-          const g = c.createLinearGradient(0, 0, 0, ctx.chart.height);
-          g.addColorStop(0, 'rgba(139,92,246,.3)');
-          g.addColorStop(1, 'rgba(139,92,246,.01)');
-          return g;
+      labels: [...histLabels, ...foreLabels],
+      datasets: [
+        {
+          label: `${filterLabel} — ${this.translate.instant('forecast.chart_filtered')}`,
+          data: padH(data.map((r: any) => r.actual_netpay), foreLabels.length),
+          borderColor: '#8B5CF6',
+          backgroundColor: (ctx: any) => {
+            const c = ctx.chart.ctx;
+            const g = c.createLinearGradient(0, 0, 0, ctx.chart.height);
+            g.addColorStop(0, 'rgba(139,92,246,.3)');
+            g.addColorStop(1, 'rgba(139,92,246,.01)');
+            return g;
+          },
+          borderWidth: 2.5, pointRadius: 0, pointHoverRadius: 5,
+          pointHoverBackgroundColor: '#8B5CF6', tension: 0.38, fill: true, spanGaps: true,
         },
-        borderWidth: 2.5, pointRadius: 0, pointHoverRadius: 5,
-        pointHoverBackgroundColor: '#8B5CF6', tension: 0.38, fill: true,
-      }],
+        {
+          label: 'CI upper',
+          data: pad(fore.map((r: any) => r.upper), histLabels.length),
+          borderColor: 'transparent', backgroundColor: 'transparent',
+          borderWidth: 0, pointRadius: 0, tension: 0.3, spanGaps: false, fill: false,
+        },
+        {
+          label: 'CI lower',
+          data: pad(fore.map((r: any) => r.lower), histLabels.length),
+          borderColor: 'transparent', backgroundColor: 'rgba(245,158,11,.13)',
+          borderWidth: 0, pointRadius: 0, tension: 0.3, fill: '-1', spanGaps: false,
+        },
+        {
+          label: `${this.translate.instant('forecast.chart_forecast')} — ${this.winnerLabel} (MAPE ${this.result?.mape?.toFixed(1)}%)`,
+          data: pad(fore.map((r: any) => r.predicted_netpay), histLabels.length),
+          borderColor: FORE_COLOR, backgroundColor: 'transparent',
+          borderWidth: 2.5, borderDash: [7, 4],
+          pointBackgroundColor: FORE_COLOR, pointRadius: 4, pointHoverRadius: 6,
+          pointBorderColor: '#0e0e1a', pointBorderWidth: 1.5,
+          tension: 0.3, fill: false, spanGaps: false,
+        },
+      ] as any,
     };
   }
 
@@ -533,6 +612,8 @@ export class ForecastComponent implements OnInit, OnDestroy {
         this.filteredData  = res.data || [];
         this.filterLoading = false;
         this.buildFilteredChart();
+        // Refresh main chart so it uses ministry data for non-admin users
+        if (this.userMinistry && this.result) this.buildMainChart();
       },
       error: () => { this.filterLoading = false; },
     });
@@ -876,6 +957,19 @@ export class ForecastComponent implements OnInit, OnDestroy {
   }
   get filteredForecastEstimate(): number {
     return (this.filteredShare / 100) * (this.result?.avg_forecast || 0);
+  }
+
+  /** KPI: avg historical — ministry-specific for locked users, global otherwise */
+  get displayAvgHistorical(): number {
+    return (this.userMinistry && this.filteredData.length)
+      ? this.filteredAvg
+      : (this.result?.avg_historical || 0);
+  }
+  /** KPI: avg forecast — ministry-scaled for locked users, global otherwise */
+  get displayAvgForecast(): number {
+    return (this.userMinistry && this.filteredData.length)
+      ? this.filteredForecastEstimate
+      : (this.result?.avg_forecast || 0);
   }
 
   get empYoyPct(): string {

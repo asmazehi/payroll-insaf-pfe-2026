@@ -2,6 +2,8 @@ import { Component, OnInit } from '@angular/core';
 import { AdminService, Ticket } from '../../services/admin.service';
 import { AuthService } from '../../services/auth.service';
 
+const SEEN_KEY = 'insaf_tickets_seen';
+
 @Component({
   selector: 'app-tickets',
   templateUrl: './tickets.component.html',
@@ -17,7 +19,14 @@ export class TicketsComponent implements OnInit {
   saving = false;
   saveError = '';
 
+  editingTicket: Ticket | null = null;
+  editForm = { title: '', description: '' };
+  editSaving = false;
+  editError = '';
+
   confirmDialog: { title: string; message: string; action: () => void } | null = null;
+
+  resolvedNotifications: Ticket[] = [];
 
   constructor(private adminService: AdminService, public auth: AuthService) {}
 
@@ -28,9 +37,32 @@ export class TicketsComponent implements OnInit {
   load(): void {
     this.loading = true;
     this.adminService.getTickets().subscribe({
-      next: (t) => { this.tickets = t; this.loading = false; },
+      next: (tickets) => {
+        this.tickets = tickets;
+        this.loading = false;
+        if (!this.isAdmin()) this.checkResolvedNotifications(tickets);
+      },
       error: () => { this.error = 'Failed to load tickets'; this.loading = false; }
     });
+  }
+
+  /** Notify user about tickets that became DONE since last visit. */
+  private checkResolvedNotifications(tickets: Ticket[]): void {
+    const raw = localStorage.getItem(SEEN_KEY);
+    const seen: Record<number, string> = raw ? JSON.parse(raw) : {};
+
+    this.resolvedNotifications = tickets.filter(t =>
+      t.status === 'DONE' && (!seen[t.id] || seen[t.id] !== 'DONE')
+    );
+
+    // Mark all current tickets as seen
+    const next: Record<number, string> = {};
+    tickets.forEach(t => next[t.id] = t.status);
+    localStorage.setItem(SEEN_KEY, JSON.stringify(next));
+  }
+
+  dismissNotification(ticket: Ticket): void {
+    this.resolvedNotifications = this.resolvedNotifications.filter(t => t.id !== ticket.id);
   }
 
   openCreate(): void {
@@ -49,9 +81,31 @@ export class TicketsComponent implements OnInit {
     });
   }
 
+  openEdit(ticket: Ticket): void {
+    this.editingTicket = ticket;
+    this.editForm = { title: ticket.title, description: ticket.description ?? '' };
+    this.editError = '';
+  }
+
+  submitEdit(): void {
+    if (!this.editingTicket) return;
+    if (!this.editForm.title.trim()) { this.editError = 'Title is required'; return; }
+    this.editSaving = true;
+    this.editError = '';
+    this.adminService.editTicket(this.editingTicket.id, this.editForm.title, this.editForm.description).subscribe({
+      next: (updated) => {
+        this.editSaving = false;
+        this.editingTicket = null;
+        const idx = this.tickets.findIndex(t => t.id === updated.id);
+        if (idx !== -1) this.tickets[idx] = updated;
+      },
+      error: (e) => { this.editSaving = false; this.editError = e?.error?.error || 'Failed to update ticket'; }
+    });
+  }
+
   setStatus(ticket: Ticket, status: string): void {
     this.adminService.updateTicketStatus(ticket.id, status).subscribe({
-      next: (t) => { ticket.status = t.status; },
+      next: (t) => { ticket.status = t.status; ticket.resolvedAt = t.resolvedAt; },
       error: () => {}
     });
   }
@@ -73,5 +127,15 @@ export class TicketsComponent implements OnInit {
 
   statusClass(s: string): string {
     return { OPEN: 'status-open', IN_PROGRESS: 'status-progress', DONE: 'status-done' }[s] ?? '';
+  }
+
+  canEdit(ticket: Ticket): boolean {
+    return !this.isAdmin() && ticket.status === 'OPEN' &&
+           ticket.createdBy === this.auth.getCurrentUser()?.username;
+  }
+
+  canDelete(ticket: Ticket): boolean {
+    return !this.isAdmin() && ticket.status === 'OPEN' &&
+           ticket.createdBy === this.auth.getCurrentUser()?.username;
   }
 }

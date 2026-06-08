@@ -32,17 +32,25 @@ public class Ticket {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt = Instant.now();
 
+    @Column(name = "resolved_at")
+    private Instant resolvedAt;
+
     public Long getId()                    { return id; }
     public String getTitle()               { return title; }
     public void setTitle(String t)         { this.title = t; }
     public String getDescription()         { return description; }
     public void setDescription(String d)   { this.description = d; }
     public String getStatus()              { return status; }
-    public void setStatus(String s)        { this.status = s; this.updatedAt = Instant.now(); }
     public String getMinistryCode()        { return ministryCode; }
     public void setMinistryCode(String m)  { this.ministryCode = m; }
     public String getCreatedBy()           { return createdBy; }
     public void setCreatedBy(String c)     { this.createdBy = c; }
     public Instant getCreatedAt()          { return createdAt; }
     public Instant getUpdatedAt()          { return updatedAt; }
+    public Instant getResolvedAt()         { return resolvedAt; }
+    public void setStatus(String s) {
+        this.status = s;
+        this.updatedAt = Instant.now();
+        if ("DONE".equals(s) && this.resolvedAt == null) this.resolvedAt = Instant.now();
+    }
 }

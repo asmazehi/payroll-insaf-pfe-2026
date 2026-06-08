@@ -31,6 +31,7 @@ export interface Ticket {
   createdBy: string;
   createdAt: string;
   updatedAt: string;
+  resolvedAt: string | null;
 }
 
 export interface EtlJob {
@@ -100,6 +101,10 @@ export class AdminService {
 
   createTicket(title: string, description: string): Observable<Ticket> {
     return this.http.post<Ticket>(`${this.base}/tickets`, { title, description });
+  }
+
+  editTicket(id: number, title: string, description: string): Observable<Ticket> {
+    return this.http.put<Ticket>(`${this.base}/tickets/${id}`, { title, description });
   }
 
   updateTicketStatus(id: number, status: string): Observable<Ticket> {

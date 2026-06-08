@@ -540,7 +540,7 @@ async def stream_progress(run_id: str):
 def _check_disk(run_id: str, stage: str, min_gb: float = 8.0) -> None:
     """Abort the pipeline if free disk space is below min_gb."""
     import shutil as _shutil
-    free = _shutil.disk_usage("C:\\").free / 1024 ** 3
+    free = _shutil.disk_usage("/" if os.name != "nt" else "C:\\").free / 1024 ** 3
     if free < min_gb:
         msg = (f"DISK FULL ABORT at [{stage}] — only {free:.1f} GB free "
                f"(minimum {min_gb} GB required). Free up space and retry.")

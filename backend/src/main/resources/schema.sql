@@ -70,8 +70,10 @@ CREATE TABLE IF NOT EXISTS public.tickets (
     ministry_code VARCHAR(10),
     created_by   VARCHAR(50)  NOT NULL,
     created_at   TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
-    updated_at   TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+    updated_at   TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+    resolved_at  TIMESTAMPTZ
 );
+ALTER TABLE public.tickets ADD COLUMN IF NOT EXISTS resolved_at TIMESTAMPTZ;
 
 -- Per-ministry aggregated MV — used by ministry-scoped dashboard queries (sub-ms vs 36s on raw table)
 -- REFRESH MATERIALIZED VIEW dw.mv_ministry_details; — run after each ETL load

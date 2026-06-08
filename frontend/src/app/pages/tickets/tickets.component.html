@@ -18,6 +18,17 @@
 
   <div class="page-body">
 
+    <!-- DONE notifications for users -->
+    <div class="resolved-notification" *ngFor="let n of resolvedNotifications">
+      <mat-icon>check_circle</mat-icon>
+      <div class="notif-text">
+        <strong>Your ticket has been resolved:</strong> {{ n.title }}
+      </div>
+      <button mat-icon-button (click)="dismissNotification(n)">
+        <mat-icon>close</mat-icon>
+      </button>
+    </div>
+
     <div class="alert-error" *ngIf="error">{{ error }}</div>
 
     <div class="loading-wrap" *ngIf="loading">
@@ -48,6 +59,7 @@
         <h3 class="ticket-title">{{ t.title }}</h3>
         <p class="ticket-desc" *ngIf="t.description">{{ t.description }}</p>
 
+        <!-- Admin controls -->
         <div class="ticket-card__footer" *ngIf="isAdmin()">
           <div class="status-actions">
             <button mat-stroked-button class="btn-open"
@@ -63,6 +75,22 @@
           <button mat-icon-button color="warn" (click)="remove(t)">
             <mat-icon>delete</mat-icon>
           </button>
+        </div>
+
+        <!-- User controls (edit/delete own OPEN tickets) -->
+        <div class="ticket-card__footer user-actions" *ngIf="!isAdmin() && (canEdit(t) || canDelete(t))">
+          <button mat-stroked-button class="btn-edit" (click)="openEdit(t)" *ngIf="canEdit(t)">
+            <mat-icon>edit</mat-icon> Edit
+          </button>
+          <button mat-icon-button color="warn" (click)="remove(t)" *ngIf="canDelete(t)">
+            <mat-icon>delete</mat-icon>
+          </button>
+        </div>
+
+        <!-- Resolved info for user -->
+        <div class="resolved-info" *ngIf="!isAdmin() && t.status === 'DONE' && t.resolvedAt">
+          <mat-icon>check_circle</mat-icon>
+          Resolved on {{ t.resolvedAt | date:'MMM d, y' }} — will be removed after 5 days
         </div>
       </div>
     </div>
@@ -106,6 +134,34 @@
         <button mat-button (click)="showForm=false">Cancel</button>
         <button mat-raised-button color="primary" (click)="submit()" [disabled]="saving">
           {{ saving ? 'Submitting…' : 'Submit Ticket' }}
+        </button>
+      </div>
+    </div>
+
+    <!-- Edit ticket modal -->
+    <div class="modal-backdrop" *ngIf="editingTicket" (click)="editingTicket=null"></div>
+    <div class="modal-panel" *ngIf="editingTicket" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <mat-icon class="modal-icon">edit</mat-icon>
+        <h3>Edit Ticket</h3>
+      </div>
+
+      <div class="alert-error" *ngIf="editError">{{ editError }}</div>
+
+      <mat-form-field appearance="outline" class="full-width">
+        <mat-label>Issue title</mat-label>
+        <input matInput [(ngModel)]="editForm.title" maxlength="200" />
+      </mat-form-field>
+
+      <mat-form-field appearance="outline" class="full-width">
+        <mat-label>Details (optional)</mat-label>
+        <textarea matInput [(ngModel)]="editForm.description" rows="4"></textarea>
+      </mat-form-field>
+
+      <div class="form-actions">
+        <button mat-button (click)="editingTicket=null">Cancel</button>
+        <button mat-raised-button color="primary" (click)="submitEdit()" [disabled]="editSaving">
+          {{ editSaving ? 'Saving…' : 'Save Changes' }}
         </button>
       </div>
     </div>
