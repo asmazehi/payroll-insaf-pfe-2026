@@ -92,8 +92,8 @@ public class TicketController {
         }
         return ticketRepository.findByIdAndCreatedBy(id, auth.getName())
                 .map(t -> {
-                    if (!"OPEN".equals(t.getStatus()))
-                        return ResponseEntity.badRequest().<Object>body(Map.of("error", "Only OPEN tickets can be deleted"));
+                    if ("DONE".equals(t.getStatus()))
+                        return ResponseEntity.badRequest().<Object>body(Map.of("error", "Resolved tickets cannot be deleted"));
                     ticketRepository.deleteById(id);
                     return ResponseEntity.<Object>ok(Map.of("message", "Ticket deleted"));
                 })
@@ -106,10 +106,10 @@ public class TicketController {
         return ResponseEntity.ok(Map.of("count", ticketRepository.countByStatus("OPEN")));
     }
 
-    /** Auto-purge DONE tickets older than 5 days — runs every hour. */
+    /** Auto-purge DONE tickets older than 2 days — runs every hour. */
     @Scheduled(fixedDelay = 3_600_000)
     public void purgeDoneTickets() {
-        Instant cutoff = Instant.now().minus(5, ChronoUnit.DAYS);
+        Instant cutoff = Instant.now().minus(2, ChronoUnit.DAYS);
         List<Ticket> old = ticketRepository.findByStatusAndResolvedAtBefore("DONE", cutoff);
         if (!old.isEmpty()) ticketRepository.deleteAll(old);
     }

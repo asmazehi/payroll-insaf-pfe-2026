@@ -135,7 +135,7 @@ export class TicketsComponent implements OnInit {
   }
 
   canDelete(ticket: Ticket): boolean {
-    return !this.isAdmin() && ticket.status === 'OPEN' &&
+    return !this.isAdmin() && ticket.status !== 'DONE' &&
            ticket.createdBy === this.auth.getCurrentUser()?.username;
   }
 }

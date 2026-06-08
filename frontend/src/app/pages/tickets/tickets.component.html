@@ -90,7 +90,7 @@
         <!-- Resolved info for user -->
         <div class="resolved-info" *ngIf="!isAdmin() && t.status === 'DONE' && t.resolvedAt">
           <mat-icon>check_circle</mat-icon>
-          Resolved on {{ t.resolvedAt | date:'MMM d, y' }} — will be removed after 5 days
+          Resolved on {{ t.resolvedAt | date:'MMM d, y' }} — will be removed after 2 days
         </div>
       </div>
     </div>
