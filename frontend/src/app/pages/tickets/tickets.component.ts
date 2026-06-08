@@ -130,12 +130,10 @@ export class TicketsComponent implements OnInit {
   }
 
   canEdit(ticket: Ticket): boolean {
-    return !this.isAdmin() && ticket.status === 'OPEN' &&
-           ticket.createdBy === this.auth.getCurrentUser()?.username;
+    return !this.isAdmin() && ticket.createdBy === this.auth.getCurrentUser()?.username;
   }
 
   canDelete(ticket: Ticket): boolean {
-    return !this.isAdmin() && ticket.status !== 'DONE' &&
-           ticket.createdBy === this.auth.getCurrentUser()?.username;
+    return !this.isAdmin() && ticket.createdBy === this.auth.getCurrentUser()?.username;
   }
 }

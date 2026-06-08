@@ -61,8 +61,6 @@ public class TicketController {
 
         return ticketRepository.findByIdAndCreatedBy(id, auth.getName())
                 .map(t -> {
-                    if (!"OPEN".equals(t.getStatus()))
-                        return ResponseEntity.badRequest().<Object>body(Map.of("error", "Only OPEN tickets can be edited"));
                     String title = body.get("title");
                     if (title != null && !title.isBlank()) t.setTitle(title.trim());
                     if (body.containsKey("description"))    t.setDescription(body.get("description"));
@@ -92,8 +90,6 @@ public class TicketController {
         }
         return ticketRepository.findByIdAndCreatedBy(id, auth.getName())
                 .map(t -> {
-                    if ("DONE".equals(t.getStatus()))
-                        return ResponseEntity.badRequest().<Object>body(Map.of("error", "Resolved tickets cannot be deleted"));
                     ticketRepository.deleteById(id);
                     return ResponseEntity.<Object>ok(Map.of("message", "Ticket deleted"));
                 })
