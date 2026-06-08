@@ -88,9 +88,10 @@
         </div>
 
         <!-- Resolved info for user -->
-        <div class="resolved-info" *ngIf="!isAdmin() && t.status === 'DONE' && t.resolvedAt">
+        <div class="resolved-info" *ngIf="!isAdmin() && t.status === 'DONE'">
           <mat-icon>check_circle</mat-icon>
-          Resolved on {{ t.resolvedAt | date:'MMM d, y' }} — will be removed after 2 days
+          <span *ngIf="t.resolvedAt">Resolved on {{ t.resolvedAt | date:'MMM d, y' }} — </span>
+          Will be removed after 2 days
         </div>
       </div>
     </div>

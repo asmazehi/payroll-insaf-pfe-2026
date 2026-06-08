@@ -2,7 +2,8 @@ import { Component, OnInit } from '@angular/core';
 import { AdminService, Ticket } from '../../services/admin.service';
 import { AuthService } from '../../services/auth.service';
 
-const SEEN_KEY = 'insaf_tickets_seen';
+const SEEN_KEY      = 'insaf_tickets_seen';
+const DISMISSED_KEY = 'insaf_tickets_dismissed';
 
 @Component({
   selector: 'app-tickets',
@@ -46,23 +47,22 @@ export class TicketsComponent implements OnInit {
     });
   }
 
-  /** Notify user about tickets that became DONE since last visit. */
+  /** Notify user about DONE tickets not yet explicitly dismissed. */
   private checkResolvedNotifications(tickets: Ticket[]): void {
-    const raw = localStorage.getItem(SEEN_KEY);
-    const seen: Record<number, string> = raw ? JSON.parse(raw) : {};
+    const raw = localStorage.getItem(DISMISSED_KEY);
+    const dismissed: number[] = raw ? JSON.parse(raw) : [];
 
     this.resolvedNotifications = tickets.filter(t =>
-      t.status === 'DONE' && (!seen[t.id] || seen[t.id] !== 'DONE')
+      t.status === 'DONE' && !dismissed.includes(t.id)
     );
-
-    // Mark all current tickets as seen
-    const next: Record<number, string> = {};
-    tickets.forEach(t => next[t.id] = t.status);
-    localStorage.setItem(SEEN_KEY, JSON.stringify(next));
   }
 
   dismissNotification(ticket: Ticket): void {
     this.resolvedNotifications = this.resolvedNotifications.filter(t => t.id !== ticket.id);
+    const raw = localStorage.getItem(DISMISSED_KEY);
+    const dismissed: number[] = raw ? JSON.parse(raw) : [];
+    if (!dismissed.includes(ticket.id)) dismissed.push(ticket.id);
+    localStorage.setItem(DISMISSED_KEY, JSON.stringify(dismissed));
   }
 
   openCreate(): void {
