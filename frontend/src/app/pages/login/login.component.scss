@@ -108,21 +108,21 @@
   }
 
   &__prism {
-    display: flex; align-items: center; gap: 14px;
+    display: flex; align-items: center; gap: 20px;
   }
   &__prism-icon {
-    height: 48px; width: auto; flex-shrink: 0;
+    height: 90px; width: auto; flex-shrink: 0;
   }
   &__prism-text {
-    display: flex; flex-direction: column; gap: 4px;
+    display: flex; flex-direction: column; gap: 8px;
   }
   &__prism-name {
-    font-size: 2rem; font-weight: 900;
-    color: #fff; letter-spacing: 4px; line-height: 1;
+    font-size: 4rem; font-weight: 900;
+    color: #fff; letter-spacing: 8px; line-height: 1;
   }
   &__prism-sub {
-    font-size: .68rem; color: rgba(255,255,255,.45);
-    text-transform: uppercase; letter-spacing: .1em;
+    font-size: .78rem; color: rgba(255,255,255,.5);
+    text-transform: uppercase; letter-spacing: .15em;
   }
 }
 
