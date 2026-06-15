@@ -89,36 +89,40 @@
 
 /* Brand */
 .brand {
-  display: flex; flex-direction: column; gap: 10px;
+  display: flex; flex-direction: column; gap: 16px;
   margin-bottom: 44px;
 
   &__cni {
     display: flex; align-items: center; gap: 10px;
   }
   &__cni-img {
-    height: 32px; width: auto; object-fit: contain;
+    height: 28px; width: auto; object-fit: contain;
     background: rgba(255,255,255,.08);
     border: 1px solid rgba(255,255,255,.15);
-    border-radius: 8px;
-    padding: 4px;
-    backdrop-filter: blur(10px);
+    border-radius: 7px;
+    padding: 3px 5px;
   }
   &__cni-label {
-    font-size: .72rem; color: rgba(255,255,255,.45);
-    text-transform: uppercase; letter-spacing: .08em;
+    font-size: .68rem; color: rgba(255,255,255,.4);
+    text-transform: uppercase; letter-spacing: .1em;
   }
 
   &__prism {
-    height: 46px; width: auto; object-fit: contain;
-    display: block;
-    margin-top: 4px;
+    display: flex; align-items: center; gap: 14px;
   }
-
-  &__insaf-tag {
-    font-size: .7rem;
-    color: rgba(255,255,255,.35);
-    letter-spacing: .1em;
-    text-transform: uppercase;
+  &__prism-icon {
+    height: 48px; width: auto; flex-shrink: 0;
+  }
+  &__prism-text {
+    display: flex; flex-direction: column; gap: 4px;
+  }
+  &__prism-name {
+    font-size: 2rem; font-weight: 900;
+    color: #fff; letter-spacing: 4px; line-height: 1;
+  }
+  &__prism-sub {
+    font-size: .68rem; color: rgba(255,255,255,.45);
+    text-transform: uppercase; letter-spacing: .1em;
   }
 }
 

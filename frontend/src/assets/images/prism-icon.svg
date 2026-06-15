@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" width="80" height="80">
+  <defs>
+    <linearGradient id="pg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#38BDF8"/>
+      <stop offset="100%" style="stop-color:#1D4ED8"/>
+    </linearGradient>
+    <linearGradient id="r1" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#93C5FD;stop-opacity:1"/>
+      <stop offset="100%" style="stop-color:#93C5FD;stop-opacity:0"/>
+    </linearGradient>
+    <linearGradient id="r2" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#60A5FA;stop-opacity:1"/>
+      <stop offset="100%" style="stop-color:#60A5FA;stop-opacity:0"/>
+    </linearGradient>
+    <linearGradient id="r3" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#38BDF8;stop-opacity:1"/>
+      <stop offset="100%" style="stop-color:#38BDF8;stop-opacity:0"/>
+    </linearGradient>
+  </defs>
+  <!-- Prism triangle -->
+  <polygon points="8,6 8,74 52,40" fill="url(#pg)"/>
+  <!-- Rays -->
+  <polygon points="52,37 52,34 80,10 80,6"  fill="url(#r1)"/>
+  <polygon points="52,40 52,36 80,36 80,32" fill="url(#r2)"/>
+  <polygon points="52,43 52,46 80,70 80,74" fill="url(#r3)"/>
+</svg>
