@@ -89,22 +89,37 @@
 
 /* Brand */
 .brand {
-  display: flex; align-items: center; gap: 14px;
-  margin-bottom: 52px;
+  display: flex; flex-direction: column; gap: 10px;
+  margin-bottom: 44px;
 
-  &__logo {
-    width: 52px; height: 52px;
+  &__cni {
+    display: flex; align-items: center; gap: 10px;
+  }
+  &__cni-img {
+    height: 32px; width: auto; object-fit: contain;
     background: rgba(255,255,255,.08);
     border: 1px solid rgba(255,255,255,.15);
-    border-radius: 14px;
-    display: flex; align-items: center; justify-content: center;
+    border-radius: 8px;
+    padding: 4px;
     backdrop-filter: blur(10px);
-    img { height: 34px; width: auto; object-fit: contain; }
+  }
+  &__cni-label {
+    font-size: .72rem; color: rgba(255,255,255,.45);
+    text-transform: uppercase; letter-spacing: .08em;
   }
 
-  &__text { display: flex; flex-direction: column; }
-  &__name { font-size: 1.35rem; font-weight: 800; color: #fff; letter-spacing: -.02em; line-height: 1.1; }
-  &__sub  { font-size: .7rem; color: rgba(255,255,255,.45); text-transform: uppercase; letter-spacing: .1em; margin-top: 3px; }
+  &__prism {
+    height: 46px; width: auto; object-fit: contain;
+    display: block;
+    margin-top: 4px;
+  }
+
+  &__insaf-tag {
+    font-size: .7rem;
+    color: rgba(255,255,255,.35);
+    letter-spacing: .1em;
+    text-transform: uppercase;
+  }
 }
 
 /* Headline */

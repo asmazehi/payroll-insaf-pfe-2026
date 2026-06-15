@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 160" width="600" height="160">
+  <defs>
+    <linearGradient id="prismFill" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#38BDF8"/>
+      <stop offset="100%" style="stop-color:#2563EB"/>
+    </linearGradient>
+    <linearGradient id="r1" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#93C5FD;stop-opacity:1"/>
+      <stop offset="100%" style="stop-color:#93C5FD;stop-opacity:0"/>
+    </linearGradient>
+    <linearGradient id="r2" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#60A5FA;stop-opacity:1"/>
+      <stop offset="100%" style="stop-color:#60A5FA;stop-opacity:0"/>
+    </linearGradient>
+    <linearGradient id="r3" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#38BDF8;stop-opacity:1"/>
+      <stop offset="100%" style="stop-color:#38BDF8;stop-opacity:0"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Incoming ray -->
+  <rect x="0" y="76" width="18" height="5" rx="2.5" fill="#BFDBFE" opacity="0.7"/>
+
+  <!-- Prism triangle (pointing right) -->
+  <polygon points="18,18 18,138 108,78" fill="url(#prismFill)"/>
+  <!-- Prism edge highlight -->
+  <polygon points="18,18 18,138 108,78" fill="none" stroke="white" stroke-width="1.5" stroke-opacity="0.25"/>
+
+  <!-- Ray 1 — up, lightest -->
+  <polygon points="108,74 108,69 210,18 210,11" fill="url(#r1)"/>
+  <!-- Ray 2 — middle -->
+  <polygon points="108,77 108,73 210,73 210,68" fill="url(#r2)"/>
+  <!-- Ray 3 — down, lightest blue -->
+  <polygon points="108,80 108,85 210,138 210,145" fill="url(#r3)"/>
+
+  <!-- PRISM wordmark — white on dark -->
+  <text x="228" y="97"
+        font-family="'Arial Black', 'Impact', Arial, sans-serif"
+        font-weight="900"
+        font-size="62"
+        letter-spacing="8"
+        fill="#FFFFFF">PRISM</text>
+
+  <!-- Subtitle -->
+  <text x="231" y="120"
+        font-family="Arial, sans-serif"
+        font-weight="400"
+        font-size="12"
+        letter-spacing="3"
+        fill="#93C5FD">INSAF · PAYROLL INTELLIGENCE PLATFORM</text>
+</svg>
